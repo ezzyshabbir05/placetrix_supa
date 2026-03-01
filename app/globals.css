@@ -1,6 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@custom-variant dark (&:is(.dark *));
+
+
 
 :root {
   --background: hsl(0 0% 100%);
@@ -149,9 +153,21 @@
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Hide scrollbar — Webkit (Chrome, Edge, Safari) */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar — Firefox + IE/Edge legacy */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 }
