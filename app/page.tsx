@@ -97,7 +97,7 @@ function HeroSection() {
 
 function TestimonialsSection() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-8 sm:space-y-8 sm:py-6">
+    <div className="mx-auto max-w-5xl space-y-6 pt-8 pb-0 sm:space-y-8 sm:pt-6">
       <div className="flex flex-col gap-1.5 px-4 sm:gap-2 md:px-6">
         <h1 className="text-balance font-semibold text-2xl tracking-wide sm:text-3xl md:text-4xl xl:font-bold">
           Real Students, Real Results

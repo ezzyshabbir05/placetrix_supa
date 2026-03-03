@@ -13,11 +13,10 @@ export function Footer() {
     <footer className="relative">
       <div
         className={cn(
-          "mx-auto max-w-5xl lg:border-x",
+          "mx-auto max-w-5xl",
           "dark:bg-[radial-gradient(35%_80%_at_25%_0%,--theme(--color-foreground/.04),transparent)]",
         )}
       >
-        <div className="absolute inset-x-0 h-px w-full bg-border" />
         <div className="grid max-w-5xl grid-cols-6 gap-6 p-4">
           <div className="col-span-6 flex flex-col gap-4 pt-5 md:col-span-4">
             <a className="font-bold" href="#">
@@ -106,8 +105,8 @@ const resources = [
     href: "#",
   },
   {
-	title: "FAQs",
-	href: "#",
+    title: "FAQs",
+    href: "#",
   },
 ];
 
