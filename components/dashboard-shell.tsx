@@ -7,13 +7,13 @@ import {
     SidebarTrigger,
     useSidebar,
 } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
+import { SiteHeader } from "@/components/site-header"
 
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
-const HOVER_OPEN_DELAY  = 90   // ms
+const HOVER_OPEN_DELAY = 90   // ms
 const HOVER_CLOSE_DELAY = 140  // ms
 
 
@@ -32,32 +32,13 @@ interface SidebarHoverContextValue {
 
 
 export const SidebarHoverContext = React.createContext<SidebarHoverContextValue>({
-    onUserMenuOpenChange: () => {},
-    hoverProps: { onPointerEnter: () => {}, onPointerLeave: () => {} },
+    onUserMenuOpenChange: () => { },
+    hoverProps: { onPointerEnter: () => { }, onPointerLeave: () => { } },
 })
 
 
 export function useSidebarHoverContext() {
     return React.useContext(SidebarHoverContext)
-}
-
-
-// ─── Site Header ──────────────────────────────────────────────────────────────
-
-
-function SiteHeader({ onManualToggle }: { onManualToggle: () => void }) {
-    return (
-        <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
-            <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-                <SidebarTrigger className="-ml-1" onClick={onManualToggle} />
-                <Separator
-                    orientation="vertical"
-                    className="mx-2 data-[orientation=vertical]:h-4"
-                />
-                <h1 className="text-sm">Dashboard</h1>
-            </div>
-        </header>
-    )
 }
 
 
@@ -100,11 +81,11 @@ export function DashboardShell({
     //   • hoverProps object identity is permanently stable
     //   • no re-render cascade through AppSidebar on every menu open/close
 
-    const manualModeRef    = React.useRef(false)  // true after SidebarTrigger click
-    const hoverOpenedRef   = React.useRef(false)  // true only when hover opened sidebar
-    const suspendHoverRef  = React.useRef(false)  // FIX #1: read by timer closures — always current
-    const intentTimerRef   = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-    const lastIntentRef    = React.useRef<"open" | "close" | null>(null)
+    const manualModeRef = React.useRef(false)  // true after SidebarTrigger click
+    const hoverOpenedRef = React.useRef(false)  // true only when hover opened sidebar
+    const suspendHoverRef = React.useRef(false)  // FIX #1: read by timer closures — always current
+    const intentTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+    const lastIntentRef = React.useRef<"open" | "close" | null>(null)
 
     // Stable setter ref so timer closures can call setOpen without being
     // listed as a dependency (setOpen is already stable from useState).
@@ -117,7 +98,7 @@ export function DashboardShell({
     const clearIntentTimer = React.useCallback(() => {
         if (intentTimerRef.current) clearTimeout(intentTimerRef.current)
         intentTimerRef.current = null
-        lastIntentRef.current  = null
+        lastIntentRef.current = null
     }, []) // no deps — only touches refs
 
 
@@ -155,7 +136,7 @@ export function DashboardShell({
         intentTimerRef.current = setTimeout(() => {
             commitIntent(intent)
             intentTimerRef.current = null
-            lastIntentRef.current  = null
+            lastIntentRef.current = null
         }, delay)
     }, [commitIntent]) // commitIntent is stable, so scheduleIntent is stable too
 

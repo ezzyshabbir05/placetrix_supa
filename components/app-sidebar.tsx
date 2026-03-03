@@ -50,38 +50,38 @@ const VALID_ACCOUNT_TYPES: AccountType[] = ["candidate", "institute", "admin", "
 
 const NAV_MAIN: Record<AccountType, NavItem[]> = {
     candidate: [
-        { title: "Home",            url: "/~/home",         icon: IconHome },
-        { title: "Job Search",      url: "/~/jobs",         icon: IconSearch },
+        { title: "Home", url: "/~/home", icon: IconHome },
+        { title: "Job Search", url: "/~/jobs", icon: IconSearch },
         { title: "My Applications", url: "/~/applications", icon: IconClipboardList },
-        { title: "Tests",           url: "/~/tests",        icon: IconChartBar },
-        { title: "Resume",          url: "/~/resume",       icon: IconFileDescription },
-        { title: "Events",          url: "/~/events",       icon: IconCalendarEvent },
+        { title: "Tests", url: "/~/tests", icon: IconChartBar },
+        { title: "Resume", url: "/~/resume", icon: IconFileDescription },
+        { title: "Events", url: "/~/events", icon: IconCalendarEvent },
     ],
     institute: [
-        { title: "Home",       url: "/~/home",       icon: IconHome },
-        { title: "Students",   url: "/~/students",   icon: IconSchool },
-        { title: "Drives",     url: "/~/drives",     icon: IconFolder },
-        { title: "Tests",      url: "/~/tests",      icon: IconChartBar },
-        { title: "Reports",    url: "/~/reports",    icon: IconReport },
+        { title: "Home", url: "/~/home", icon: IconHome },
+        { title: "Students", url: "/~/students", icon: IconSchool },
+        { title: "Drives", url: "/~/drives", icon: IconFolder },
+        { title: "Tests", url: "/~/tests", icon: IconChartBar },
+        { title: "Reports", url: "/~/reports", icon: IconReport },
         { title: "Recruiters", url: "/~/recruiters", icon: IconBriefcase },
     ],
     admin: [
-        { title: "Home",      url: "/~/home",      icon: IconHome },
-        { title: "Users",     url: "/~/users",     icon: IconUsers },
-        { title: "Groups",    url: "/~/groups",    icon: IconUsersGroup },
-        { title: "Drives",    url: "/~/drives",    icon: IconFolder },
-        { title: "Tests",     url: "/~/tests",     icon: IconChartBar },
-        { title: "Events",    url: "/~/events",    icon: IconCalendarEvent },
+        { title: "Home", url: "/~/home", icon: IconHome },
+        { title: "Users", url: "/~/users", icon: IconUsers },
+        { title: "Groups", url: "/~/groups", icon: IconUsersGroup },
+        { title: "Drives", url: "/~/drives", icon: IconFolder },
+        { title: "Tests", url: "/~/tests", icon: IconChartBar },
+        { title: "Events", url: "/~/events", icon: IconCalendarEvent },
         { title: "Analytics", url: "/~/analytics", icon: IconFileAnalytics },
-        { title: "Reports",   url: "/~/reports",   icon: IconReport },
+        { title: "Reports", url: "/~/reports", icon: IconReport },
     ],
     recruiter: [
-        { title: "Home",         url: "/~/home",       icon: IconHome },
-        { title: "Job Postings", url: "/~/postings",   icon: IconBriefcase2 },
-        { title: "Candidates",   url: "/~/candidates", icon: IconTargetArrow },
-        { title: "Drives",       url: "/~/drives",     icon: IconFolder },
-        { title: "Tests",        url: "/~/tests",      icon: IconChartBar },
-        { title: "Reports",      url: "/~/reports",    icon: IconReport },
+        { title: "Home", url: "/~/home", icon: IconHome },
+        { title: "Job Postings", url: "/~/postings", icon: IconBriefcase2 },
+        { title: "Candidates", url: "/~/candidates", icon: IconTargetArrow },
+        { title: "Drives", url: "/~/drives", icon: IconFolder },
+        { title: "Tests", url: "/~/tests", icon: IconChartBar },
+        { title: "Reports", url: "/~/reports", icon: IconReport },
     ],
 }
 
@@ -89,8 +89,8 @@ const NAV_MAIN: Record<AccountType, NavItem[]> = {
 
 const NAV_SECONDARY: NavItem[] = [
     { title: "Notifications", url: "/~/notifications", icon: IconBell },
-    { title: "Settings",      url: "/~/settings",      icon: IconSettings },
-    { title: "Get Help",      url: "/~/help",           icon: IconHelp },
+    { title: "Settings", url: "/~/settings", icon: IconSettings },
+    { title: "Get Help", url: "/~/help", icon: IconHelp },
 ]
 
 
@@ -98,7 +98,7 @@ const NAV_SECONDARY: NavItem[] = [
 const ROLE_LABELS: Record<AccountType, string> = {
     candidate: "Candidate",
     institute: "Institute",
-    admin:     "Admin",
+    admin: "Admin",
     recruiter: "Recruiter",
 }
 
@@ -107,7 +107,7 @@ const ROLE_LABELS: Record<AccountType, string> = {
 const ROLE_COLORS: Record<AccountType, string> = {
     candidate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     institute: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    admin:     "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    admin: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
     recruiter: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
 }
 
@@ -124,8 +124,8 @@ type ThemeOption = {
 }
 
 const THEME_OPTIONS: ThemeOption[] = [
-    { value: "light",  label: "Light",  icon: IconSun },
-    { value: "dark",   label: "Dark",   icon: IconMoon },
+    { value: "light", label: "Light", icon: IconSun },
+    { value: "dark", label: "Dark", icon: IconMoon },
     { value: "system", label: "System", icon: IconDeviceLaptop },
 ]
 
@@ -135,11 +135,14 @@ const THEME_OPTIONS: ThemeOption[] = [
 
 
 
+const VALID_ACCOUNT_TYPE_SET = new Set<string>(VALID_ACCOUNT_TYPES)
+
 function safeAccountType(type: string | null | undefined): AccountType {
-    return VALID_ACCOUNT_TYPES.includes(type as AccountType)
+    return VALID_ACCOUNT_TYPE_SET.has(type ?? "")
         ? (type as AccountType)
         : "candidate"
 }
+
 
 
 
@@ -148,10 +151,10 @@ function safeAccountType(type: string | null | undefined): AccountType {
 
 
 export function NavUser({ user }: { user: UserProfile }) {
-    const { isMobile }              = useSidebar()
-    const router                    = useRouter()
-    const { onUserMenuOpenChange }  = useSidebarHoverContext()
-    const { theme, setTheme }       = useTheme()
+    const { isMobile } = useSidebar()
+    const router = useRouter()
+    const { onUserMenuOpenChange } = useSidebarHoverContext()
+    const { theme, setTheme } = useTheme()
 
     /**
      * next-themes reads from localStorage/system on the client only.
@@ -160,10 +163,13 @@ export function NavUser({ user }: { user: UserProfile }) {
     const [mounted, setMounted] = React.useState(false)
     React.useEffect(() => setMounted(true), [])
 
-    const displayName  = user.display_name?.trim() || "User"
-    const email        = user.email?.trim()         || "No email"
-    const accountType  = safeAccountType(user.account_type)
-    const initials     = user.display_name?.trim()
+    const displayName = user.display_name?.trim() || "User"
+    const email = user.email?.trim() || "No email"
+    const sidebarSubtitle = user.username?.trim()
+        ? `@${user.username.trim()}`
+        : email
+    const accountType = safeAccountType(user.account_type)
+    const initials = user.display_name?.trim()
         ? displayName.split(" ").filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2)
         : (user.email?.trim()[0]?.toUpperCase() ?? "?")
 
@@ -193,7 +199,8 @@ export function NavUser({ user }: { user: UserProfile }) {
                             </Avatar>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-medium">{displayName}</span>
-                                <span className="truncate text-xs text-muted-foreground">{email}</span>
+                                {/* ✅ Show username if available, else fall back to email */}
+                                <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
                             </div>
                             <IconDotsVertical className="ml-auto size-4" />
                         </SidebarMenuButton>
@@ -301,7 +308,7 @@ export function NavUser({ user }: { user: UserProfile }) {
 
 
 export function NavMain({ items }: { items: NavItem[] }) {
-    const pathname        = usePathname()
+    const pathname = usePathname()
     const { setOpenMobile } = useSidebar()
 
 
@@ -344,7 +351,7 @@ export function NavSecondary({
 }: {
     items: NavItem[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
-    const pathname          = usePathname()
+    const pathname = usePathname()
     const { setOpenMobile } = useSidebar()
 
 
@@ -380,37 +387,42 @@ export function NavSecondary({
 
 
 
+// ─── AppSidebarSkeleton ───────────────────────────────────────────────────────
+
 export function AppSidebarSkeleton() {
     const { state } = useSidebar()
-    const collapsed  = state === "collapsed"
+    const collapsed = state === "collapsed"
 
+    // 6 is the candidate nav count — a sensible mid-range default.
+    // SidebarMenuSkeleton already randomises text widths internally,
+    // and the sidebar's [data-collapsible=icon] CSS hides text skeletons
+    // automatically when collapsed, so no extra guard is needed here.
+    const PRIMARY_COUNT = 6
 
     return (
-        <Sidebar collapsible="icon" variant="inset">
-
+        <Sidebar collapsible="icon" variant="sidebar">
 
             {/* ── Header ─────────────────────────────────────── */}
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <div className={`flex items-center gap-2 p-1.5 ${collapsed ? "justify-center" : ""}`}>
-                            <Skeleton className="size-5 rounded-md shrink-0" />
+                            {/* Match the real logo's size-5.5 */}
+                            <Skeleton className="size-5.5 rounded-md shrink-0" />
                             {!collapsed && <Skeleton className="h-5 w-24" />}
                         </div>
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
 
-
             {/* ── Content ────────────────────────────────────── */}
             <SidebarContent>
 
-
-                {/* Primary nav — 6 items mirrors candidate/admin max */}
+                {/* Primary nav */}
                 <SidebarGroup>
                     <SidebarGroupContent className="flex flex-col gap-2">
                         <SidebarMenu>
-                            {Array.from({ length: 6 }).map((_, i) => (
+                            {Array.from({ length: PRIMARY_COUNT }).map((_, i) => (
                                 <SidebarMenuItem key={i}>
                                     <SidebarMenuSkeleton showIcon />
                                 </SidebarMenuItem>
@@ -419,12 +431,11 @@ export function AppSidebarSkeleton() {
                     </SidebarGroupContent>
                 </SidebarGroup>
 
-
-                {/* Secondary nav — pushed to bottom */}
+                {/* Secondary nav — derived from the real array so count never drifts */}
                 <SidebarGroup className="mt-auto">
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {Array.from({ length: 3 }).map((_, i) => (
+                            {Array.from({ length: NAV_SECONDARY.length }).map((_, i) => (
                                 <SidebarMenuItem key={i}>
                                     <SidebarMenuSkeleton showIcon />
                                 </SidebarMenuItem>
@@ -433,19 +444,17 @@ export function AppSidebarSkeleton() {
                     </SidebarGroupContent>
                 </SidebarGroup>
 
-
             </SidebarContent>
-
 
             {/* ── Footer ─────────────────────────────────────── */}
             <SidebarFooter>
                 <div className={`flex items-center gap-2 p-2 ${collapsed ? "justify-center" : ""}`}>
                     <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
 
-                    {/* Hide name / email / dots in icon-only mode */}
                     {!collapsed && (
                         <>
-                            <div className="flex flex-col gap-1.5 flex-1 overflow-hidden">
+                            {/* min-w-0 is the correct Flexbox truncation fix, not overflow-hidden */}
+                            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                                 <Skeleton className="h-3.5 w-28" />
                                 <Skeleton className="h-3 w-36" />
                             </div>
@@ -455,10 +464,10 @@ export function AppSidebarSkeleton() {
                 </div>
             </SidebarFooter>
 
-
         </Sidebar>
     )
 }
+
 
 
 
@@ -474,15 +483,15 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-    const accountType          = safeAccountType(user.account_type)
-    const mainNav              = NAV_MAIN[accountType]
-    const { hoverProps }       = useSidebarHoverContext()
+    const accountType = safeAccountType(user.account_type)
+    const mainNav = NAV_MAIN[accountType]
+    const { hoverProps } = useSidebarHoverContext()
 
 
     return (
         <Sidebar
             collapsible="icon"
-            variant="inset"
+            variant="sidebar"
             {...hoverProps}   // onPointerEnter / onPointerLeave from DashboardShell
             {...props}
         >

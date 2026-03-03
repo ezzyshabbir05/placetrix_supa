@@ -5,6 +5,7 @@ import { getUserProfile } from "@/lib/supabase/profile"
 import { DashboardShell } from "@/components/dashboard-shell"
 
 
+
 // ─── Sidebar Loader (async server component) ──────────────────────────────────
 
 
