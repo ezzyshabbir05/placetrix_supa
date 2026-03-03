@@ -4,8 +4,6 @@
 @import "shadcn/tailwind.css";
 @custom-variant dark (&:is(.dark *));
 
-
-
 :root {
   --background: hsl(0 0% 100%);
   --foreground: hsl(0 0% 4%);
@@ -44,7 +42,7 @@
   --font-mono: Space Mono, monospace;
 
   --radius: 1.2rem;
-  
+
   --shadow-2xs: 0 1px 3px 0px hsl(0 0% 9% / 0.05);
   --shadow-xs: 0 1px 3px 0px hsl(0 0% 9% / 0.05);
   --shadow-sm: 0 1px 3px 0px hsl(0 0% 9% / 0.10), 0 1px 2px -1px hsl(0 0% 9% / 0.10);
@@ -53,7 +51,7 @@
   --shadow-lg: 0 1px 3px 0px hsl(0 0% 9% / 0.10), 0 4px 6px -1px hsl(0 0% 9% / 0.10);
   --shadow-xl: 0 1px 3px 0px hsl(0 0% 9% / 0.10), 0 8px 10px -1px hsl(0 0% 9% / 0.10);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 9% / 0.25);
-  
+
 }
 
 .dark {
@@ -88,7 +86,7 @@
   --sidebar-accent-foreground: hsl(0 0% 98%);
   --sidebar-border: hsl(0 0% 100% / 0.1);
   --sidebar-ring: hsl(0 0% 45%);
-  
+
   --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
@@ -152,7 +150,7 @@
 }
 
 @layer base {
-  
+
   * {
     @apply border-border outline-ring/50;
   }

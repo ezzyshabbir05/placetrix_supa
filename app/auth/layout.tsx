@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { FloatingPaths } from "@/components/ui/auth_page/floating-paths";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function AuthLayout({
     children,
@@ -11,21 +12,18 @@ export default async function AuthLayout({
     // ── Auth guard: kick logged-in users out of auth routes ──
     const supabase = await createClient();
     const { data } = await supabase.auth.getClaims();
-    if (data?.claims) redirect("/protected");
+    if (data?.claims) redirect("/~");
 
     return (
         <main className="relative md:h-screen md:overflow-hidden lg:grid lg:grid-cols-2">
 
             {/* ── Left Panel (desktop only) ── */}
             <div className="relative hidden h-full flex-col border-r bg-secondary p-10 lg:flex dark:bg-secondary/20">
-                <div className="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-background" />
+                <div className="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-background pointer-events-none" />
 
-                <a
-                    className="font-bold text-xl"
-                    href="#"
-                >
+                <Link href="/" className="font-bold text-xl">
                     PlaceTrix
-                </a>
+                </Link>
 
                 <div className="z-10 mt-auto">
                     <blockquote className="space-y-2">

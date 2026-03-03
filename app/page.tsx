@@ -1,7 +1,7 @@
 import { Header } from "@/components/header";
 import { cn } from "@/lib/utils";
 import { FullWidthDivider } from "@/components/ui/landing/full-width-divider";
-import { ArrowRightIcon, PhoneCallIcon } from "lucide-react";
+import { ArrowRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DecorIcon } from "@/components/ui/landing/decor-icon";
 import { AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -10,10 +10,11 @@ import { GridPattern } from "@/components/ui/landing/grid-pattern";
 import { Avatar } from "@/components/ui/avatar";
 import Link from "next/link";
 
+
 function HeroSection() {
   return (
     <section className="flex flex-col">
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-5 px-4 min-h-[calc(100svh-3rem)]">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-4 px-4 sm:gap-5 min-h-[calc(100svh-3rem)]">
         {/* X Faded Borders & Shades */}
         <div
           aria-hidden="true"
@@ -32,9 +33,10 @@ function HeroSection() {
           <div className="absolute inset-y-0 right-8 w-px bg-linear-to-b from-transparent via-border/50 to-border/50 md:right-12" />
         </div>
 
+
         <a
           className={cn(
-            "group mx-auto flex w-fit items-center gap-3 rounded-sm border bg-card p-1 shadow",
+            "group mx-auto flex max-w-[90vw] w-fit flex-wrap items-center gap-2 rounded-sm border bg-card p-1 shadow sm:gap-3 sm:flex-nowrap",
             "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards transition-all delay-500 duration-500 ease-out"
           )}
         >
@@ -42,24 +44,26 @@ function HeroSection() {
             <p className="font-mono text-xs">NEW</p>
           </div>
           <span className="text-xs">1,000+ mock tests attempted</span>
-          <span className="block h-5 border-l" />
-          <div className="pr-1">
+          <span className="hidden h-5 border-l sm:block" />
+          <div className="pr-1 hidden sm:block">
             <ArrowRightIcon className="size-3 -translate-x-0.5 duration-150 ease-out group-hover:translate-x-0.5" />
           </div>
         </a>
 
+
         <h1
           className={cn(
-            "max-w-2xl text-balance text-center text-4xl text-foreground md:text-6xl lg:text-7xl",
+            "max-w-xs text-balance text-center text-4xl text-foreground sm:max-w-xl sm:text-5xl md:max-w-2xl md:text-6xl lg:text-7xl",
             "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards delay-100 duration-500 ease-out"
           )}
         >
           The Gap Between You and Your Goal? Let's Close It.
         </h1>
 
+
         <p
           className={cn(
-            "text-center text-muted-foreground text-sm tracking-wider sm:text-lg",
+            "max-w-xs text-center text-muted-foreground text-sm tracking-normal sm:max-w-none sm:tracking-wider sm:text-lg",
             "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards delay-200 duration-500 ease-out"
           )}
         >
@@ -67,13 +71,15 @@ function HeroSection() {
           crush your goals with Placetrix.
         </p>
 
-        <div className="fade-in slide-in-from-bottom-10 flex w-fit animate-in items-center justify-center gap-3 fill-mode-backwards pt-2 delay-300 duration-500 ease-out">
-          <Button>
+
+        <div className="fade-in slide-in-from-bottom-10 flex w-fit animate-in items-center justify-center gap-3 fill-mode-backwards pt-1 sm:pt-2 delay-300 duration-500 ease-out">
+          <Button size="sm" className="sm:size-default">
             <Link href="/auth/sign-up">Start Practicing</Link>
             <ArrowRightIcon data-icon="inline-end" />
           </Button>
         </div>
       </div>
+
 
       <div className="relative">
         <DecorIcon className="size-4" position="top-left" />
@@ -86,11 +92,12 @@ function HeroSection() {
   );
 }
 
+
 function TestimonialsSection() {
   return (
-    <div className="mx-auto min-h-screen max-w-5xl space-y-8 py-6">
-      <div className="flex flex-col gap-2 px-4 md:px-6">
-        <h1 className="text-balance font-semibold text-3xl tracking-wide md:text-4xl xl:font-bold">
+    <div className="mx-auto max-w-5xl space-y-6 py-8 sm:space-y-8 sm:py-6">
+      <div className="flex flex-col gap-1.5 px-4 sm:gap-2 md:px-6">
+        <h1 className="text-balance font-semibold text-2xl tracking-wide sm:text-3xl md:text-4xl xl:font-bold">
           Real Students, Real Results
         </h1>
         <p className="text-muted-foreground text-sm md:text-base lg:text-lg">
@@ -115,6 +122,7 @@ function TestimonialsSection() {
   );
 }
 
+
 type Testimonial = {
   name: string;
   role: string;
@@ -123,56 +131,42 @@ type Testimonial = {
   quote: string;
 };
 
+
 const testimonials: Testimonial[] = [
   {
     quote:
-      "Placetrix's mock tests helped me spot my weak areas instantly. My score jumped by 35% in just six weeks of consistent practice.",
-    image: "https://github.com/shadcn.png",
-    name: "Arjun Sharma",
-    role: "JEE Aspirant",
-    company: "IIT Delhi (2025)",
+      "Placetrix’s structured aptitude and technical tests were vital to my prep. Consistent practice boosted my confidence and helped me clear the Infosys aptitude round. I highly recommend it!",
+    image: "https://api.dicebear.com/9.x/glass/svg?seed=Pranjal Haral",
+    name: "Pranjal Haral",
+    role: "Software Engineer",
+    company: "Infosys",
   },
   {
     quote:
-      "The group management feature is a game-changer. I assign tests to my entire batch and get detailed performance reports in real time.",
-    image: "https://github.com/rauchg.png",
-    name: "Priya Mehta",
-    role: "Senior Faculty",
-    company: "Aakash Institute",
+      "Regular practice with Placetrix improved my fundamentals and helped me crack the Infosys aptitude round. I appreciate the effort and recommend it to all aspirants.",
+    image: "https://api.dicebear.com/9.x/glass/svg?seed=Janhavi Patil",
+    name: "Janhavi Patil",
+    role: "Software Engineer",
+    company: "Infosys",
   },
   {
     quote:
-      "I used five different platforms before Placetrix. Nothing else comes close for mock test quality and progress tracking.",
-    image: "https://unavatar.io/x/elonmusk",
-    name: "Rohan Verma",
-    role: "UPSC Aspirant",
-    company: "Civil Services 2025",
+      "Placetrix was essential to my success. The app’s quizzes and mock tests significantly improved my speed and accuracy, leaving me well-prepared for the placement process. Truly thankful!",
+    image: "https://api.dicebear.com/9.x/glass/svg?seed=Pinal Lagdhir",
+    name: "Pinal Lagdhir",
+    role: "Software Engineer",
+    company: "Infosys",
   },
   {
     quote:
-      "Our coaching centre switched entirely to Placetrix for assessments. Test creation, student tracking, and results — all in one place.",
-    image: "https://unavatar.io/x/tim_cook",
-    name: "Sneha Kulkarni",
-    role: "Director",
-    company: "EduFirst Academy",
-  },
-  {
-    quote:
-      "I cracked NEET on my second attempt and Placetrix was a big part of that. The analytics showed exactly what I needed to fix.",
-    image: "https://unavatar.io/x/JeffBezos",
-    name: "Meera Nair",
-    role: "NEET Qualifier",
-    company: "AIIMS Pune",
-  },
-  {
-    quote:
-      "Assigning chapter-wise tests to student groups and reviewing their attempts side-by-side has made my revision sessions so much more effective.",
-    image: "https://unavatar.io/x/sama",
-    name: "Vikram Joshi",
-    role: "Maths Teacher",
-    company: "Narayana Classes",
+      "Placetrix helped me approach placements in a structured way. The consistent practice strengthened my problem-solving skills and boosted my confidence. A must-use for aspirants!",
+    image: "https://api.dicebear.com/9.x/glass/svg?seed=Chaitali Bonde",
+    name: "Chaitali Bonde",
+    role: "Software Engineer",
+    company: "Infosys",
   },
 ];
+
 
 function TestimonialsCard({
   testimonial,
@@ -185,7 +179,7 @@ function TestimonialsCard({
   return (
     <figure
       className={cn(
-        "relative grid grid-cols-[auto_1fr] gap-x-3 overflow-hidden bg-background p-4",
+        "relative grid grid-cols-[auto_1fr] gap-x-3 overflow-hidden bg-background p-3 sm:p-4",
         className
       )}
       {...props}
@@ -200,6 +194,7 @@ function TestimonialsCard({
         />
       </div>
 
+
       <Avatar className="size-8 rounded-full">
         <AvatarImage alt={`${name}'s profile picture`} src={image} />
         <AvatarFallback>{name.charAt(0)}</AvatarFallback>
@@ -212,24 +207,25 @@ function TestimonialsCard({
             {company && `, ${company}`}
           </span>
         </figcaption>
-        <blockquote className="mt-3">
-          <p className="text-foreground/80 text-sm tracking-wide">{quote}</p>
+        <blockquote className="mt-2 sm:mt-3">
+          <p className="text-foreground/80 text-sm tracking-wide leading-relaxed">{quote}</p>
         </blockquote>
       </div>
     </figure>
   );
 }
 
+
 export default function LandingPage() {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden px-4 supports-[overflow:clip]:overflow-clip">
+    <div className="relative flex min-h-screen flex-col overflow-hidden supports-[overflow:clip]:overflow-clip">
       <Header />
       <main
         className={cn(
-          "relative mx-auto max-w-4xl grow",
-          // X Borders
-          "before:absolute before:-inset-y-14 before:-left-px before:w-px before:bg-border",
-          "after:absolute after:-inset-y-14 after:-right-px after:w-px after:bg-border"
+          "relative mx-auto w-full max-w-4xl grow",
+          // X Borders — hidden on very small screens to avoid clipping content
+          "sm:before:absolute sm:before:-inset-y-14 sm:before:-left-px sm:before:w-px sm:before:bg-border",
+          "sm:after:absolute sm:after:-inset-y-14 sm:after:-right-px sm:after:w-px sm:after:bg-border"
         )}
       >
         <HeroSection />
