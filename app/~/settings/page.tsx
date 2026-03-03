@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { getUserProfile } from "@/lib/supabase/profile"
 import { redirect } from "next/navigation"
-import { SettingsClient } from "./SettingsClient"
+import { CandidateSettingsClient } from "./CandidateSettingsClient"
+import { InstituteSettingsClient } from "./InstituteSettingsClient"
 
 export default async function SettingsPage() {
   const profile = await getUserProfile()
@@ -20,8 +21,7 @@ export default async function SettingsPage() {
       .single()
 
     return (
-      <SettingsClient
-        role="candidate"
+      <CandidateSettingsClient
         userProfile={profile}
         initialData={candidateProfile ?? null}
       />
@@ -36,20 +36,12 @@ export default async function SettingsPage() {
       .single()
 
     return (
-      <SettingsClient
-        role="institute"
+      <InstituteSettingsClient
         userProfile={profile}
         initialData={instituteProfile ?? null}
       />
     )
   }
 
-  // Fallback for other roles
-  return (
-    <SettingsClient
-      role={profile.account_type as "candidate" | "institute"}
-      userProfile={profile}
-      initialData={null}
-    />
-  )
+  redirect("/dashboard")
 }

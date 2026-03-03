@@ -250,8 +250,13 @@ export function DashboardShell({
             >
                 {sidebar}
 
-                <SidebarInset>
-                    <SiteHeader onManualToggle={onManualToggle} />
+                <SidebarInset className="h-svh overflow-y-auto">
+                    {/* Sticky header — sticks to the top of SidebarInset's scroll container */}
+                    <div className="sticky top-0 z-10 w-full bg-background border-b">
+                        <SiteHeader onManualToggle={onManualToggle} />
+                    </div>
+
+                    {/* Scrollable content area */}
                     <div className="flex flex-1 flex-col">
                         <div className="@container/main flex flex-1 flex-col gap-2">
                             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -260,6 +265,7 @@ export function DashboardShell({
                         </div>
                     </div>
                 </SidebarInset>
+
 
                 <MobileHoverGuard suspendHoverRef={suspendHoverRef} />
             </SidebarProvider>

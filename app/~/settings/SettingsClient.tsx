@@ -228,22 +228,22 @@ export function SettingsClient({ role, userProfile, initialData }: Props) {
   // Load institutes for candidate
   useEffect(() => {
     if (!isCandidate) return
-    ;(async () => {
-      const { data } = await supabase
-        .from("institute_profiles")
-        .select("profile_id, institute_name, courses")
-        .order("institute_name")
-      if (data) {
-        setInstitutes(data)
-        if (initialData?.institute_id) {
-          const found = data.find((i) => i.profile_id === initialData.institute_id)
-          if (found) {
-            setInstituteName(found.institute_name)
-            setAvailableCourses(found.courses ?? [])
+      ; (async () => {
+        const { data } = await supabase
+          .from("institute_profiles")
+          .select("profile_id, institute_name, courses")
+          .order("institute_name")
+        if (data) {
+          setInstitutes(data)
+          if (initialData?.institute_id) {
+            const found = data.find((i) => i.profile_id === initialData.institute_id)
+            if (found) {
+              setInstituteName(found.institute_name)
+              setAvailableCourses(found.courses ?? [])
+            }
           }
         }
-      }
-    })()
+      })()
   }, [isCandidate])
 
   // When instituteId changes, update courses
@@ -476,39 +476,27 @@ export function SettingsClient({ role, userProfile, initialData }: Props) {
     <div className="min-h-screen w-full">
       <Tabs defaultValue={isCandidate ? "account" : "institution"}>
         {/* ── Header ── */}
-        <div className="border-b border-border bg-background/95 backdrop-blur">
-          <div className="px-4 py-4 md:px-6 md:py-6 space-y-1">
-            <h1 className="text-3xl font-bold">
-              {isCandidate ? "Settings" : "College Settings"}
-            </h1>
-            <p className="text-muted-foreground">
-              {isCandidate
-                ? "Manage your account preferences"
-                : "Manage your institution preferences and information"}
-            </p>
-          </div>
-          <div className="w-full overflow-x-auto no-scrollbar pb-px">
-            <TabsList variant="line" className="px-4 md:px-6 justify-start">
-              {isCandidate ? (
-                <>
-                  <TabsTrigger value="account"><User className="h-4 w-4 mr-2" />Account</TabsTrigger>
-                  <TabsTrigger value="security"><Lock className="h-4 w-4 mr-2" />Security</TabsTrigger>
-                  <TabsTrigger value="billing"><CreditCard className="h-4 w-4 mr-2" />Billing</TabsTrigger>
-                  <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notifications</TabsTrigger>
-                  <TabsTrigger value="history"><History className="h-4 w-4 mr-2" />Login History</TabsTrigger>
-                  <TabsTrigger value="privacy"><Shield className="h-4 w-4 mr-2" />Privacy</TabsTrigger>
-                </>
-              ) : (
-                <>
-                  <TabsTrigger value="institution"><Building2 className="h-4 w-4 mr-2" />Institution</TabsTrigger>
-                  <TabsTrigger value="security"><Lock className="h-4 w-4 mr-2" />Security</TabsTrigger>
-                  <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notifications</TabsTrigger>
-                  <TabsTrigger value="history"><History className="h-4 w-4 mr-2" />Login History</TabsTrigger>
-                  <TabsTrigger value="privacy"><Shield className="h-4 w-4 mr-2" />Privacy</TabsTrigger>
-                </>
-              )}
-            </TabsList>
-          </div>
+        <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border bg-background/95 backdrop-blur">
+          <TabsList variant="line" className="px-4 md:px-6 justify-start">
+            {isCandidate ? (
+              <>
+                <TabsTrigger value="account"><User className="h-4 w-4 mr-2" />Account</TabsTrigger>
+                <TabsTrigger value="security"><Lock className="h-4 w-4 mr-2" />Security</TabsTrigger>
+                <TabsTrigger value="billing"><CreditCard className="h-4 w-4 mr-2" />Billing</TabsTrigger>
+                <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notifications</TabsTrigger>
+                <TabsTrigger value="history"><History className="h-4 w-4 mr-2" />Login History</TabsTrigger>
+                <TabsTrigger value="privacy"><Shield className="h-4 w-4 mr-2" />Privacy</TabsTrigger>
+              </>
+            ) : (
+              <>
+                <TabsTrigger value="institution"><Building2 className="h-4 w-4 mr-2" />Institution</TabsTrigger>
+                <TabsTrigger value="security"><Lock className="h-4 w-4 mr-2" />Security</TabsTrigger>
+                <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notifications</TabsTrigger>
+                <TabsTrigger value="history"><History className="h-4 w-4 mr-2" />Login History</TabsTrigger>
+                <TabsTrigger value="privacy"><Shield className="h-4 w-4 mr-2" />Privacy</TabsTrigger>
+              </>
+            )}
+          </TabsList>
         </div>
 
         <div className="px-4 py-6 md:px-6 md:py-8">
