@@ -10,6 +10,7 @@ import {
     IconSearch, IconSettings, IconShieldCheck, IconUser, IconUserCircle,
     IconUsers, IconUsersGroup, IconCreditCard, IconCalendarEvent, IconSchool,
     IconBriefcase2, IconFileAnalytics, IconTargetArrow,
+    IconSun, IconMoon, IconDeviceLaptop, IconCheck,
 } from "@tabler/icons-react"
 import {
     Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
@@ -27,9 +28,12 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useSidebarHoverContext } from "@/components/dashboard-shell"
+import { useTheme } from "next-themes"
+
 
 
 // ─── Role-based nav definitions ──────────────────────────────────────────────
+
 
 
 type NavItem = {
@@ -39,7 +43,9 @@ type NavItem = {
 }
 
 
+
 const VALID_ACCOUNT_TYPES: AccountType[] = ["candidate", "institute", "admin", "recruiter"]
+
 
 
 const NAV_MAIN: Record<AccountType, NavItem[]> = {
@@ -80,11 +86,13 @@ const NAV_MAIN: Record<AccountType, NavItem[]> = {
 }
 
 
+
 const NAV_SECONDARY: NavItem[] = [
     { title: "Notifications", url: "/~/notifications", icon: IconBell },
     { title: "Settings",      url: "/~/settings",      icon: IconSettings },
     { title: "Get Help",      url: "/~/help",           icon: IconHelp },
 ]
+
 
 
 const ROLE_LABELS: Record<AccountType, string> = {
@@ -95,6 +103,7 @@ const ROLE_LABELS: Record<AccountType, string> = {
 }
 
 
+
 const ROLE_COLORS: Record<AccountType, string> = {
     candidate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     institute: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
@@ -103,7 +112,27 @@ const ROLE_COLORS: Record<AccountType, string> = {
 }
 
 
+
+// ─── Theme options ────────────────────────────────────────────────────────────
+
+
+
+type ThemeOption = {
+    value: string
+    label: string
+    icon: Icon
+}
+
+const THEME_OPTIONS: ThemeOption[] = [
+    { value: "light",  label: "Light",  icon: IconSun },
+    { value: "dark",   label: "Dark",   icon: IconMoon },
+    { value: "system", label: "System", icon: IconDeviceLaptop },
+]
+
+
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 
 function safeAccountType(type: string | null | undefined): AccountType {
@@ -113,13 +142,23 @@ function safeAccountType(type: string | null | undefined): AccountType {
 }
 
 
+
 // ─── NavUser ──────────────────────────────────────────────────────────────────
+
 
 
 export function NavUser({ user }: { user: UserProfile }) {
     const { isMobile }              = useSidebar()
     const router                    = useRouter()
     const { onUserMenuOpenChange }  = useSidebarHoverContext()
+    const { theme, setTheme }       = useTheme()
+
+    /**
+     * next-themes reads from localStorage/system on the client only.
+     * Guard the active-check behind `mounted` to avoid SSR hydration mismatches.
+     */
+    const [mounted, setMounted] = React.useState(false)
+    React.useEffect(() => setMounted(true), [])
 
     const displayName  = user.display_name?.trim() || "User"
     const email        = user.email?.trim()         || "No email"
@@ -128,11 +167,13 @@ export function NavUser({ user }: { user: UserProfile }) {
         ? displayName.split(" ").filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2)
         : (user.email?.trim()[0]?.toUpperCase() ?? "?")
 
+
     const handleLogout = async () => {
         const supabase = createClient()
         await supabase.auth.signOut()
         router.push("/auth/login")
     }
+
 
     return (
         <SidebarMenu>
@@ -158,6 +199,7 @@ export function NavUser({ user }: { user: UserProfile }) {
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
 
+
                     <DropdownMenuContent
                         className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
                         side={isMobile ? "bottom" : "right"}
@@ -171,6 +213,7 @@ export function NavUser({ user }: { user: UserProfile }) {
                         onPointerLeave={() => onUserMenuOpenChange(false)}
                         onCloseAutoFocus={(e) => e.preventDefault()}
                     >
+                        {/* ── User identity header ───────────────────── */}
                         <DropdownMenuLabel className="p-0 font-normal">
                             <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                                 <Avatar className="h-8 w-8 rounded-lg">
@@ -184,7 +227,10 @@ export function NavUser({ user }: { user: UserProfile }) {
                             </div>
                         </DropdownMenuLabel>
 
+
                         <DropdownMenuSeparator />
+
+                        {/* ── Account / billing / notifications ─────── */}
                         <DropdownMenuGroup>
                             <DropdownMenuItem>
                                 <IconUserCircle />
@@ -203,9 +249,41 @@ export function NavUser({ user }: { user: UserProfile }) {
                             </DropdownMenuItem>
                         </DropdownMenuGroup>
 
+
                         <DropdownMenuSeparator />
 
-                        <DropdownMenuItem variant="destructive" onClick={handleLogout} className="cursor-pointer">
+                        {/* ── Theme selector ─────────────────────────── */}
+                        <DropdownMenuGroup>
+                            <DropdownMenuLabel className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                                Appearance
+                            </DropdownMenuLabel>
+                            {THEME_OPTIONS.map(({ value, label, icon: ThemeIcon }) => {
+                                const isActive = mounted && theme === value
+                                return (
+                                    <DropdownMenuItem
+                                        key={value}
+                                        onClick={() => setTheme(value)}
+                                        className="cursor-pointer"
+                                    >
+                                        <ThemeIcon className="size-4 shrink-0" />
+                                        <span className="flex-1">{label}</span>
+                                        {isActive && (
+                                            <IconCheck className="ml-auto size-3.5 text-primary" />
+                                        )}
+                                    </DropdownMenuItem>
+                                )
+                            })}
+                        </DropdownMenuGroup>
+
+
+                        <DropdownMenuSeparator />
+
+                        {/* ── Logout ─────────────────────────────────── */}
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onClick={handleLogout}
+                            className="cursor-pointer"
+                        >
                             <IconLogout />
                             Log out
                         </DropdownMenuItem>
@@ -217,12 +295,15 @@ export function NavUser({ user }: { user: UserProfile }) {
 }
 
 
+
 // ─── NavMain ──────────────────────────────────────────────────────────────────
+
 
 
 export function NavMain({ items }: { items: NavItem[] }) {
     const pathname        = usePathname()
     const { setOpenMobile } = useSidebar()
+
 
     return (
         <SidebarGroup>
@@ -252,7 +333,9 @@ export function NavMain({ items }: { items: NavItem[] }) {
 }
 
 
+
 // ─── NavSecondary ─────────────────────────────────────────────────────────────
+
 
 
 export function NavSecondary({
@@ -263,6 +346,7 @@ export function NavSecondary({
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
     const pathname          = usePathname()
     const { setOpenMobile } = useSidebar()
+
 
     return (
         <SidebarGroup {...props}>
@@ -291,15 +375,19 @@ export function NavSecondary({
 }
 
 
+
 // ─── AppSidebarSkeleton ───────────────────────────────────────────────────────
+
 
 
 export function AppSidebarSkeleton() {
     const { state } = useSidebar()
     const collapsed  = state === "collapsed"
 
+
     return (
         <Sidebar collapsible="icon" variant="inset">
+
 
             {/* ── Header ─────────────────────────────────────── */}
             <SidebarHeader>
@@ -313,8 +401,10 @@ export function AppSidebarSkeleton() {
                 </SidebarMenu>
             </SidebarHeader>
 
+
             {/* ── Content ────────────────────────────────────── */}
             <SidebarContent>
+
 
                 {/* Primary nav — 6 items mirrors candidate/admin max */}
                 <SidebarGroup>
@@ -322,17 +412,13 @@ export function AppSidebarSkeleton() {
                         <SidebarMenu>
                             {Array.from({ length: 6 }).map((_, i) => (
                                 <SidebarMenuItem key={i}>
-                                    {/*
-                                     * SidebarMenuSkeleton already suppresses the
-                                     * text bar via group-data-[collapsible=icon]
-                                     * CSS when collapsed — no change needed here.
-                                     */}
                                     <SidebarMenuSkeleton showIcon />
                                 </SidebarMenuItem>
                             ))}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
+
 
                 {/* Secondary nav — pushed to bottom */}
                 <SidebarGroup className="mt-auto">
@@ -347,7 +433,9 @@ export function AppSidebarSkeleton() {
                     </SidebarGroupContent>
                 </SidebarGroup>
 
+
             </SidebarContent>
+
 
             {/* ── Footer ─────────────────────────────────────── */}
             <SidebarFooter>
@@ -367,13 +455,16 @@ export function AppSidebarSkeleton() {
                 </div>
             </SidebarFooter>
 
+
         </Sidebar>
     )
 }
 
 
 
+
 // ─── AppSidebar ───────────────────────────────────────────────────────────────
+
 
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -381,10 +472,12 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 
+
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
     const accountType          = safeAccountType(user.account_type)
     const mainNav              = NAV_MAIN[accountType]
     const { hoverProps }       = useSidebarHoverContext()
+
 
     return (
         <Sidebar
@@ -412,10 +505,12 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
                 </SidebarMenu>
             </SidebarHeader>
 
+
             <SidebarContent>
                 <NavMain items={mainNav} />
                 <NavSecondary items={NAV_SECONDARY} className="mt-auto" />
             </SidebarContent>
+
 
             <SidebarFooter>
                 <NavUser user={user} />
