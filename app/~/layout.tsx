@@ -1,36 +1,16 @@
 import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { AppSidebar, AppSidebarSkeleton } from "@/components/app-sidebar"
-import { Separator } from "@/components/ui/separator"
-import {
-    SidebarInset,
-    SidebarProvider,
-    SidebarTrigger,
-} from "@/components/ui/sidebar"
 import { getUserProfile } from "@/lib/supabase/profile"
+import { DashboardShell } from "@/components/dashboard-shell"
 
-// ─── Header ───────────────────────────────────────────────────────────────────
 
-function SiteHeader() {
-    return (
-        <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
-            <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-                <SidebarTrigger className="-ml-1" />
-                <Separator
-                    orientation="vertical"
-                    className="mx-2 data-[orientation=vertical]:h-4"
-                />
-                <h1 className="text-base font-medium">Dashboard</h1>
-            </div>
-        </header>
-    )
-}
+// ─── Sidebar Loader (async server component) ──────────────────────────────────
 
-// ─── Sidebar loader (async server component) ──────────────────────────────────
 
 /**
- * Isolated from the layout so Suspense can show AppSidebarSkeleton
- * while the profile is being fetched, without blocking children.
+ * Isolated so Suspense can show AppSidebarSkeleton while the profile
+ * fetch is in-flight, without blocking children from rendering.
  */
 async function SidebarLoader() {
     const profile = await getUserProfile()
@@ -42,7 +22,9 @@ async function SidebarLoader() {
     return <AppSidebar user={profile} />
 }
 
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
+
 
 export default function DashboardLayout({
     children,
@@ -50,32 +32,14 @@ export default function DashboardLayout({
     children: React.ReactNode
 }) {
     return (
-        <SidebarProvider
-            style={
-                {
-                    "--sidebar-width": "calc(var(--spacing) * 72)",
-                    "--header-height": "calc(var(--spacing) * 12)",
-                } as React.CSSProperties
+        <DashboardShell
+            sidebar={
+                <Suspense fallback={<AppSidebarSkeleton />}>
+                    <SidebarLoader />
+                </Suspense>
             }
         >
-            {/*
-             * AppSidebarSkeleton is shown while the async profile fetch
-             * resolves. Children render immediately — no waterfall.
-             */}
-            <Suspense fallback={<AppSidebarSkeleton />}>
-                <SidebarLoader />
-            </Suspense>
-
-            <SidebarInset>
-                <SiteHeader />
-                <div className="flex flex-1 flex-col">
-                    <div className="@container/main flex flex-1 flex-col gap-2">
-                        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-                            {children}
-                        </div>
-                    </div>
-                </div>
-            </SidebarInset>
-        </SidebarProvider>
+            {children}
+        </DashboardShell>
     )
 }

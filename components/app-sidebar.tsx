@@ -26,9 +26,11 @@ import { AccountType, UserProfile } from "@/lib/supabase/profile"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useSidebarHoverContext } from "@/components/dashboard-shell"
 
 
 // ─── Role-based nav definitions ──────────────────────────────────────────────
+
 
 type NavItem = {
     title: string
@@ -36,88 +38,95 @@ type NavItem = {
     icon: Icon
 }
 
+
 const VALID_ACCOUNT_TYPES: AccountType[] = ["candidate", "institute", "admin", "recruiter"]
+
 
 const NAV_MAIN: Record<AccountType, NavItem[]> = {
     candidate: [
-        { title: "Home", url: "/~/home", icon: IconHome },
-        { title: "Job Search", url: "/~/jobs", icon: IconSearch },
+        { title: "Home",            url: "/~/home",         icon: IconHome },
+        { title: "Job Search",      url: "/~/jobs",         icon: IconSearch },
         { title: "My Applications", url: "/~/applications", icon: IconClipboardList },
-        { title: "Tests", url: "/~/tests", icon: IconChartBar },
-        { title: "Resume", url: "/~/resume", icon: IconFileDescription },
-        { title: "Events", url: "/~/events", icon: IconCalendarEvent },
+        { title: "Tests",           url: "/~/tests",        icon: IconChartBar },
+        { title: "Resume",          url: "/~/resume",       icon: IconFileDescription },
+        { title: "Events",          url: "/~/events",       icon: IconCalendarEvent },
     ],
     institute: [
-        { title: "Home", url: "/~/home", icon: IconHome },
-        { title: "Students", url: "/~/students", icon: IconSchool },
-        { title: "Drives", url: "/~/drives", icon: IconFolder },
-        { title: "Tests", url: "/~/tests", icon: IconChartBar },
-        { title: "Reports", url: "/~/reports", icon: IconReport },
+        { title: "Home",       url: "/~/home",       icon: IconHome },
+        { title: "Students",   url: "/~/students",   icon: IconSchool },
+        { title: "Drives",     url: "/~/drives",     icon: IconFolder },
+        { title: "Tests",      url: "/~/tests",      icon: IconChartBar },
+        { title: "Reports",    url: "/~/reports",    icon: IconReport },
         { title: "Recruiters", url: "/~/recruiters", icon: IconBriefcase },
     ],
     admin: [
-        { title: "Home", url: "/~/home", icon: IconHome },
-        { title: "Users", url: "/~/users", icon: IconUsers },
-        { title: "Groups", url: "/~/groups", icon: IconUsersGroup },
-        { title: "Drives", url: "/~/drives", icon: IconFolder },
-        { title: "Tests", url: "/~/tests", icon: IconChartBar },
-        { title: "Events", url: "/~/events", icon: IconCalendarEvent },
+        { title: "Home",      url: "/~/home",      icon: IconHome },
+        { title: "Users",     url: "/~/users",     icon: IconUsers },
+        { title: "Groups",    url: "/~/groups",    icon: IconUsersGroup },
+        { title: "Drives",    url: "/~/drives",    icon: IconFolder },
+        { title: "Tests",     url: "/~/tests",     icon: IconChartBar },
+        { title: "Events",    url: "/~/events",    icon: IconCalendarEvent },
         { title: "Analytics", url: "/~/analytics", icon: IconFileAnalytics },
-        { title: "Reports", url: "/~/reports", icon: IconReport },
+        { title: "Reports",   url: "/~/reports",   icon: IconReport },
     ],
     recruiter: [
-        { title: "Home", url: "/~/home", icon: IconHome },
-        { title: "Job Postings", url: "/~/postings", icon: IconBriefcase2 },
-        { title: "Candidates", url: "/~/candidates", icon: IconTargetArrow },
-        { title: "Drives", url: "/~/drives", icon: IconFolder },
-        { title: "Tests", url: "/~/tests", icon: IconChartBar },
-        { title: "Reports", url: "/~/reports", icon: IconReport },
+        { title: "Home",         url: "/~/home",       icon: IconHome },
+        { title: "Job Postings", url: "/~/postings",   icon: IconBriefcase2 },
+        { title: "Candidates",   url: "/~/candidates", icon: IconTargetArrow },
+        { title: "Drives",       url: "/~/drives",     icon: IconFolder },
+        { title: "Tests",        url: "/~/tests",      icon: IconChartBar },
+        { title: "Reports",      url: "/~/reports",    icon: IconReport },
     ],
 }
 
+
 const NAV_SECONDARY: NavItem[] = [
     { title: "Notifications", url: "/~/notifications", icon: IconBell },
-    { title: "Settings", url: "/~/settings", icon: IconSettings },
-    { title: "Get Help", url: "/~/help", icon: IconHelp },
+    { title: "Settings",      url: "/~/settings",      icon: IconSettings },
+    { title: "Get Help",      url: "/~/help",           icon: IconHelp },
 ]
+
 
 const ROLE_LABELS: Record<AccountType, string> = {
     candidate: "Candidate",
     institute: "Institute",
-    admin: "Admin",
+    admin:     "Admin",
     recruiter: "Recruiter",
 }
+
 
 const ROLE_COLORS: Record<AccountType, string> = {
     candidate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     institute: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    admin: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    admin:     "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
     recruiter: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
 }
 
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Guards against a corrupt/missing account_type value in the DB row. */
+
 function safeAccountType(type: string | null | undefined): AccountType {
     return VALID_ACCOUNT_TYPES.includes(type as AccountType)
         ? (type as AccountType)
         : "candidate"
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+
+// ─── NavUser ──────────────────────────────────────────────────────────────────
+
 
 export function NavUser({ user }: { user: UserProfile }) {
-    const { isMobile } = useSidebar()
-    const router = useRouter()
+    const { isMobile }              = useSidebar()
+    const router                    = useRouter()
+    const { onUserMenuOpenChange }  = useSidebarHoverContext()
 
-    // ── Fallbacks ──
-    const displayName = user.display_name?.trim() || "User"
-    const email = user.email?.trim() || "No email"
-    const accountType = safeAccountType(user.account_type)
-    const initials = user.display_name?.trim()
+    const displayName  = user.display_name?.trim() || "User"
+    const email        = user.email?.trim()         || "No email"
+    const accountType  = safeAccountType(user.account_type)
+    const initials     = user.display_name?.trim()
         ? displayName.split(" ").filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2)
         : (user.email?.trim()[0]?.toUpperCase() ?? "?")
-
 
     const handleLogout = async () => {
         const supabase = createClient()
@@ -128,13 +137,16 @@ export function NavUser({ user }: { user: UserProfile }) {
     return (
         <SidebarMenu>
             <SidebarMenuItem>
-                <DropdownMenu>
+                <DropdownMenu
+                    onOpenChange={onUserMenuOpenChange}
+                    modal={false}
+                >
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
                             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                         >
-                            <Avatar className="h-8 w-8 rounded-lg grayscale">
+                            <Avatar className="h-8 w-8 rounded-lg">
                                 <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
                                 <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                             </Avatar>
@@ -151,6 +163,13 @@ export function NavUser({ user }: { user: UserProfile }) {
                         side={isMobile ? "bottom" : "right"}
                         align="end"
                         sideOffset={4}
+                        /**
+                         * Keep hover-suspension alive while pointer moves from
+                         * the trigger into the dropdown content.
+                         */
+                        onPointerEnter={() => onUserMenuOpenChange(true)}
+                        onPointerLeave={() => onUserMenuOpenChange(false)}
+                        onCloseAutoFocus={(e) => e.preventDefault()}
                     >
                         <DropdownMenuLabel className="p-0 font-normal">
                             <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
@@ -169,7 +188,8 @@ export function NavUser({ user }: { user: UserProfile }) {
                         <DropdownMenuGroup>
                             <DropdownMenuItem>
                                 <IconUserCircle />
-                                Account <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[accountType]}`}>
+                                Account{" "}
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[accountType]}`}>
                                     {ROLE_LABELS[accountType]}
                                 </span>
                             </DropdownMenuItem>
@@ -185,7 +205,7 @@ export function NavUser({ user }: { user: UserProfile }) {
 
                         <DropdownMenuSeparator />
 
-                        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+                        <DropdownMenuItem variant="destructive" onClick={handleLogout} className="cursor-pointer">
                             <IconLogout />
                             Log out
                         </DropdownMenuItem>
@@ -196,8 +216,12 @@ export function NavUser({ user }: { user: UserProfile }) {
     )
 }
 
+
+// ─── NavMain ──────────────────────────────────────────────────────────────────
+
+
 export function NavMain({ items }: { items: NavItem[] }) {
-    const pathname = usePathname()
+    const pathname        = usePathname()
     const { setOpenMobile } = useSidebar()
 
     return (
@@ -209,17 +233,12 @@ export function NavMain({ items }: { items: NavItem[] }) {
                             <SidebarMenuButton
                                 tooltip={item.title}
                                 asChild
-                                // Exact match for the item URL, or a child route
                                 isActive={
                                     pathname === item.url ||
                                     pathname.startsWith(item.url + "/")
                                 }
                             >
-                                <Link
-                                    href={item.url}
-                                    // Close the mobile drawer on navigation
-                                    onClick={() => setOpenMobile(false)}
-                                >
+                                <Link href={item.url} onClick={() => setOpenMobile(false)}>
                                     <item.icon />
                                     <span>{item.title}</span>
                                 </Link>
@@ -232,13 +251,17 @@ export function NavMain({ items }: { items: NavItem[] }) {
     )
 }
 
+
+// ─── NavSecondary ─────────────────────────────────────────────────────────────
+
+
 export function NavSecondary({
     items,
     ...props
 }: {
     items: NavItem[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
-    const pathname = usePathname()
+    const pathname          = usePathname()
     const { setOpenMobile } = useSidebar()
 
     return (
@@ -267,34 +290,43 @@ export function NavSecondary({
     )
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
-/**
- * Rendered by Suspense in the layout while getUserProfile() is in-flight.
- * Uses shadcn's built-in SidebarMenuSkeleton (showIcon variant) for nav rows,
- * and plain Skeleton for the logo + footer user tile.
- */
+// ─── AppSidebarSkeleton ───────────────────────────────────────────────────────
+
+
 export function AppSidebarSkeleton() {
+    const { state } = useSidebar()
+    const collapsed  = state === "collapsed"
+
     return (
         <Sidebar collapsible="icon" variant="inset">
+
+            {/* ── Header ─────────────────────────────────────── */}
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <div className="flex items-center gap-2 p-1.5">
+                        <div className={`flex items-center gap-2 p-1.5 ${collapsed ? "justify-center" : ""}`}>
                             <Skeleton className="size-5 rounded-md shrink-0" />
-                            <Skeleton className="h-5 w-24" />
+                            {!collapsed && <Skeleton className="h-5 w-24" />}
                         </div>
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
 
+            {/* ── Content ────────────────────────────────────── */}
             <SidebarContent>
-                {/* Main nav skeleton – 6 rows */}
+
+                {/* Primary nav — 6 items mirrors candidate/admin max */}
                 <SidebarGroup>
                     <SidebarGroupContent className="flex flex-col gap-2">
                         <SidebarMenu>
                             {Array.from({ length: 6 }).map((_, i) => (
                                 <SidebarMenuItem key={i}>
+                                    {/*
+                                     * SidebarMenuSkeleton already suppresses the
+                                     * text bar via group-data-[collapsible=icon]
+                                     * CSS when collapsed — no change needed here.
+                                     */}
                                     <SidebarMenuSkeleton showIcon />
                                 </SidebarMenuItem>
                             ))}
@@ -302,7 +334,7 @@ export function AppSidebarSkeleton() {
                     </SidebarGroupContent>
                 </SidebarGroup>
 
-                {/* Secondary nav skeleton – 3 rows, pushed to bottom */}
+                {/* Secondary nav — pushed to bottom */}
                 <SidebarGroup className="mt-auto">
                     <SidebarGroupContent>
                         <SidebarMenu>
@@ -314,35 +346,53 @@ export function AppSidebarSkeleton() {
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
+
             </SidebarContent>
 
-            {/* Footer user tile skeleton */}
+            {/* ── Footer ─────────────────────────────────────── */}
             <SidebarFooter>
-                <div className="flex items-center gap-2 p-2">
+                <div className={`flex items-center gap-2 p-2 ${collapsed ? "justify-center" : ""}`}>
                     <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
-                    <div className="flex flex-col gap-1.5 flex-1 overflow-hidden">
-                        <Skeleton className="h-3.5 w-28" />
-                        <Skeleton className="h-3 w-36" />
-                    </div>
-                    <Skeleton className="h-4 w-4 rounded shrink-0" />
+
+                    {/* Hide name / email / dots in icon-only mode */}
+                    {!collapsed && (
+                        <>
+                            <div className="flex flex-col gap-1.5 flex-1 overflow-hidden">
+                                <Skeleton className="h-3.5 w-28" />
+                                <Skeleton className="h-3 w-36" />
+                            </div>
+                            <Skeleton className="h-4 w-4 rounded shrink-0" />
+                        </>
+                    )}
                 </div>
             </SidebarFooter>
+
         </Sidebar>
     )
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+
+
+// ─── AppSidebar ───────────────────────────────────────────────────────────────
+
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
     user: UserProfile
 }
 
+
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-    const accountType = safeAccountType(user.account_type)
-    const mainNav = NAV_MAIN[accountType]
+    const accountType          = safeAccountType(user.account_type)
+    const mainNav              = NAV_MAIN[accountType]
+    const { hoverProps }       = useSidebarHoverContext()
 
     return (
-        <Sidebar collapsible="icon" variant="inset" {...props}>
+        <Sidebar
+            collapsible="icon"
+            variant="inset"
+            {...hoverProps}   // onPointerEnter / onPointerLeave from DashboardShell
+            {...props}
+        >
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
