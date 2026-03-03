@@ -87,26 +87,18 @@ const company = [
     href: "https://360viewtech.in/",
   },
   {
-    title: "Careers",
-    href: "#",
-  },
-  {
-    title: "Brand assets",
-    href: "#",
-  },
-  {
     title: "Privacy Policy",
     href: "/privacy-policy",
   },
   {
     title: "Terms of Service",
-    href: "#",
+    href: "/terms-of-service",
   },
 ];
 
 const resources = [
   {
-    title: "Blog",
+    title: "Pricing",
     href: "#",
   },
   {
@@ -114,16 +106,8 @@ const resources = [
     href: "#",
   },
   {
-    title: "Contact Support",
-    href: "#",
-  },
-  {
-    title: "Community",
-    href: "#",
-  },
-  {
-    title: "Security",
-    href: "#",
+	title: "FAQs",
+	href: "#",
   },
 ];
 
