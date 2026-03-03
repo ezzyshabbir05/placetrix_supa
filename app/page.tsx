@@ -9,6 +9,8 @@ import { GridFiller } from "@/components/ui/landing/grid-filler";
 import { GridPattern } from "@/components/ui/landing/grid-pattern";
 import { Avatar } from "@/components/ui/avatar";
 import Link from "next/link";
+import { Footer } from "@/components/footer";
+import { HeaderWrapper } from "@/components/header-wrapper";
 
 
 function HeroSection() {
@@ -219,7 +221,7 @@ function TestimonialsCard({
 export default function LandingPage() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden supports-[overflow:clip]:overflow-clip">
-      <Header />
+      <HeaderWrapper />
       <main
         className={cn(
           "relative mx-auto w-full max-w-4xl grow",
@@ -230,6 +232,7 @@ export default function LandingPage() {
       >
         <HeroSection />
         <TestimonialsSection />
+        <Footer />
       </main>
     </div>
   );
