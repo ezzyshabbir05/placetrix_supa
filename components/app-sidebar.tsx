@@ -31,9 +31,7 @@ import { useSidebarHoverContext } from "@/components/dashboard-shell"
 import { useTheme } from "next-themes"
 
 
-
 // ─── Role-based nav definitions ──────────────────────────────────────────────
-
 
 
 type NavItem = {
@@ -43,10 +41,7 @@ type NavItem = {
 }
 
 
-
 const VALID_ACCOUNT_TYPES: AccountType[] = ["candidate", "institute", "admin", "recruiter"]
-
-
 
 const NAV_MAIN: Record<AccountType, NavItem[]> = {
     candidate: [
@@ -85,15 +80,11 @@ const NAV_MAIN: Record<AccountType, NavItem[]> = {
     ],
 }
 
-
-
 const NAV_SECONDARY: NavItem[] = [
     { title: "Notifications", url: "/~/notifications", icon: IconBell },
     { title: "Settings", url: "/~/settings", icon: IconSettings },
     { title: "Get Help", url: "/~/help", icon: IconHelp },
 ]
-
-
 
 const ROLE_LABELS: Record<AccountType, string> = {
     candidate: "Candidate",
@@ -101,8 +92,6 @@ const ROLE_LABELS: Record<AccountType, string> = {
     admin: "Admin",
     recruiter: "Recruiter",
 }
-
-
 
 const ROLE_COLORS: Record<AccountType, string> = {
     candidate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -112,16 +101,10 @@ const ROLE_COLORS: Record<AccountType, string> = {
 }
 
 
-
 // ─── Theme options ────────────────────────────────────────────────────────────
 
 
-
-type ThemeOption = {
-    value: string
-    label: string
-    icon: Icon
-}
+type ThemeOption = { value: string; label: string; icon: Icon }
 
 const THEME_OPTIONS: ThemeOption[] = [
     { value: "light", label: "Light", icon: IconSun },
@@ -130,9 +113,7 @@ const THEME_OPTIONS: ThemeOption[] = [
 ]
 
 
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 
 
 const VALID_ACCOUNT_TYPE_SET = new Set<string>(VALID_ACCOUNT_TYPES)
@@ -143,36 +124,45 @@ function safeAccountType(type: string | null | undefined): AccountType {
         : "candidate"
 }
 
-
+// Largest nav count across all roles — used as skeleton item count so the
+// fallback tree always has the same number of SidebarMenuItem nodes as the
+// most-common real render, avoiding a count-driven useId() drift.
+const MAX_PRIMARY_NAV_COUNT = Math.max(
+    ...VALID_ACCOUNT_TYPES.map((t) => NAV_MAIN[t].length)
+)
 
 
 // ─── NavUser ──────────────────────────────────────────────────────────────────
 
 
-
-export function NavUser({ user }: { user: UserProfile }) {
+/**
+ * Accepts `user: UserProfile | null`.
+ *
+ * When null the trigger button renders a skeleton interior but the
+ * DropdownMenuTrigger (and its Radix useId() call) stays mounted, keeping
+ * the fiber tree identical to the loaded state and preventing the hydration
+ * id mismatch.
+ */
+export function NavUser({ user }: { user: UserProfile | null }) {
     const { isMobile } = useSidebar()
     const router = useRouter()
     const { onUserMenuOpenChange } = useSidebarHoverContext()
     const { theme, setTheme } = useTheme()
 
-    /**
-     * next-themes reads from localStorage/system on the client only.
-     * Guard the active-check behind `mounted` to avoid SSR hydration mismatches.
-     */
+    // next-themes only reads localStorage/system on the client.
     const [mounted, setMounted] = React.useState(false)
     React.useEffect(() => setMounted(true), [])
 
-    const displayName = user.display_name?.trim() || "User"
-    const email = user.email?.trim() || "No email"
-    const sidebarSubtitle = user.username?.trim()
+    // Derived display values — safe to compute even when user is null.
+    const displayName = user?.display_name?.trim() || "User"
+    const email = user?.email?.trim() || "No email"
+    const sidebarSubtitle = user?.username?.trim()
         ? `@${user.username.trim()}`
         : email
-    const accountType = safeAccountType(user.account_type)
-    const initials = user.display_name?.trim()
+    const accountType = safeAccountType(user?.account_type)
+    const initials = user?.display_name?.trim()
         ? displayName.split(" ").filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-        : (user.email?.trim()[0]?.toUpperCase() ?? "?")
-
+        : (user?.email?.trim()[0]?.toUpperCase() ?? "?")
 
     const handleLogout = async () => {
         const supabase = createClient()
@@ -180,121 +170,139 @@ export function NavUser({ user }: { user: UserProfile }) {
         router.push("/auth/login")
     }
 
-
     return (
         <SidebarMenu>
             <SidebarMenuItem>
+                {/*
+                 * DropdownMenu + DropdownMenuTrigger are ALWAYS rendered,
+                 * even when user is null (skeleton state).
+                 * This keeps Radix's useId() call at the same fiber position
+                 * on server (fallback) and client (resolved), fixing the
+                 * id hydration mismatch.
+                 */}
                 <DropdownMenu
                     onOpenChange={onUserMenuOpenChange}
                     modal={false}
                 >
-                    <DropdownMenuTrigger asChild>
+                    <DropdownMenuTrigger asChild disabled={!user}>
                         <SidebarMenuButton
                             size="lg"
                             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                         >
-                            <Avatar className="h-8 w-8 rounded-lg">
-                                <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
-                                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
-                            </Avatar>
-                            <div className="grid flex-1 text-left text-sm leading-tight">
-                                <span className="truncate font-medium">{displayName}</span>
-                                {/* ✅ Show username if available, else fall back to email */}
-                                <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
-                            </div>
-                            <IconDotsVertical className="ml-auto size-4" />
+                            {user ? (
+                                // ── Loaded state ──────────────────────────────
+                                <>
+                                    <Avatar className="h-8 w-8 rounded-lg">
+                                        <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
+                                        <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="grid flex-1 text-left text-sm leading-tight">
+                                        <span className="truncate font-medium">{displayName}</span>
+                                        <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
+                                    </div>
+                                    <IconDotsVertical className="ml-auto size-4" />
+                                </>
+                            ) : (
+                                // ── Skeleton state ────────────────────────────
+                                <>
+                                    <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+                                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                                        <Skeleton className="h-3.5 w-28" />
+                                        <Skeleton className="h-3 w-36" />
+                                    </div>
+                                    <Skeleton className="h-4 w-4 rounded shrink-0 ml-auto" />
+                                </>
+                            )}
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
 
-
-                    <DropdownMenuContent
-                        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-                        side={isMobile ? "bottom" : "right"}
-                        align="end"
-                        sideOffset={4}
-                        /**
-                         * Keep hover-suspension alive while pointer moves from
-                         * the trigger into the dropdown content.
-                         */
-                        onPointerEnter={() => onUserMenuOpenChange(true)}
-                        onPointerLeave={() => onUserMenuOpenChange(false)}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                    >
-                        {/* ── User identity header ───────────────────── */}
-                        <DropdownMenuLabel className="p-0 font-normal">
-                            <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                                <Avatar className="h-8 w-8 rounded-lg">
-                                    <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
-                                    <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
-                                </Avatar>
-                                <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-medium">{displayName}</span>
-                                    <span className="truncate text-xs text-muted-foreground">{email}</span>
-                                </div>
-                            </div>
-                        </DropdownMenuLabel>
-
-
-                        <DropdownMenuSeparator />
-
-                        {/* ── Account / billing / notifications ─────── */}
-                        <DropdownMenuGroup>
-                            <DropdownMenuItem>
-                                <IconUserCircle />
-                                Account{" "}
-                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[accountType]}`}>
-                                    {ROLE_LABELS[accountType]}
-                                </span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <IconCreditCard />
-                                Billing
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <IconNotification />
-                                Notifications
-                            </DropdownMenuItem>
-                        </DropdownMenuGroup>
-
-
-                        <DropdownMenuSeparator />
-
-                        {/* ── Theme selector ─────────────────────────── */}
-                        <DropdownMenuGroup>
-                            <DropdownMenuLabel className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                                Appearance
-                            </DropdownMenuLabel>
-                            {THEME_OPTIONS.map(({ value, label, icon: ThemeIcon }) => {
-                                const isActive = mounted && theme === value
-                                return (
-                                    <DropdownMenuItem
-                                        key={value}
-                                        onClick={() => setTheme(value)}
-                                        className="cursor-pointer"
-                                    >
-                                        <ThemeIcon className="size-4 shrink-0" />
-                                        <span className="flex-1">{label}</span>
-                                        {isActive && (
-                                            <IconCheck className="ml-auto size-3.5 text-primary" />
-                                        )}
-                                    </DropdownMenuItem>
-                                )
-                            })}
-                        </DropdownMenuGroup>
-
-
-                        <DropdownMenuSeparator />
-
-                        {/* ── Logout ─────────────────────────────────── */}
-                        <DropdownMenuItem
-                            variant="destructive"
-                            onClick={handleLogout}
-                            className="cursor-pointer"
+                    {/*
+                     * Only render dropdown content when the user is loaded.
+                     * The trigger itself stays in the tree regardless (see above).
+                     */}
+                    {user && (
+                        <DropdownMenuContent
+                            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                            side={isMobile ? "bottom" : "right"}
+                            align="end"
+                            sideOffset={4}
+                            onPointerEnter={() => onUserMenuOpenChange(true)}
+                            onPointerLeave={() => onUserMenuOpenChange(false)}
+                            onCloseAutoFocus={(e) => e.preventDefault()}
                         >
-                            <IconLogout />
-                            Log out
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
+                            {/* ── User identity header ───────────────────── */}
+                            <DropdownMenuLabel className="p-0 font-normal">
+                                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                                    <Avatar className="h-8 w-8 rounded-lg">
+                                        <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
+                                        <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="grid flex-1 text-left text-sm leading-tight">
+                                        <span className="truncate font-medium">{displayName}</span>
+                                        <span className="truncate text-xs text-muted-foreground">{email}</span>
+                                    </div>
+                                </div>
+                            </DropdownMenuLabel>
+
+                            <DropdownMenuSeparator />
+
+                            {/* ── Account / billing / notifications ─────── */}
+                            <DropdownMenuGroup>
+                                <DropdownMenuItem>
+                                    <IconUserCircle />
+                                    Account{" "}
+                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[accountType]}`}>
+                                        {ROLE_LABELS[accountType]}
+                                    </span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem>
+                                    <IconCreditCard />
+                                    Billing
+                                </DropdownMenuItem>
+                                <DropdownMenuItem>
+                                    <IconNotification />
+                                    Notifications
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
+
+                            <DropdownMenuSeparator />
+
+                            {/* ── Theme selector ─────────────────────────── */}
+                            <DropdownMenuGroup>
+                                <DropdownMenuLabel className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                                    Appearance
+                                </DropdownMenuLabel>
+                                {THEME_OPTIONS.map(({ value, label, icon: ThemeIcon }) => {
+                                    const isActive = mounted && theme === value
+                                    return (
+                                        <DropdownMenuItem
+                                            key={value}
+                                            onClick={() => setTheme(value)}
+                                            className="cursor-pointer"
+                                        >
+                                            <ThemeIcon className="size-4 shrink-0" />
+                                            <span className="flex-1">{label}</span>
+                                            {isActive && (
+                                                <IconCheck className="ml-auto size-3.5 text-primary" />
+                                            )}
+                                        </DropdownMenuItem>
+                                    )
+                                })}
+                            </DropdownMenuGroup>
+
+                            <DropdownMenuSeparator />
+
+                            {/* ── Logout ─────────────────────────────────── */}
+                            <DropdownMenuItem
+                                variant="destructive"
+                                onClick={handleLogout}
+                                className="cursor-pointer"
+                            >
+                                <IconLogout />
+                                Log out
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    )}
                 </DropdownMenu>
             </SidebarMenuItem>
         </SidebarMenu>
@@ -302,15 +310,12 @@ export function NavUser({ user }: { user: UserProfile }) {
 }
 
 
-
 // ─── NavMain ──────────────────────────────────────────────────────────────────
-
 
 
 export function NavMain({ items }: { items: NavItem[] }) {
     const pathname = usePathname()
     const { setOpenMobile } = useSidebar()
-
 
     return (
         <SidebarGroup>
@@ -340,9 +345,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 }
 
 
-
 // ─── NavSecondary ─────────────────────────────────────────────────────────────
-
 
 
 export function NavSecondary({
@@ -353,7 +356,6 @@ export function NavSecondary({
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
     const pathname = usePathname()
     const { setOpenMobile } = useSidebar()
-
 
     return (
         <SidebarGroup {...props}>
@@ -382,146 +384,122 @@ export function NavSecondary({
 }
 
 
-
-// ─── AppSidebarSkeleton ───────────────────────────────────────────────────────
-
-
-
-// ─── AppSidebarSkeleton ───────────────────────────────────────────────────────
-
-export function AppSidebarSkeleton() {
-    const { state } = useSidebar()
-    const collapsed = state === "collapsed"
-
-    // 6 is the candidate nav count — a sensible mid-range default.
-    // SidebarMenuSkeleton already randomises text widths internally,
-    // and the sidebar's [data-collapsible=icon] CSS hides text skeletons
-    // automatically when collapsed, so no extra guard is needed here.
-    const PRIMARY_COUNT = 6
-
-    return (
-        <Sidebar collapsible="icon" variant="sidebar">
-
-            {/* ── Header ─────────────────────────────────────── */}
-            <SidebarHeader>
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <div className={`flex items-center gap-2 p-1.5 ${collapsed ? "justify-center" : ""}`}>
-                            {/* Match the real logo's size-5.5 */}
-                            <Skeleton className="size-5.5 rounded-md shrink-0" />
-                            {!collapsed && <Skeleton className="h-5 w-24" />}
-                        </div>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarHeader>
-
-            {/* ── Content ────────────────────────────────────── */}
-            <SidebarContent>
-
-                {/* Primary nav */}
-                <SidebarGroup>
-                    <SidebarGroupContent className="flex flex-col gap-2">
-                        <SidebarMenu>
-                            {Array.from({ length: PRIMARY_COUNT }).map((_, i) => (
-                                <SidebarMenuItem key={i}>
-                                    <SidebarMenuSkeleton showIcon />
-                                </SidebarMenuItem>
-                            ))}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
-
-                {/* Secondary nav — derived from the real array so count never drifts */}
-                <SidebarGroup className="mt-auto">
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {Array.from({ length: NAV_SECONDARY.length }).map((_, i) => (
-                                <SidebarMenuItem key={i}>
-                                    <SidebarMenuSkeleton showIcon />
-                                </SidebarMenuItem>
-                            ))}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
-
-            </SidebarContent>
-
-            {/* ── Footer ─────────────────────────────────────── */}
-            <SidebarFooter>
-                <div className={`flex items-center gap-2 p-2 ${collapsed ? "justify-center" : ""}`}>
-                    <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
-
-                    {!collapsed && (
-                        <>
-                            {/* min-w-0 is the correct Flexbox truncation fix, not overflow-hidden */}
-                            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                                <Skeleton className="h-3.5 w-28" />
-                                <Skeleton className="h-3 w-36" />
-                            </div>
-                            <Skeleton className="h-4 w-4 rounded shrink-0" />
-                        </>
-                    )}
-                </div>
-            </SidebarFooter>
-
-        </Sidebar>
-    )
-}
-
-
-
-
-
 // ─── AppSidebar ───────────────────────────────────────────────────────────────
 
 
-
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-    user: UserProfile
+    /**
+     * null = skeleton/loading state (used as the Suspense fallback).
+     * The tree shape is identical in both states so Radix useId() counters
+     * stay in sync between server and client hydration.
+     */
+    user: UserProfile | null
 }
 
-
-
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-    const accountType = safeAccountType(user.account_type)
-    const mainNav = NAV_MAIN[accountType]
+    const accountType = safeAccountType(user?.account_type)
+    const mainNav = user ? NAV_MAIN[accountType] : null
     const { hoverProps } = useSidebarHoverContext()
-
 
     return (
         <Sidebar
             collapsible="icon"
             variant="sidebar"
-            {...hoverProps}   // onPointerEnter / onPointerLeave from DashboardShell
+            {...hoverProps}
             {...props}
         >
+            {/* ── Header ───────────────────────────────────────── */}
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton className="data-[slot=sidebar-menu-button]:!p-1.5 group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent">
-                            <Image
-                                src="/placetrix.svg"
-                                alt="PlaceTrix"
-                                width={25}
-                                height={25}
-                                className="size-5.5! dark:invert dark:brightness-0 dark:contrast-100 transition-all duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[-6deg] group-hover/logo:drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
-                            />
-                            <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider">
-                                PlaceTrix
-                            </span>
-                        </SidebarMenuButton>
+                        {user ? (
+                            <SidebarMenuButton className="data-[slot=sidebar-menu-button]:!p-1.5 group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent">
+                                <Image
+                                    src="/placetrix.svg"
+                                    alt="PlaceTrix"
+                                    width={25}
+                                    height={25}
+                                    className="size-5.5! dark:invert dark:brightness-0 dark:contrast-100 transition-all duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[-6deg] group-hover/logo:drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+                                />
+                                <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider">
+                                    PlaceTrix
+                                </span>
+                            </SidebarMenuButton>
+                        ) : (
+                            <div className="flex items-center gap-2 p-1.5">
+                                <Skeleton className="size-5.5 rounded-md shrink-0" />
+                                <Skeleton className="h-5 w-24" />
+                            </div>
+                        )}
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
 
-
+            {/* ── Content ──────────────────────────────────────── */}
             <SidebarContent>
-                <NavMain items={mainNav} />
-                <NavSecondary items={NAV_SECONDARY} className="mt-auto" />
+                {/* Primary nav */}
+                <SidebarGroup>
+                    <SidebarGroupContent className="flex flex-col gap-2">
+                        <SidebarMenu>
+                            {mainNav ? (
+                                // Loaded: render real nav items
+                                mainNav.map((item) => (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton tooltip={item.title} asChild>
+                                            <Link href={item.url}>
+                                                <item.icon />
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                ))
+                            ) : (
+                                // Skeleton: fixed count matching max role nav length
+                                Array.from({ length: MAX_PRIMARY_NAV_COUNT }).map((_, i) => (
+                                    <SidebarMenuItem key={i}>
+                                        <SidebarMenuSkeleton showIcon />
+                                    </SidebarMenuItem>
+                                ))
+                            )}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+
+                {/* Secondary nav */}
+                <SidebarGroup className="mt-auto">
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {user ? (
+                                NAV_SECONDARY.map((item) => (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton asChild>
+                                            <Link href={item.url}>
+                                                <item.icon />
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                ))
+                            ) : (
+                                Array.from({ length: NAV_SECONDARY.length }).map((_, i) => (
+                                    <SidebarMenuItem key={i}>
+                                        <SidebarMenuSkeleton showIcon />
+                                    </SidebarMenuItem>
+                                ))
+                            )}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
             </SidebarContent>
 
-
+            {/* ── Footer ───────────────────────────────────────── */}
             <SidebarFooter>
+                {/*
+                 * NavUser always mounts here — null triggers its internal
+                 * skeleton state. This is the key fix: DropdownMenuTrigger
+                 * and its Radix useId() call exist in the tree on BOTH the
+                 * server-rendered fallback AND the resolved client render.
+                 */}
                 <NavUser user={user} />
             </SidebarFooter>
         </Sidebar>
