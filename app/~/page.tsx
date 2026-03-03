@@ -1,7 +1,15 @@
 // app/~/page.tsx
-// Required by Next.js parallel routes — the layout renders the
-// correct named slot (@candidate, @institute, etc.) based on RBAC.
-// This default children slot is intentionally empty.
-export default function DashboardPage() {
-  return null;
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function TildePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/~/home");
+  }, [router]);
+
+  return null; // or a loading spinner while redirecting
 }

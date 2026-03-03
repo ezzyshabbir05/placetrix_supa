@@ -111,12 +111,13 @@ export function NavUser({ user }: { user: UserProfile }) {
     const router = useRouter()
 
     // ── Fallbacks ──
-    const displayName = user.display_name?.trim() || "Unknown User"
+    const displayName = user.display_name?.trim() || "User"
     const email = user.email?.trim() || "No email"
     const accountType = safeAccountType(user.account_type)
-    const initials = displayName !== "Unknown User"
+    const initials = user.display_name?.trim()
         ? displayName.split(" ").filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-        : "??"
+        : (user.email?.trim()[0]?.toUpperCase() ?? "?")
+
 
     const handleLogout = async () => {
         const supabase = createClient()
@@ -165,19 +166,12 @@ export function NavUser({ user }: { user: UserProfile }) {
                         </DropdownMenuLabel>
 
                         <DropdownMenuSeparator />
-
-                        <div className="px-2 py-1">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[accountType]}`}>
-                                {ROLE_LABELS[accountType]}
-                            </span>
-                        </div>
-
-                        <DropdownMenuSeparator />
-
                         <DropdownMenuGroup>
                             <DropdownMenuItem>
                                 <IconUserCircle />
-                                Account
+                                Account <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[accountType]}`}>
+                                    {ROLE_LABELS[accountType]}
+                                </span>
                             </DropdownMenuItem>
                             <DropdownMenuItem>
                                 <IconCreditCard />
