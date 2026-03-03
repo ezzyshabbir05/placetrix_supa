@@ -43,7 +43,7 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/protected`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/~`,
         },
       });
 
@@ -71,7 +71,7 @@ export default function SignUpPage() {
     setError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/protected` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=/~` },
     });
     if (error) { setError(error.message); setIsGoogleLoading(false); }
   };

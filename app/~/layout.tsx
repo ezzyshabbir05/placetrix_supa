@@ -1,14 +1,17 @@
-import { AppSidebar } from "@/components/app-sidebar"
-import { Button } from "@/components/ui/button"
+import { Suspense } from "react"
+import { redirect } from "next/navigation"
+import { AppSidebar, AppSidebarSkeleton } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
 import {
     SidebarInset,
     SidebarProvider,
     SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { getUserProfile } from "@/lib/supabase/profile"
 
+// ─── Header ───────────────────────────────────────────────────────────────────
 
-export function SiteHeader() {
+function SiteHeader() {
     return (
         <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
             <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
@@ -17,23 +20,29 @@ export function SiteHeader() {
                     orientation="vertical"
                     className="mx-2 data-[orientation=vertical]:h-4"
                 />
-                <h1 className="text-base font-medium">Documents</h1>
-                <div className="ml-auto flex items-center gap-2">
-                    <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
-                        <a
-                            href="https://github.com/shadcn-ui/ui/tree/main/apps/v4/app/(examples)/dashboard"
-                            rel="noopener noreferrer"
-                            target="_blank"
-                            className="dark:text-foreground"
-                        >
-                            GitHub
-                        </a>
-                    </Button>
-                </div>
+                <h1 className="text-base font-medium">Dashboard</h1>
             </div>
         </header>
     )
 }
+
+// ─── Sidebar loader (async server component) ──────────────────────────────────
+
+/**
+ * Isolated from the layout so Suspense can show AppSidebarSkeleton
+ * while the profile is being fetched, without blocking children.
+ */
+async function SidebarLoader() {
+    const profile = await getUserProfile()
+
+    if (!profile) {
+        redirect("/auth/login")
+    }
+
+    return <AppSidebar user={profile} />
+}
+
+// ─── Layout ───────────────────────────────────────────────────────────────────
 
 export default function DashboardLayout({
     children,
@@ -49,7 +58,14 @@ export default function DashboardLayout({
                 } as React.CSSProperties
             }
         >
-            <AppSidebar/>
+            {/*
+             * AppSidebarSkeleton is shown while the async profile fetch
+             * resolves. Children render immediately — no waterfall.
+             */}
+            <Suspense fallback={<AppSidebarSkeleton />}>
+                <SidebarLoader />
+            </Suspense>
+
             <SidebarInset>
                 <SiteHeader />
                 <div className="flex flex-1 flex-col">

@@ -36,7 +36,7 @@ export default function LoginPage() {
         try {
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
-            router.push("/protected");
+            router.push("/~");
             router.refresh();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : "An error occurred");
@@ -51,7 +51,7 @@ export default function LoginPage() {
         setError(null);
         const { error } = await supabase.auth.signInWithOAuth({
             provider: "google",
-            options: { redirectTo: `${window.location.origin}/auth/callback?next=/protected` },
+            options: { redirectTo: `${window.location.origin}/auth/callback?next=/~` },
         });
         if (error) {
             setError(error.message);
