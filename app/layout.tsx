@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: "Placetrix",
   description:
     "Practice mock tests, join study groups, and track your progress with Placetrix.",
+    icons: {
+      icon: "/placetrix-light.svg",
+    },
 };
 
 
