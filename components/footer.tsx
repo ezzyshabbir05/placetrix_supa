@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import {
   FacebookIcon,
@@ -85,7 +84,7 @@ export function Footer() {
 const company = [
   {
     title: "About Us",
-    href: "#",
+    href: "https://360viewtech.in/",
   },
   {
     title: "Careers",
@@ -97,7 +96,7 @@ const company = [
   },
   {
     title: "Privacy Policy",
-    href: "#",
+    href: "/privacy-policy",
   },
   {
     title: "Terms of Service",
@@ -136,11 +135,11 @@ const socialLinks = [
 
   {
     icon: <InstagramIcon />,
-    link: "#",
+    link: "https://www.instagram.com/360viewtech/",
   },
   {
     icon: <GithubIcon />,
-    link: "#",
+    link: "https://github.com/360viewtech",
   },
 ];
 
