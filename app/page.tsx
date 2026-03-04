@@ -199,7 +199,7 @@ function TestimonialsCard({
 
 
       <Avatar className="size-8 rounded-full">
-        <AvatarImage alt={`${name}'s profile picture`} src={image} />
+        <AvatarImage alt={`${name}'s profile picture`} src={image} className="object-cover" />
         <AvatarFallback>{name.charAt(0)}</AvatarFallback>
       </Avatar>
       <div>

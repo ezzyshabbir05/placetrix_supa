@@ -48,7 +48,7 @@ function UserAvatar({ user }: { user: UserProfile }) {
 
   return (
     <Avatar className="size-7 border-2">
-        <AvatarImage src={user.avatar_url ?? undefined} alt={user.display_name} />
+        <AvatarImage src={user.avatar_url ?? undefined} alt={user.display_name} className="object-cover" />
         <AvatarFallback>{initials}</AvatarFallback>
       </Avatar>
   );

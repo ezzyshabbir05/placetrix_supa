@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useEffect, useCallback } from "react"
+import { useState, useTransition, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { UserProfile } from "@/lib/supabase/profile"
 import { toast } from "sonner"
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { Separator } from "@/components/ui/separator"
 import {
   Combobox,
   ComboboxContent,
@@ -20,24 +21,17 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox"
 import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
-import { LoginHistoryTab } from "./LoginHistoryTab"  // ← new import
+import { LoginHistoryTab } from "./LoginHistoryTab"
+// Remove ImageIcon, add Avatar imports and Camera icon
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
-  Building2,
-  Lock,
-  Bell,
-  History,
-  Shield,
-  Upload,
-  Plus,
-  Minus,
-  Mail,
-  Globe,
-  Phone,
+  Building2, Lock, Bell, History, Shield,
+  Upload, Plus, Minus, Mail, Globe, Phone, Loader2, Camera,
 } from "lucide-react"
 
 
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 
 
@@ -60,6 +54,9 @@ const STATE_OPTIONS = [
 
 const COUNTRY_OPTIONS = ["India", "Other"]
 
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
+
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -78,12 +75,12 @@ interface Props {
 
 
 function RequiredMark() {
-  return <span className="text-red-500 ml-1">*</span>
+  return <span className="text-destructive ml-0.5">*</span>
 }
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null
-  return <p className="text-xs text-red-500 mt-1">{message}</p>
+  return <p className="text-xs text-destructive mt-1">{message}</p>
 }
 
 
@@ -99,11 +96,26 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
 
-  // ── Institute State ──────────────────────────────────────────────────────
+  // ── Logo ──────────────────────────────────────────────────────────────────
 
 
 
-  const [institutNameField, setInstitutNameField] = useState(initialData?.institute_name ?? "")
+  const [logoSrc, setLogoSrc] = useState<string | null>(
+    initialData?.logo_url ? `${initialData.logo_url}?t=${Date.now()}` : null
+  )
+  const [storedLogoUrl, setStoredLogoUrl] = useState<string | null>(
+    initialData?.logo_url ?? null
+  )
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+
+
+  // ── Institute fields ──────────────────────────────────────────────────────
+
+
+
+  const [instituteName, setInstituteName] = useState(initialData?.institute_name ?? "")
   const [instituteCode, setInstituteCode] = useState(initialData?.institute_code ?? "")
   const [establishedYear, setEstablishedYear] = useState(
     initialData?.established_year ? String(initialData.established_year) : ""
@@ -130,41 +142,40 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
 
-  // ── Dirty tracking helper ────────────────────────────────────────────────
+  // ── Dirty tracking ────────────────────────────────────────────────────────
 
 
 
   const markDirty = useCallback(
     <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
       (value: T | ((prev: T) => T)) => {
-        // @ts-ignore – overload union is fine here
-        setter(value)
+        setter(value as any)
         setIsDirty(true)
       },
     []
   )
 
-  const handleInstituteName    = markDirty(setInstitutNameField)
-  const handleInstituteCode    = markDirty(setInstituteCode)
-  const handleEstablishedYear  = markDirty(setEstablishedYear)
-  const handleAffiliation      = markDirty(setAffiliation)
-  const handleAddress          = markDirty(setAddress)
-  const handleCity             = markDirty(setCity)
-  const handleStateVal         = markDirty(setStateVal)
-  const handlePincode          = markDirty(setPincode)
-  const handleCountry          = markDirty(setCountry)
-  const handleInstPhone        = markDirty(setInstPhone)
-  const handleInstEmail        = markDirty(setInstEmail)
-  const handleWebsiteUrl       = markDirty(setWebsiteUrl)
-  const handlePrincipalName    = markDirty(setPrincipalName)
-  const handlePrincipalEmail   = markDirty(setPrincipalEmail)
-  const handlePrincipalPhone   = markDirty(setPrincipalPhone)
-  const handleCourses          = markDirty(setCourses)
-  const handleSocialLinks      = markDirty(setSocialLinks)
+  const handleInstituteName = markDirty(setInstituteName)
+  const handleInstituteCode = markDirty(setInstituteCode)
+  const handleEstablishedYear = markDirty(setEstablishedYear)
+  const handleAffiliation = markDirty(setAffiliation)
+  const handleAddress = markDirty(setAddress)
+  const handleCity = markDirty(setCity)
+  const handleStateVal = markDirty(setStateVal)
+  const handlePincode = markDirty(setPincode)
+  const handleCountry = markDirty(setCountry)
+  const handleInstPhone = markDirty(setInstPhone)
+  const handleInstEmail = markDirty(setInstEmail)
+  const handleWebsiteUrl = markDirty(setWebsiteUrl)
+  const handlePrincipalName = markDirty(setPrincipalName)
+  const handlePrincipalEmail = markDirty(setPrincipalEmail)
+  const handlePrincipalPhone = markDirty(setPrincipalPhone)
+  const handleCourses = markDirty(setCourses)
+  const handleSocialLinks = markDirty(setSocialLinks)
 
 
 
-  // ── Warn on browser close / refresh when dirty ───────────────────────────
+  // ── Warn on unsaved changes ───────────────────────────────────────────────
 
 
 
@@ -181,7 +192,70 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
 
-  // ── Course handlers ──────────────────────────────────────────────────────
+  // ── Logo upload ───────────────────────────────────────────────────────────
+
+
+
+  async function handleLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Please upload a JPEG, PNG, or WebP image.")
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      toast.error("Image must be smaller than 2 MB.")
+      return
+    }
+
+    const blobUrl = URL.createObjectURL(file)
+    setLogoSrc(blobUrl)
+    setIsUploadingLogo(true)
+
+    try {
+      const ext = file.name.split(".").pop() ?? "png"
+      const path = `institutes/${userProfile.id}/logo.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path)
+
+      const { data: updatedRows, error: dbError } = await supabase
+        .from("institute_profiles")
+        .update({ logo_url: publicUrl })
+        .eq("profile_id", userProfile.id)
+        .select("profile_id")
+
+      if (dbError) throw dbError
+
+      if (!updatedRows || updatedRows.length === 0) {
+        toast.warning("Please save your institution details first, then re-upload the logo.")
+        setLogoSrc(storedLogoUrl ? `${storedLogoUrl}?t=${Date.now()}` : null)
+        URL.revokeObjectURL(blobUrl)
+        return
+      }
+
+      setStoredLogoUrl(publicUrl)
+      setLogoSrc(`${publicUrl}?t=${Date.now()}`)
+      URL.revokeObjectURL(blobUrl)
+      toast.success("Logo updated successfully!")
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to upload logo. Please try again.")
+      setLogoSrc(storedLogoUrl ? `${storedLogoUrl}?t=${Date.now()}` : null)
+    } finally {
+      setIsUploadingLogo(false)
+      if (logoInputRef.current) logoInputRef.current.value = ""
+    }
+  }
+
+
+
+  // ── Course handlers ───────────────────────────────────────────────────────
 
 
 
@@ -203,7 +277,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
 
-  // ── Social link handlers ─────────────────────────────────────────────────
+  // ── Social link handlers ──────────────────────────────────────────────────
 
 
 
@@ -229,20 +303,20 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
 
-  function validateInstitute(): Record<string, string> {
+  function validate(): Record<string, string> {
     const e: Record<string, string> = {}
-    if (!institutNameField.trim()) e.instituteName  = "College name is required"
-    if (!affiliation)              e.affiliation    = "Affiliation is required"
-    if (!address.trim())           e.address        = "Address is required"
-    if (!city.trim())              e.city           = "City is required"
-    if (!stateVal)                 e.state          = "State is required"
-    if (!pincode.trim())           e.pincode        = "Pincode is required"
-    if (!country)                  e.country        = "Country is required"
-    if (!instPhone.trim())         e.instPhone      = "Contact number is required"
-    if (!instEmail.trim())         e.instEmail      = "Email is required"
-    if (!principalName.trim())     e.principalName  = "Principal name is required"
-    if (!principalEmail.trim())    e.principalEmail = "Principal email is required"
-    if (!principalPhone.trim())    e.principalPhone = "Principal contact is required"
+    if (!instituteName.trim()) e.instituteName = "College name is required"
+    if (!affiliation) e.affiliation = "Affiliation is required"
+    if (!address.trim()) e.address = "Address is required"
+    if (!city.trim()) e.city = "City is required"
+    if (!stateVal) e.state = "State is required"
+    if (!pincode.trim()) e.pincode = "Pincode is required"
+    if (!country) e.country = "Country is required"
+    if (!instPhone.trim()) e.instPhone = "Contact number is required"
+    if (!instEmail.trim()) e.instEmail = "Email is required"
+    if (!principalName.trim()) e.principalName = "Principal name is required"
+    if (!principalEmail.trim()) e.principalEmail = "Principal email is required"
+    if (!principalPhone.trim()) e.principalPhone = "Principal contact is required"
     return e
   }
 
@@ -253,7 +327,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
   function handleDiscard() {
-    setInstitutNameField(initialData?.institute_name ?? "")
+    setInstituteName(initialData?.institute_name ?? "")
     setInstituteCode(initialData?.institute_code ?? "")
     setEstablishedYear(
       initialData?.established_year ? String(initialData.established_year) : ""
@@ -283,8 +357,8 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
 
-  function handleSaveInstitute() {
-    const newErrors = validateInstitute()
+  function handleSave() {
+    const newErrors = validate()
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) {
       toast.error("Please fix the validation errors before saving.")
@@ -293,24 +367,26 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
     startTransition(async () => {
       const payload: Record<string, any> = {
-        profile_id:       userProfile.id,
-        institute_name:   institutNameField.trim(),
-        institute_code:   instituteCode.trim() || null,
+        profile_id: userProfile.id,
+        institute_name: instituteName.trim(),
+        institute_code: instituteCode.trim() || null,
         established_year: establishedYear ? Number(establishedYear) : null,
-        affiliation:      affiliation || null,
-        address:          address.trim() || null,
-        city:             city.trim() || null,
-        state:            stateVal || null,
-        pincode:          pincode.trim() || null,
-        country:          country || "India",
-        phone_number:     instPhone.trim() || null,
-        email:            instEmail.trim() || null,
-        website_url:      websiteUrl.trim() || null,
-        principal_name:   principalName.trim() || null,
-        principal_email:  principalEmail.trim() || null,
-        principal_phone:  principalPhone.trim() || null,
-        courses:          courses.filter((c) => c.trim()),
-        social_links:     socialLinks.filter((l) => l.trim()),
+        affiliation: affiliation || null,
+        address: address.trim() || null,
+        city: city.trim() || null,
+        state: stateVal || null,
+        pincode: pincode.trim() || null,
+        country: country || "India",
+        phone_number: instPhone.trim() || null,
+        email: instEmail.trim() || null,
+        website_url: websiteUrl.trim() || null,
+        principal_name: principalName.trim() || null,
+        principal_email: principalEmail.trim() || null,
+        principal_phone: principalPhone.trim() || null,
+        courses: courses.filter((c) => c.trim()),
+        social_links: socialLinks.filter((l) => l.trim()),
+        // Preserve existing logo on upsert — do NOT overwrite with null
+        ...(storedLogoUrl ? { logo_url: storedLogoUrl } : {}),
       }
 
       const { error } = await supabase
@@ -337,7 +413,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     <div className="min-h-screen w-full">
       <Tabs defaultValue="institution">
 
-        {/* ── Tab Bar ── */}
+        {/* ── Tab Bar (unchanged) ── */}
         <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
           <TabsList variant="line" className="px-4 md:px-6 justify-start">
             <TabsTrigger value="institution"><Building2 className="h-4 w-4 mr-2" />Institution</TabsTrigger>
@@ -350,41 +426,79 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
         <div className="px-4 py-6 md:px-6 md:py-8">
 
-          {/* ══════════════════════════════════════════════════════════════
+
+          {/* ════════════════════════════════════════════════════════════════
               INSTITUTION TAB
-          ══════════════════════════════════════════════════════════════ */}
+          ════════════════════════════════════════════════════════════════ */}
           <TabsContent value="institution" className="space-y-6">
 
-            {/* Logo */}
+            {/* ── Logo ── */}
             <Card>
               <CardHeader>
                 <CardTitle>College Logo</CardTitle>
-                <CardDescription>Upload your institution's official logo</CardDescription>
+                <CardDescription>
+                  JPEG, PNG or WebP · max 2 MB · square recommended
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button variant="outline" disabled>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Logo
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Logo upload coming soon. (Square PNG/JPG, min 200×200px)
-                </p>
+                <div className="flex items-center gap-4">
+                  <div className="relative shrink-0">
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={logoSrc ?? undefined} alt="Institution logo" className="object-cover" />
+                      <AvatarFallback className="text-xl font-semibold">
+                        {instituteName ? instituteName[0].toUpperCase() : "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <button
+                      type="button"
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={isUploadingLogo}
+                      aria-label="Change institution logo"
+                      className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    >
+                      {isUploadingLogo
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Camera className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleLogoFileChange}
+                    />
+                    <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()} disabled={isUploadingLogo}>
+                      {isUploadingLogo
+                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                        : <><Upload className="h-4 w-4 mr-2" />Upload Logo</>}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Square image recommended · max 2 MB</p>
+                    {!initialData?.institute_name && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Save institution details first, then upload the logo.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Basic Information */}
+            {/* ── Basic Information ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Basic Information</CardTitle>
                 <CardDescription>Essential details about your institution</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>College Name<RequiredMark /></Label>
                     <Input
                       placeholder="Enter college name"
-                      value={institutNameField}
+                      value={instituteName}
                       onChange={(e) => handleInstituteName(e.target.value)}
                     />
                     <FieldError message={errors.instituteName} />
@@ -392,7 +506,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   <div className="space-y-2">
                     <Label>College Code</Label>
                     <Input
-                      placeholder="Enter college code (optional)"
+                      placeholder="College code (optional)"
                       value={instituteCode}
                       onChange={(e) => handleInstituteCode(e.target.value)}
                     />
@@ -413,18 +527,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                   <div className="space-y-2">
                     <Label>Affiliation<RequiredMark /></Label>
-                    <Combobox
-                      items={AFFILIATION_OPTIONS}
-                      value={affiliation}
-                      onValueChange={(v) => handleAffiliation(v || "")}
-                    >
+                    <Combobox items={AFFILIATION_OPTIONS} value={affiliation} onValueChange={(v) => handleAffiliation(v || "")}>
                       <ComboboxInput placeholder="Select affiliation" />
                       <ComboboxContent>
                         <ComboboxEmpty>No affiliation found.</ComboboxEmpty>
                         <ComboboxList>
-                          {(item) => (
-                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
-                          )}
+                          {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -432,10 +540,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
+                <Separator />
+
                 <div className="space-y-2">
                   <Label>Address<RequiredMark /></Label>
                   <Textarea
-                    placeholder="Enter complete address"
+                    placeholder="Complete address"
                     rows={3}
                     value={address}
                     onChange={(e) => handleAddress(e.target.value)}
@@ -447,7 +557,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   <div className="space-y-2">
                     <Label>City<RequiredMark /></Label>
                     <Input
-                      placeholder="Enter city"
+                      placeholder="City"
                       value={city}
                       onChange={(e) => handleCity(e.target.value)}
                     />
@@ -455,18 +565,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                   <div className="space-y-2">
                     <Label>State<RequiredMark /></Label>
-                    <Combobox
-                      items={STATE_OPTIONS}
-                      value={stateVal}
-                      onValueChange={(v) => handleStateVal(v || "")}
-                    >
+                    <Combobox items={STATE_OPTIONS} value={stateVal} onValueChange={(v) => handleStateVal(v || "")}>
                       <ComboboxInput placeholder="Select state" />
                       <ComboboxContent>
                         <ComboboxEmpty>No state found.</ComboboxEmpty>
                         <ComboboxList>
-                          {(item) => (
-                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
-                          )}
+                          {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -486,38 +590,37 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
                 <div className="space-y-2">
                   <Label>Country<RequiredMark /></Label>
-                  <Combobox
-                    items={COUNTRY_OPTIONS}
-                    value={country}
-                    onValueChange={(v) => handleCountry(v || "India")}
-                  >
+                  <Combobox items={COUNTRY_OPTIONS} value={country} onValueChange={(v) => handleCountry(v || "India")}>
                     <ComboboxInput placeholder="Select country" />
                     <ComboboxContent>
                       <ComboboxEmpty>No country found.</ComboboxEmpty>
                       <ComboboxList>
-                        {(item) => (
-                          <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
-                        )}
+                        {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
                   <FieldError message={errors.country} />
                 </div>
+
               </CardContent>
             </Card>
 
-            {/* Contact Information */}
+            {/* ── Contact Information ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Contact Information</CardTitle>
                 <CardDescription>Primary contact details for the institution</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label><Phone className="h-4 w-4 inline mr-1" />Contact Number<RequiredMark /></Label>
+                    <Label className="flex items-center gap-1.5">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      Contact Number<RequiredMark />
+                    </Label>
                     <Input
-                      placeholder="Enter contact number"
+                      placeholder="Institution contact number"
                       type="tel"
                       value={instPhone}
                       onChange={(e) => handleInstPhone(e.target.value)}
@@ -525,7 +628,10 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     <FieldError message={errors.instPhone} />
                   </div>
                   <div className="space-y-2">
-                    <Label><Mail className="h-4 w-4 inline mr-1" />Email Address<RequiredMark /></Label>
+                    <Label className="flex items-center gap-1.5">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      Email Address<RequiredMark />
+                    </Label>
                     <Input
                       placeholder="college@example.com"
                       type="email"
@@ -535,8 +641,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     <FieldError message={errors.instEmail} />
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label><Globe className="h-4 w-4 inline mr-1" />Website URL</Label>
+                  <Label className="flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                    Website URL
+                  </Label>
                   <Input
                     placeholder="https://www.yourcollege.edu"
                     type="url"
@@ -544,120 +654,103 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     onChange={(e) => handleWebsiteUrl(e.target.value)}
                   />
                 </div>
+
               </CardContent>
             </Card>
 
-            {/* Administrative Contacts */}
+            {/* ── Administrative Contacts ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Administrative Contacts</CardTitle>
                 <CardDescription>Key personnel contact information</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold">Principal Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Name<RequiredMark /></Label>
-                      <Input
-                        placeholder="Principal name"
-                        value={principalName}
-                        onChange={(e) => handlePrincipalName(e.target.value)}
-                      />
-                      <FieldError message={errors.principalName} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Email<RequiredMark /></Label>
-                      <Input
-                        placeholder="principal@example.com"
-                        type="email"
-                        value={principalEmail}
-                        onChange={(e) => handlePrincipalEmail(e.target.value)}
-                      />
-                      <FieldError message={errors.principalEmail} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Contact Number<RequiredMark /></Label>
-                      <Input
-                        placeholder="Contact number"
-                        type="tel"
-                        value={principalPhone}
-                        onChange={(e) => handlePrincipalPhone(e.target.value)}
-                      />
-                      <FieldError message={errors.principalPhone} />
-                    </div>
+              <CardContent className="space-y-4">
+                <p className="text-sm font-medium">Principal Details</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name<RequiredMark /></Label>
+                    <Input
+                      placeholder="Principal name"
+                      value={principalName}
+                      onChange={(e) => handlePrincipalName(e.target.value)}
+                    />
+                    <FieldError message={errors.principalName} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email<RequiredMark /></Label>
+                    <Input
+                      placeholder="principal@example.com"
+                      type="email"
+                      value={principalEmail}
+                      onChange={(e) => handlePrincipalEmail(e.target.value)}
+                    />
+                    <FieldError message={errors.principalEmail} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Contact Number<RequiredMark /></Label>
+                    <Input
+                      placeholder="Contact number"
+                      type="tel"
+                      value={principalPhone}
+                      onChange={(e) => handlePrincipalPhone(e.target.value)}
+                    />
+                    <FieldError message={errors.principalPhone} />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Courses Offered */}
+            {/* ── Courses Offered ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Courses Offered</CardTitle>
                 <CardDescription>Departments / courses available at your institution</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 {courses.map((course, index) => (
-                  <div key={index} className="flex items-end gap-2">
-                    <div className="flex-1 space-y-2">
-                      <Label>Course {index + 1}</Label>
-                      <Input
-                        placeholder="e.g. Computer Science"
-                        value={course}
-                        onChange={(e) => handleCourseChange(index, e.target.value)}
-                      />
-                    </div>
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      placeholder={`e.g. Computer Science`}
+                      value={course}
+                      onChange={(e) => handleCourseChange(index, e.target.value)}
+                    />
                     {courses.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        type="button"
-                        onClick={() => removeCourse(index)}
-                      >
+                      <Button variant="ghost" size="icon" type="button" onClick={() => removeCourse(index)}>
                         <Minus className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 ))}
-                <Button variant="outline" onClick={addCourse} type="button">
+                <Button variant="outline" size="sm" onClick={addCourse} type="button">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add another course
+                  Add course
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Social Links */}
+            {/* ── Social Links ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Social Media &amp; Links</CardTitle>
                 <CardDescription>Connect your institution's social presence</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 {socialLinks.map((link, index) => (
-                  <div key={index} className="flex items-end gap-2">
-                    <div className="flex-1 space-y-2">
-                      <Label>Social Media / Other Link {index + 1}</Label>
-                      <Input
-                        value={link}
-                        onChange={(e) => handleSocialLinkChange(index, e.target.value)}
-                        placeholder="https://facebook.com/yourcollegepage"
-                        type="url"
-                      />
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      type="button"
-                      onClick={() => removeSocialLink(index)}
-                    >
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      value={link}
+                      onChange={(e) => handleSocialLinkChange(index, e.target.value)}
+                      placeholder="https://facebook.com/yourcollegepage"
+                      type="url"
+                    />
+                    <Button variant="ghost" size="icon" type="button" onClick={() => removeSocialLink(index)}>
                       <Minus className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                <Button variant="outline" onClick={addSocialLink} type="button">
+                <Button variant="outline" size="sm" onClick={addSocialLink} type="button">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add another link
+                  Add link
                 </Button>
               </CardContent>
             </Card>
@@ -665,9 +758,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
           </TabsContent>
 
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* ════════════════════════════════════════════════════════════════
               SECURITY TAB
-          ══════════════════════════════════════════════════════════════ */}
+          ════════════════════════════════════════════════════════════════ */}
           <TabsContent value="security" className="space-y-6">
             <Card>
               <CardHeader>
@@ -698,10 +791,8 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Enable 2FA</p>
-                    <p className="text-sm text-muted-foreground">
-                      Require a verification code when signing in
-                    </p>
+                    <p className="font-medium text-sm">Enable 2FA</p>
+                    <p className="text-sm text-muted-foreground">Require a verification code when signing in</p>
                   </div>
                   <Switch disabled />
                 </div>
@@ -710,9 +801,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
           </TabsContent>
 
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* ════════════════════════════════════════════════════════════════
               NOTIFICATIONS TAB
-          ══════════════════════════════════════════════════════════════ */}
+          ════════════════════════════════════════════════════════════════ */}
           <TabsContent value="notifications">
             <Card>
               <CardHeader>
@@ -720,50 +811,28 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 <CardDescription>Manage how you receive updates</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Student Registration Alerts</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Get notified when new students register
-                    </p>
+                {[
+                  { label: "Student Registration Alerts", desc: "Get notified when new students register" },
+                  { label: "Placement Updates", desc: "Notifications about placement activities" },
+                  { label: "System Announcements", desc: "Important system updates and changes" },
+                  { label: "Weekly Reports", desc: "Receive weekly summary of activities" },
+                ].map(({ label, desc }) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <div>
+                      <Label>{label}</Label>
+                      <p className="text-sm text-muted-foreground">{desc}</p>
+                    </div>
+                    <Switch />
                   </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Placement Updates</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Notifications about placement activities
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>System Announcements</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Important system updates and changes
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Weekly Reports</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive weekly summary of activities
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
 
 
-          {/* ══════════════════════════════════════════════════════════════
-              LOGIN HISTORY TAB  ← replaced with real component
-          ══════════════════════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════════════════════════
+              LOGIN HISTORY TAB
+          ════════════════════════════════════════════════════════════════ */}
           <TabsContent value="history">
             <LoginHistoryTab
               supabase={supabase}
@@ -772,9 +841,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
           </TabsContent>
 
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* ════════════════════════════════════════════════════════════════
               PRIVACY TAB
-          ══════════════════════════════════════════════════════════════ */}
+          ════════════════════════════════════════════════════════════════ */}
           <TabsContent value="privacy" className="space-y-6">
             <Card>
               <CardHeader>
@@ -782,42 +851,20 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 <CardDescription>Manage your institution's data privacy</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Public Profile</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Make college info visible to recruiters
-                    </p>
+                {[
+                  { label: "Public Profile", desc: "Make college info visible to recruiters" },
+                  { label: "Student Data Sharing", desc: "Allow sharing student data with verified recruiters" },
+                  { label: "Analytics & Insights", desc: "Help improve platform with usage data" },
+                  { label: "Placement Statistics", desc: "Share placement statistics publicly" },
+                ].map(({ label, desc }) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <div>
+                      <Label>{label}</Label>
+                      <p className="text-sm text-muted-foreground">{desc}</p>
+                    </div>
+                    <Switch />
                   </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Student Data Sharing</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Allow sharing student data with verified recruiters
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Analytics &amp; Insights</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Help improve platform with usage data
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Placement Statistics</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Share placement statistics publicly
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
+                ))}
               </CardContent>
             </Card>
             <Card>
@@ -825,32 +872,26 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 <CardTitle>Data Management</CardTitle>
                 <CardDescription>Export or delete your institution data</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full md:w-auto">
-                  Export All Data
-                </Button>
-                <Button variant="outline" className="w-full md:w-auto text-destructive hover:text-destructive">
+              <CardContent className="flex flex-wrap gap-3">
+                <Button variant="outline">Export All Data</Button>
+                <Button variant="outline" className="text-destructive hover:text-destructive">
                   Request Account Deletion
                 </Button>
               </CardContent>
             </Card>
           </TabsContent>
 
+
         </div>
       </Tabs>
 
-      {/* ── Floating Save Bar ──────────────────────────────────────────────────
-           Rendered outside <Tabs> so it persists across all tab switches.
-           Only appears when isDirty === true (any institution field changed).
-      ──────────────────────────────────────────────────────────────────────── */}
       <FloatingSaveBar
         isDirty={isDirty}
         isPending={isPending}
-        onSave={handleSaveInstitute}
+        onSave={handleSave}
         onDiscard={handleDiscard}
         message="You have unsaved changes"
       />
-
     </div>
   )
 }

@@ -31,7 +31,9 @@ import { useSidebarHoverContext } from "@/components/dashboard-shell"
 import { useTheme } from "next-themes"
 
 
+
 // ─── Role-based nav definitions ──────────────────────────────────────────────
+
 
 
 type NavItem = {
@@ -41,7 +43,9 @@ type NavItem = {
 }
 
 
+
 const VALID_ACCOUNT_TYPES: AccountType[] = ["candidate", "institute", "admin", "recruiter"]
+
 
 const NAV_MAIN: Record<AccountType, NavItem[]> = {
     candidate: [
@@ -80,11 +84,13 @@ const NAV_MAIN: Record<AccountType, NavItem[]> = {
     ],
 }
 
+
 const NAV_SECONDARY: NavItem[] = [
     { title: "Notifications", url: "/~/notifications", icon: IconBell },
     { title: "Settings", url: "/~/settings", icon: IconSettings },
     { title: "Get Help", url: "/~/help", icon: IconHelp },
 ]
+
 
 const ROLE_LABELS: Record<AccountType, string> = {
     candidate: "Candidate",
@@ -92,6 +98,7 @@ const ROLE_LABELS: Record<AccountType, string> = {
     admin: "Admin",
     recruiter: "Recruiter",
 }
+
 
 const ROLE_COLORS: Record<AccountType, string> = {
     candidate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -101,10 +108,13 @@ const ROLE_COLORS: Record<AccountType, string> = {
 }
 
 
+
 // ─── Theme options ────────────────────────────────────────────────────────────
 
 
+
 type ThemeOption = { value: string; label: string; icon: Icon }
+
 
 const THEME_OPTIONS: ThemeOption[] = [
     { value: "light", label: "Light", icon: IconSun },
@@ -113,10 +123,13 @@ const THEME_OPTIONS: ThemeOption[] = [
 ]
 
 
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
+
 const VALID_ACCOUNT_TYPE_SET = new Set<string>(VALID_ACCOUNT_TYPES)
+
 
 function safeAccountType(type: string | null | undefined): AccountType {
     return VALID_ACCOUNT_TYPE_SET.has(type ?? "")
@@ -124,36 +137,26 @@ function safeAccountType(type: string | null | undefined): AccountType {
         : "candidate"
 }
 
-// Largest nav count across all roles — used as skeleton item count so the
-// fallback tree always has the same number of SidebarMenuItem nodes as the
-// most-common real render, avoiding a count-driven useId() drift.
+
 const MAX_PRIMARY_NAV_COUNT = Math.max(
     ...VALID_ACCOUNT_TYPES.map((t) => NAV_MAIN[t].length)
 )
 
 
+
 // ─── NavUser ──────────────────────────────────────────────────────────────────
 
 
-/**
- * Accepts `user: UserProfile | null`.
- *
- * When null the trigger button renders a skeleton interior but the
- * DropdownMenuTrigger (and its Radix useId() call) stays mounted, keeping
- * the fiber tree identical to the loaded state and preventing the hydration
- * id mismatch.
- */
+
 export function NavUser({ user }: { user: UserProfile | null }) {
     const { isMobile } = useSidebar()
     const router = useRouter()
     const { onUserMenuOpenChange } = useSidebarHoverContext()
     const { theme, setTheme } = useTheme()
 
-    // next-themes only reads localStorage/system on the client.
     const [mounted, setMounted] = React.useState(false)
     React.useEffect(() => setMounted(true), [])
 
-    // Derived display values — safe to compute even when user is null.
     const displayName = user?.display_name?.trim() || "User"
     const email = user?.email?.trim() || "No email"
     const sidebarSubtitle = user?.username?.trim()
@@ -173,13 +176,6 @@ export function NavUser({ user }: { user: UserProfile | null }) {
     return (
         <SidebarMenu>
             <SidebarMenuItem>
-                {/*
-                 * DropdownMenu + DropdownMenuTrigger are ALWAYS rendered,
-                 * even when user is null (skeleton state).
-                 * This keeps Radix's useId() call at the same fiber position
-                 * on server (fallback) and client (resolved), fixing the
-                 * id hydration mismatch.
-                 */}
                 <DropdownMenu
                     onOpenChange={onUserMenuOpenChange}
                     modal={false}
@@ -190,10 +186,9 @@ export function NavUser({ user }: { user: UserProfile | null }) {
                             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                         >
                             {user ? (
-                                // ── Loaded state ──────────────────────────────
                                 <>
                                     <Avatar className="h-8 w-8 rounded-lg">
-                                        <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
+                                        <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} className="object-cover" />
                                         <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                                     </Avatar>
                                     <div className="grid flex-1 text-left text-sm leading-tight">
@@ -203,7 +198,6 @@ export function NavUser({ user }: { user: UserProfile | null }) {
                                     <IconDotsVertical className="ml-auto size-4" />
                                 </>
                             ) : (
-                                // ── Skeleton state ────────────────────────────
                                 <>
                                     <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
                                     <div className="flex flex-col gap-1.5 flex-1 min-w-0">
@@ -213,13 +207,9 @@ export function NavUser({ user }: { user: UserProfile | null }) {
                                     <Skeleton className="h-4 w-4 rounded shrink-0 ml-auto" />
                                 </>
                             )}
-                        </SidebarMenuButton>
+                        </SidebarMenuButton >
                     </DropdownMenuTrigger>
 
-                    {/*
-                     * Only render dropdown content when the user is loaded.
-                     * The trigger itself stays in the tree regardless (see above).
-                     */}
                     {user && (
                         <DropdownMenuContent
                             className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
@@ -234,7 +224,7 @@ export function NavUser({ user }: { user: UserProfile | null }) {
                             <DropdownMenuLabel className="p-0 font-normal">
                                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                                     <Avatar className="h-8 w-8 rounded-lg">
-                                        <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
+                                        <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} className="object-cover" />
                                         <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                                     </Avatar>
                                     <div className="grid flex-1 text-left text-sm leading-tight">
@@ -310,7 +300,9 @@ export function NavUser({ user }: { user: UserProfile | null }) {
 }
 
 
+
 // ─── NavMain ──────────────────────────────────────────────────────────────────
+
 
 
 export function NavMain({ items }: { items: NavItem[] }) {
@@ -345,7 +337,9 @@ export function NavMain({ items }: { items: NavItem[] }) {
 }
 
 
+
 // ─── NavSecondary ─────────────────────────────────────────────────────────────
+
 
 
 export function NavSecondary({
@@ -384,17 +378,15 @@ export function NavSecondary({
 }
 
 
+
 // ─── AppSidebar ───────────────────────────────────────────────────────────────
 
 
+
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-    /**
-     * null = skeleton/loading state (used as the Suspense fallback).
-     * The tree shape is identical in both states so Radix useId() counters
-     * stay in sync between server and client hydration.
-     */
     user: UserProfile | null
 }
+
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
     const accountType = safeAccountType(user?.account_type)
@@ -437,69 +429,43 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
 
             {/* ── Content ──────────────────────────────────────── */}
             <SidebarContent>
-                {/* Primary nav */}
-                <SidebarGroup>
-                    <SidebarGroupContent className="flex flex-col gap-2">
-                        <SidebarMenu>
-                            {mainNav ? (
-                                // Loaded: render real nav items
-                                mainNav.map((item) => (
-                                    <SidebarMenuItem key={item.title}>
-                                        <SidebarMenuButton tooltip={item.title} asChild>
-                                            <Link href={item.url}>
-                                                <item.icon />
-                                                <span>{item.title}</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                ))
-                            ) : (
-                                // Skeleton: fixed count matching max role nav length
-                                Array.from({ length: MAX_PRIMARY_NAV_COUNT }).map((_, i) => (
+                {/* ✅ Primary nav — delegates isActive logic to NavMain */}
+                {mainNav ? (
+                    <NavMain items={mainNav} />
+                ) : (
+                    <SidebarGroup>
+                        <SidebarGroupContent className="flex flex-col gap-2">
+                            <SidebarMenu>
+                                {Array.from({ length: MAX_PRIMARY_NAV_COUNT }).map((_, i) => (
                                     <SidebarMenuItem key={i}>
                                         <SidebarMenuSkeleton showIcon />
                                     </SidebarMenuItem>
-                                ))
-                            )}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
+                                ))}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )}
 
-                {/* Secondary nav */}
-                <SidebarGroup className="mt-auto">
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {user ? (
-                                NAV_SECONDARY.map((item) => (
-                                    <SidebarMenuItem key={item.title}>
-                                        <SidebarMenuButton asChild>
-                                            <Link href={item.url}>
-                                                <item.icon />
-                                                <span>{item.title}</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                ))
-                            ) : (
-                                Array.from({ length: NAV_SECONDARY.length }).map((_, i) => (
+                {/* ✅ Secondary nav — delegates isActive logic to NavSecondary */}
+                {user ? (
+                    <NavSecondary items={NAV_SECONDARY} className="mt-auto" />
+                ) : (
+                    <SidebarGroup className="mt-auto">
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {Array.from({ length: NAV_SECONDARY.length }).map((_, i) => (
                                     <SidebarMenuItem key={i}>
                                         <SidebarMenuSkeleton showIcon />
                                     </SidebarMenuItem>
-                                ))
-                            )}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
+                                ))}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )}
             </SidebarContent>
 
             {/* ── Footer ───────────────────────────────────────── */}
             <SidebarFooter>
-                {/*
-                 * NavUser always mounts here — null triggers its internal
-                 * skeleton state. This is the key fix: DropdownMenuTrigger
-                 * and its Radix useId() call exist in the tree on BOTH the
-                 * server-rendered fallback AND the resolved client render.
-                 */}
                 <NavUser user={user} />
             </SidebarFooter>
         </Sidebar>
