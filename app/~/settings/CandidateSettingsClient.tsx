@@ -1,6 +1,7 @@
+// app/~/settings/CandidateSettingsClient.tsx
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { useState, useEffect, useTransition, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { UserProfile } from "@/lib/supabase/profile"
 import { toast } from "sonner"
@@ -30,6 +31,8 @@ import {
   ComboboxValue,
   useComboboxAnchor,
 } from "@/components/ui/combobox"
+import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
+import { LoginHistoryTab } from "./LoginHistoryTab"
 import { cn } from "@/lib/utils"
 import {
   User,
@@ -43,11 +46,12 @@ import {
   Minus,
   Copy,
   CalendarIcon,
-  Loader2,
 } from "lucide-react"
 
 
+
 // ─── Constants ───────────────────────────────────────────────────────────────
+
 
 
 const SOFTWARE_SKILLS = [
@@ -72,7 +76,9 @@ const GENDER_REVERSE: Record<string, string> = { M: "Male", F: "Female", O: "Oth
 const YEAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(2025 - i))
 
 
+
 // ─── Types ────────────────────────────────────────────────────────────────────
+
 
 
 interface InstituteOption {
@@ -87,7 +93,9 @@ interface Props {
 }
 
 
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 
 function RequiredMark() {
@@ -99,16 +107,34 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-red-500 mt-1">{message}</p>
 }
 
+/**
+ * FIX: Replaces `date.toLocaleDateString()` which produces different output
+ * on the server (Node.js) vs client (browser) — e.g. "25/5/2005" vs "25/05/2005".
+ * This deterministic formatter always produces "DD/MM/YYYY", eliminating the
+ * SSR ↔ client hydration mismatch.
+ */
+function formatDate(date: Date): string {
+  const d = String(date.getDate()).padStart(2, "0")
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const y = date.getFullYear()
+  return `${d}/${m}/${y}`
+}
+
+
 
 // ─── Component ───────────────────────────────────────────────────────────────
+
 
 
 export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const supabase = createClient()
   const [isPending, startTransition] = useTransition()
+  const [isDirty, setIsDirty] = useState(false)
+
 
 
   // ── Personal State ───────────────────────────────────────────────────────
+
 
 
   const [firstName, setFirstName] = useState(initialData?.first_name ?? "")
@@ -127,7 +153,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const [permanentAddress, setPermanentAddress] = useState(initialData?.permanent_address ?? "")
 
 
+
   // ── Education State ──────────────────────────────────────────────────────
+
 
 
   const [instituteId, setInstituteId] = useState<string>(initialData?.institute_id ?? "")
@@ -165,7 +193,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   )
 
 
+
   // ── Professional State ───────────────────────────────────────────────────
+
 
 
   const [selectedSkills, setSelectedSkills] = useState<string[]>(initialData?.skills ?? [])
@@ -176,14 +206,18 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   )
 
 
+
   // ── Institute Lookup State ───────────────────────────────────────────────
+
 
 
   const [institutes, setInstitutes] = useState<InstituteOption[]>([])
   const [availableCourses, setAvailableCourses] = useState<string[]>([])
 
 
+
   // ── Common ───────────────────────────────────────────────────────────────
+
 
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -191,7 +225,68 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const defaultDobDate = new Date(2000, 0, 1)
 
 
+
+  // ── Dirty tracking helper ────────────────────────────────────────────────
+
+
+
+  const markDirty = useCallback(
+    <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
+      (value: T | ((prev: T) => T)) => {
+        // @ts-ignore – overload union is fine here
+        setter(value)
+        setIsDirty(true)
+      },
+    []
+  )
+
+  const handleFirstName        = markDirty(setFirstName)
+  const handleMiddleName       = markDirty(setMiddleName)
+  const handleLastName         = markDirty(setLastName)
+  const handleGender           = markDirty(setGender)
+  const handlePhoneNumber      = markDirty(setPhoneNumber)
+  const handleDateOfBirth      = markDirty(setDateOfBirth)
+  const handleAadhaarNumber    = markDirty(setAadhaarNumber)
+  const handleCurrentAddress   = markDirty(setCurrentAddress)
+  const handlePermanentAddress = markDirty(setPermanentAddress)
+  const handleCourseName       = markDirty(setCourseName)
+  const handlePassoutYear      = markDirty(setPassoutYear)
+  const handleSscPercentage    = markDirty(setSscPercentage)
+  const handleSscPassYear      = markDirty(setSscPassYear)
+  const handleIsHsc            = markDirty(setIsHsc)
+  const handleHscPercentage    = markDirty(setHscPercentage)
+  const handleHscPassYear      = markDirty(setHscPassYear)
+  const handleIsDiploma        = markDirty(setIsDiploma)
+  const handleDiplomaPercentage = markDirty(setDiplomaPercentage)
+  const handleDiplomaPassYear  = markDirty(setDiplomaPassYear)
+  const handleUniversityPrn    = markDirty(setUniversityPrn)
+  const handleSgpaValues       = markDirty(setSgpaValues)
+  const handleSelectedSkills   = markDirty(setSelectedSkills)
+  const handleLinkedinUrl      = markDirty(setLinkedinUrl)
+  const handleGithubUrl        = markDirty(setGithubUrl)
+  const handlePortfolioLinks   = markDirty(setPortfolioLinks)
+
+
+
+  // ── Warn on browser close / refresh when dirty ───────────────────────────
+
+
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ""
+      }
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [isDirty])
+
+
+
   // ── Effects ──────────────────────────────────────────────────────────────
+
 
 
   useEffect(() => {
@@ -222,7 +317,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   }, [instituteId])
 
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+
+  // ── Institute select handler ─────────────────────────────────────────────
+
 
 
   function handleInstituteSelect(name: string | null) {
@@ -230,6 +327,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
       setInstituteId("")
       setInstituteName("")
       setAvailableCourses([])
+      setIsDirty(true)
       return
     }
     const found = institutes.find((i) => i.institute_name === name)
@@ -237,55 +335,131 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
       setInstituteId(found.profile_id)
       setInstituteName(found.institute_name)
       setAvailableCourses(found.courses ?? [])
+      setIsDirty(true)
     }
   }
 
+
+
+  // ── SGPA handler ─────────────────────────────────────────────────────────
+
+
+
   function handleSgpaChange(index: number, value: string) {
-    const updated = [...sgpaValues]
-    updated[index] = value
-    setSgpaValues(updated)
+    handleSgpaValues((prev) => {
+      const updated = [...prev]
+      updated[index] = value
+      return updated
+    })
   }
 
+
+
+  // ── Portfolio link handlers ──────────────────────────────────────────────
+
+
+
   function addPortfolioLink() {
-    setPortfolioLinks((prev) => [...prev, ""])
+    handlePortfolioLinks((prev) => [...prev, ""])
   }
 
   function handlePortfolioLinkChange(index: number, value: string) {
-    const updated = [...portfolioLinks]
-    updated[index] = value
-    setPortfolioLinks(updated)
+    handlePortfolioLinks((prev) => {
+      const updated = [...prev]
+      updated[index] = value
+      return updated
+    })
   }
 
   function removePortfolioLink(index: number) {
-    setPortfolioLinks((prev) => prev.filter((_, i) => i !== index))
+    handlePortfolioLinks((prev) => prev.filter((_, i) => i !== index))
   }
+
 
 
   // ── Validation ────────────────────────────────────────────────────────────
 
 
+
   function validateCandidate(): Record<string, string> {
     const e: Record<string, string> = {}
-    if (!firstName.trim()) e.firstName = "First name is required"
-    if (!lastName.trim()) e.lastName = "Last name is required"
-    if (!gender) e.gender = "Gender is required"
-    if (!phoneNumber.trim()) e.phoneNumber = "Contact number is required"
+    if (!firstName.trim())      e.firstName      = "First name is required"
+    if (!lastName.trim())       e.lastName       = "Last name is required"
+    if (!gender)                e.gender         = "Gender is required"
+    if (!phoneNumber.trim())    e.phoneNumber    = "Contact number is required"
     else if (!/^[0-9]{10}$/.test(phoneNumber)) e.phoneNumber = "Must be exactly 10 digits"
-    if (!dateOfBirth) e.dateOfBirth = "Date of birth is required"
-    if (!instituteId) e.institute = "Institution is required"
-    if (!courseName) e.courseName = "Course / branch is required"
-    if (!passoutYear) e.passoutYear = "Passout year is required"
-    if (!sscPercentage) e.sscPercentage = "SSC percentage is required"
-    if (!sscPassYear) e.sscPassYear = "SSC passing year is required"
-    if (!universityPrn.trim()) e.universityPrn = "University PRN is required"
-    if (selectedSkills.length === 0) e.skills = "Select at least one skill"
+    if (!dateOfBirth)           e.dateOfBirth    = "Date of birth is required"
+    if (!instituteId)           e.institute      = "Institution is required"
+    if (!courseName)            e.courseName     = "Course / branch is required"
+    if (!passoutYear)           e.passoutYear    = "Passout year is required"
+    if (!sscPercentage)         e.sscPercentage  = "SSC percentage is required"
+    if (!sscPassYear)           e.sscPassYear    = "SSC passing year is required"
+    if (!universityPrn.trim())  e.universityPrn  = "University PRN is required"
+    if (selectedSkills.length === 0) e.skills    = "Select at least one skill"
     if (aadhaarNumber && !/^[0-9]{12}$/.test(aadhaarNumber))
       e.aadhaarNumber = "Aadhaar must be exactly 12 digits"
     return e
   }
 
 
+
+  // ── Discard ───────────────────────────────────────────────────────────────
+
+
+
+  function handleDiscard() {
+    setFirstName(initialData?.first_name ?? "")
+    setMiddleName(initialData?.middle_name ?? "")
+    setLastName(initialData?.last_name ?? "")
+    setGender(initialData?.gender ? GENDER_REVERSE[initialData.gender] ?? "" : "")
+    setPhoneNumber(initialData?.phone_number ?? "")
+    setDateOfBirth(
+      initialData?.date_of_birth ? new Date(initialData.date_of_birth) : undefined
+    )
+    setAadhaarNumber(initialData?.aadhaar_number ?? "")
+    setCurrentAddress(initialData?.current_address ?? "")
+    setPermanentAddress(initialData?.permanent_address ?? "")
+    setInstituteId(initialData?.institute_id ?? "")
+    setCourseName(initialData?.course_name ?? "")
+    setPassoutYear(initialData?.passout_year ? String(initialData.passout_year) : "")
+    setSscPercentage(
+      initialData?.ssc_percentage != null ? String(initialData.ssc_percentage) : ""
+    )
+    setSscPassYear(initialData?.ssc_pass_year ? String(initialData.ssc_pass_year) : "")
+    setIsHsc(initialData?.is_hsc ?? false)
+    setHscPercentage(
+      initialData?.hsc_percentage != null ? String(initialData.hsc_percentage) : ""
+    )
+    setHscPassYear(initialData?.hsc_pass_year ? String(initialData.hsc_pass_year) : "")
+    setIsDiploma(initialData?.is_diploma ?? false)
+    setDiplomaPercentage(
+      initialData?.diploma_percentage != null ? String(initialData.diploma_percentage) : ""
+    )
+    setDiplomaPassYear(
+      initialData?.diploma_pass_year ? String(initialData.diploma_pass_year) : ""
+    )
+    setUniversityPrn(initialData?.university_prn ?? "")
+    setSgpaValues(
+      Array.from({ length: 8 }, (_, i) => {
+        const val = initialData?.[`sgpa_sem${i + 1}`]
+        return val != null ? String(val) : ""
+      })
+    )
+    setSelectedSkills(initialData?.skills ?? [])
+    setLinkedinUrl(initialData?.linkedin_url ?? "")
+    setGithubUrl(initialData?.github_url ?? "")
+    setPortfolioLinks(
+      initialData?.portfolio_links?.length ? initialData.portfolio_links : [""]
+    )
+    setErrors({})
+    setIsDirty(false)
+    toast.info("Changes discarded.")
+  }
+
+
+
   // ── Save ──────────────────────────────────────────────────────────────────
+
 
 
   function handleSaveCandidate() {
@@ -299,40 +473,40 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     startTransition(async () => {
       const isFirstSave = !initialData?.profile_updated
       const payload: Record<string, any> = {
-        profile_id: userProfile.id,
-        first_name: firstName.trim() || null,
-        middle_name: middleName.trim() || null,
-        last_name: lastName.trim() || null,
-        gender: GENDER_MAP[gender] ?? null,
-        phone_number: phoneNumber.trim() || null,
-        date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split("T")[0] : null,
-        aadhaar_number: aadhaarNumber.trim() || null,
-        current_address: currentAddress.trim() || null,
-        permanent_address: permanentAddress.trim() || null,
-        institute_id: instituteId || null,
-        course_name: courseName || null,
-        passout_year: passoutYear ? Number(passoutYear) : null,
-        ssc_percentage: sscPercentage ? Number(sscPercentage) : null,
-        ssc_pass_year: sscPassYear ? Number(sscPassYear) : null,
-        is_hsc: isHsc,
-        hsc_percentage: isHsc && hscPercentage ? Number(hscPercentage) : null,
-        hsc_pass_year: isHsc && hscPassYear ? Number(hscPassYear) : null,
-        is_diploma: isDiploma,
+        profile_id:         userProfile.id,
+        first_name:         firstName.trim() || null,
+        middle_name:        middleName.trim() || null,
+        last_name:          lastName.trim() || null,
+        gender:             GENDER_MAP[gender] ?? null,
+        phone_number:       phoneNumber.trim() || null,
+        date_of_birth:      dateOfBirth ? dateOfBirth.toISOString().split("T")[0] : null,
+        aadhaar_number:     aadhaarNumber.trim() || null,
+        current_address:    currentAddress.trim() || null,
+        permanent_address:  permanentAddress.trim() || null,
+        institute_id:       instituteId || null,
+        course_name:        courseName || null,
+        passout_year:       passoutYear ? Number(passoutYear) : null,
+        ssc_percentage:     sscPercentage ? Number(sscPercentage) : null,
+        ssc_pass_year:      sscPassYear ? Number(sscPassYear) : null,
+        is_hsc:             isHsc,
+        hsc_percentage:     isHsc && hscPercentage ? Number(hscPercentage) : null,
+        hsc_pass_year:      isHsc && hscPassYear ? Number(hscPassYear) : null,
+        is_diploma:         isDiploma,
         diploma_percentage: isDiploma && diplomaPercentage ? Number(diplomaPercentage) : null,
-        diploma_pass_year: isDiploma && diplomaPassYear ? Number(diplomaPassYear) : null,
-        university_prn: universityPrn.trim() || null,
-        sgpa_sem1: sgpaValues[0] ? Number(sgpaValues[0]) : null,
-        sgpa_sem2: sgpaValues[1] ? Number(sgpaValues[1]) : null,
-        sgpa_sem3: sgpaValues[2] ? Number(sgpaValues[2]) : null,
-        sgpa_sem4: sgpaValues[3] ? Number(sgpaValues[3]) : null,
-        sgpa_sem5: sgpaValues[4] ? Number(sgpaValues[4]) : null,
-        sgpa_sem6: sgpaValues[5] ? Number(sgpaValues[5]) : null,
-        sgpa_sem7: sgpaValues[6] ? Number(sgpaValues[6]) : null,
-        sgpa_sem8: sgpaValues[7] ? Number(sgpaValues[7]) : null,
-        skills: selectedSkills.length > 0 ? selectedSkills : null,
-        linkedin_url: linkedinUrl.trim() || null,
-        github_url: githubUrl.trim() || null,
-        portfolio_links: portfolioLinks.filter((l) => l.trim()),
+        diploma_pass_year:  isDiploma && diplomaPassYear ? Number(diplomaPassYear) : null,
+        university_prn:     universityPrn.trim() || null,
+        sgpa_sem1:          sgpaValues[0] ? Number(sgpaValues[0]) : null,
+        sgpa_sem2:          sgpaValues[1] ? Number(sgpaValues[1]) : null,
+        sgpa_sem3:          sgpaValues[2] ? Number(sgpaValues[2]) : null,
+        sgpa_sem4:          sgpaValues[3] ? Number(sgpaValues[3]) : null,
+        sgpa_sem5:          sgpaValues[4] ? Number(sgpaValues[4]) : null,
+        sgpa_sem6:          sgpaValues[5] ? Number(sgpaValues[5]) : null,
+        sgpa_sem7:          sgpaValues[6] ? Number(sgpaValues[6]) : null,
+        sgpa_sem8:          sgpaValues[7] ? Number(sgpaValues[7]) : null,
+        skills:             selectedSkills.length > 0 ? selectedSkills : null,
+        linkedin_url:       linkedinUrl.trim() || null,
+        github_url:         githubUrl.trim() || null,
+        portfolio_links:    portfolioLinks.filter((l) => l.trim()),
         ...(isFirstSave ? { profile_updated: true } : {}),
       }
 
@@ -345,12 +519,15 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         toast.error("Failed to save profile. Please try again.")
       } else {
         toast.success("Profile saved successfully!")
+        setIsDirty(false)
       }
     })
   }
 
 
+
   // ── Render ─────────────────────────────────────────────────────────────────
+
 
 
   const instituteNames = institutes.map((i) => i.institute_name)
@@ -358,6 +535,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   return (
     <div className="min-h-screen w-full">
       <Tabs defaultValue="account">
+
 
         {/* ── Tab Bar ── */}
         <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
@@ -371,12 +549,15 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
           </TabsList>
         </div>
 
+
         <div className="px-4 py-6 md:px-6 md:py-8">
+
 
           {/* ══════════════════════════════════════════════════════════════
               ACCOUNT TAB
           ══════════════════════════════════════════════════════════════ */}
           <TabsContent value="account" className="space-y-6">
+
 
             {/* Profile Photo */}
             <Card>
@@ -395,6 +576,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
+
             {/* Personal Details */}
             <Card>
               <CardHeader>
@@ -402,6 +584,8 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <CardDescription>Your basic personal information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+
+
                 {/* Name */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
@@ -409,7 +593,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <Input
                       placeholder="Enter first name"
                       value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
+                      onChange={(e) => handleFirstName(e.target.value)}
                     />
                     <FieldError message={errors.firstName} />
                   </div>
@@ -418,7 +602,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <Input
                       placeholder="Enter middle name"
                       value={middleName}
-                      onChange={(e) => setMiddleName(e.target.value)}
+                      onChange={(e) => handleMiddleName(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
@@ -426,11 +610,12 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <Input
                       placeholder="Enter last name"
                       value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
+                      onChange={(e) => handleLastName(e.target.value)}
                     />
                     <FieldError message={errors.lastName} />
                   </div>
                 </div>
+
 
                 {/* Personal Info Row */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -439,7 +624,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <Combobox
                       items={GENDER_OPTIONS}
                       value={gender}
-                      onValueChange={(v) => setGender(v || "")}
+                      onValueChange={(v) => handleGender(v || "")}
                     >
                       <ComboboxInput placeholder="Select gender" />
                       <ComboboxContent>
@@ -460,7 +645,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       type="tel"
                       maxLength={10}
                       value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
+                      onChange={(e) => handlePhoneNumber(e.target.value.replace(/\D/g, ""))}
                     />
                     <FieldError message={errors.phoneNumber} />
                   </div>
@@ -476,7 +661,10 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateOfBirth ? dateOfBirth.toLocaleDateString() : "Select date"}
+                          {/* FIX: was dateOfBirth.toLocaleDateString() — locale-dependent,
+                              causes "25/5/2005" on server vs "25/05/2005" on client.
+                              Now uses formatDate() which always produces "DD/MM/YYYY". */}
+                          {dateOfBirth ? formatDate(dateOfBirth) : "Select date"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto overflow-hidden p-0" align="start">
@@ -488,7 +676,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                           fromYear={1950}
                           toYear={2010}
                           onSelect={(date) => {
-                            setDateOfBirth(date)
+                            handleDateOfBirth(date)
                             setDobOpen(false)
                           }}
                         />
@@ -498,6 +686,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
+
                 {/* Aadhaar */}
                 <div className="space-y-2">
                   <Label>Aadhaar Number</Label>
@@ -505,31 +694,33 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     placeholder="12-digit Aadhaar number"
                     maxLength={12}
                     value={aadhaarNumber}
-                    onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => handleAadhaarNumber(e.target.value.replace(/\D/g, ""))}
                   />
                   <FieldError message={errors.aadhaarNumber} />
                 </div>
 
+
                 {/* Current Address */}
                 <div className="space-y-2">
-                  <Label>Current Address<RequiredMark /></Label>
+                  <Label>Current Address</Label>
                   <Textarea
                     placeholder="Enter current address"
                     value={currentAddress}
-                    onChange={(e) => setCurrentAddress(e.target.value)}
+                    onChange={(e) => handleCurrentAddress(e.target.value)}
                     rows={3}
                   />
                 </div>
 
+
                 {/* Permanent Address */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>Permanent Address<RequiredMark /></Label>
+                    <Label>Permanent Address</Label>
                     <Button
                       variant="outline"
                       size="sm"
                       type="button"
-                      onClick={() => setPermanentAddress(currentAddress)}
+                      onClick={() => handlePermanentAddress(currentAddress)}
                     >
                       <Copy className="h-3 w-3 mr-1" />
                       Same as current
@@ -538,12 +729,15 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <Textarea
                     placeholder="Enter permanent address"
                     value={permanentAddress}
-                    onChange={(e) => setPermanentAddress(e.target.value)}
+                    onChange={(e) => handlePermanentAddress(e.target.value)}
                     rows={3}
                   />
                 </div>
+
+
               </CardContent>
             </Card>
+
 
             {/* Education Details */}
             <Card>
@@ -552,6 +746,8 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <CardDescription>Your academic background and qualifications</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+
+
                 {/* Institution */}
                 <div className="space-y-2">
                   <Label>Institution<RequiredMark /></Label>
@@ -573,14 +769,15 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <FieldError message={errors.institute} />
                 </div>
 
-                {/* Course and Batch */}
+
+                {/* Course and Passout Year */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Branch / Course<RequiredMark /></Label>
                     <Combobox
                       items={availableCourses}
                       value={courseName}
-                      onValueChange={(v) => setCourseName(v || "")}
+                      onValueChange={(v) => handleCourseName(v || "")}
                     >
                       <ComboboxInput
                         placeholder={
@@ -611,11 +808,12 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       min="2020"
                       max="2035"
                       value={passoutYear}
-                      onChange={(e) => setPassoutYear(e.target.value)}
+                      onChange={(e) => handlePassoutYear(e.target.value)}
                     />
                     <FieldError message={errors.passoutYear} />
                   </div>
                 </div>
+
 
                 {/* SSC */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -628,7 +826,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       min="0"
                       max="100"
                       value={sscPercentage}
-                      onChange={(e) => setSscPercentage(e.target.value)}
+                      onChange={(e) => handleSscPercentage(e.target.value)}
                     />
                     <FieldError message={errors.sscPercentage} />
                   </div>
@@ -637,7 +835,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <Combobox
                       items={YEAR_OPTIONS}
                       value={sscPassYear}
-                      onValueChange={(v) => setSscPassYear(v || "")}
+                      onValueChange={(v) => handleSscPassYear(v || "")}
                     >
                       <ComboboxInput placeholder="Select year" />
                       <ComboboxContent>
@@ -653,6 +851,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
+
                 {/* Education After SSC */}
                 <div className="space-y-3">
                   <Label>Education After SSC</Label>
@@ -661,7 +860,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       <input
                         type="checkbox"
                         checked={isHsc}
-                        onChange={(e) => setIsHsc(e.target.checked)}
+                        onChange={(e) => handleIsHsc(e.target.checked)}
                         className="h-4 w-4"
                       />
                       <span>HSC</span>
@@ -670,7 +869,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       <input
                         type="checkbox"
                         checked={isDiploma}
-                        onChange={(e) => setIsDiploma(e.target.checked)}
+                        onChange={(e) => handleIsDiploma(e.target.checked)}
                         className="h-4 w-4"
                       />
                       <span>Diploma</span>
@@ -687,7 +886,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                           step="0.01"
                           max="100"
                           value={hscPercentage}
-                          onChange={(e) => setHscPercentage(e.target.value)}
+                          onChange={(e) => handleHscPercentage(e.target.value)}
                         />
                       </div>
                       <div className="space-y-2">
@@ -695,7 +894,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                         <Combobox
                           items={YEAR_OPTIONS}
                           value={hscPassYear}
-                          onValueChange={(v) => setHscPassYear(v || "")}
+                          onValueChange={(v) => handleHscPassYear(v || "")}
                         >
                           <ComboboxInput placeholder="Select year" />
                           <ComboboxContent>
@@ -721,7 +920,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                           step="0.01"
                           max="100"
                           value={diplomaPercentage}
-                          onChange={(e) => setDiplomaPercentage(e.target.value)}
+                          onChange={(e) => handleDiplomaPercentage(e.target.value)}
                         />
                       </div>
                       <div className="space-y-2">
@@ -729,7 +928,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                         <Combobox
                           items={YEAR_OPTIONS}
                           value={diplomaPassYear}
-                          onValueChange={(v) => setDiplomaPassYear(v || "")}
+                          onValueChange={(v) => handleDiplomaPassYear(v || "")}
                         >
                           <ComboboxInput placeholder="Select year" />
                           <ComboboxContent>
@@ -746,16 +945,18 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   )}
                 </div>
 
+
                 {/* University PRN */}
                 <div className="space-y-2">
                   <Label>University PRN<RequiredMark /></Label>
                   <Input
                     placeholder="Enter university PRN"
                     value={universityPrn}
-                    onChange={(e) => setUniversityPrn(e.target.value)}
+                    onChange={(e) => handleUniversityPrn(e.target.value)}
                   />
                   <FieldError message={errors.universityPrn} />
                 </div>
+
 
                 {/* SGPA */}
                 <div className="space-y-3">
@@ -777,8 +978,11 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     ))}
                   </div>
                 </div>
+
+
               </CardContent>
             </Card>
+
 
             {/* Professional Information */}
             <Card>
@@ -787,6 +991,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <CardDescription>Your resume, skills, and professional links</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+
                 {/* Resume */}
                 <div className="space-y-2">
                   <Label>Resume</Label>
@@ -796,6 +1001,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </p>
                 </div>
 
+
                 {/* Skills */}
                 <div className="space-y-2">
                   <Label>Skills<RequiredMark /></Label>
@@ -804,7 +1010,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     autoHighlight
                     items={SOFTWARE_SKILLS}
                     value={selectedSkills}
-                    onValueChange={(values) => setSelectedSkills(values as string[])}
+                    onValueChange={(values) => handleSelectedSkills(values as string[])}
                   >
                     <ComboboxChips ref={skillsAnchor} className="w-full">
                       <ComboboxValue>
@@ -830,6 +1036,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <FieldError message={errors.skills} />
                 </div>
 
+
                 {/* LinkedIn */}
                 <div className="space-y-2">
                   <Label>LinkedIn Profile URL</Label>
@@ -837,9 +1044,10 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     placeholder="https://linkedin.com/in/yourprofile"
                     type="url"
                     value={linkedinUrl}
-                    onChange={(e) => setLinkedinUrl(e.target.value)}
+                    onChange={(e) => handleLinkedinUrl(e.target.value)}
                   />
                 </div>
+
 
                 {/* GitHub */}
                 <div className="space-y-2">
@@ -848,9 +1056,10 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     placeholder="https://github.com/yourusername"
                     type="url"
                     value={githubUrl}
-                    onChange={(e) => setGithubUrl(e.target.value)}
+                    onChange={(e) => handleGithubUrl(e.target.value)}
                   />
                 </div>
+
 
                 {/* Portfolio Links */}
                 {portfolioLinks.map((link, index) => (
@@ -880,21 +1089,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <Plus className="h-4 w-4 mr-2" />
                   Add another link
                 </Button>
+
+
               </CardContent>
             </Card>
 
-            {/* Save */}
-            <div className="flex justify-end">
-              <Button
-                className="w-full md:w-auto"
-                onClick={handleSaveCandidate}
-                disabled={isPending}
-              >
-                {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Save Profile
-              </Button>
-            </div>
+
           </TabsContent>
+
 
           {/* ══════════════════════════════════════════════════════════════
               SECURITY TAB
@@ -921,7 +1123,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <Button disabled>Update Password (coming soon)</Button>
               </CardContent>
             </Card>
-            {/* ── Added: Two-Factor Authentication (matches Institute file) ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Two-Factor Authentication</CardTitle>
@@ -941,6 +1142,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
+
           {/* ══════════════════════════════════════════════════════════════
               BILLING TAB
           ══════════════════════════════════════════════════════════════ */}
@@ -958,6 +1160,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
+
           {/* ══════════════════════════════════════════════════════════════
               NOTIFICATIONS TAB
           ══════════════════════════════════════════════════════════════ */}
@@ -967,7 +1170,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <CardTitle>Notification Preferences</CardTitle>
                 <CardDescription>Manage how you receive updates</CardDescription>
               </CardHeader>
-              {/* ── Fixed: Added <div> wrappers + description <p> tags ── */}
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1000,39 +1202,17 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
+
           {/* ══════════════════════════════════════════════════════════════
               LOGIN HISTORY TAB
           ══════════════════════════════════════════════════════════════ */}
           <TabsContent value="history">
-            <Card>
-              <CardHeader>
-                <CardTitle>Login History</CardTitle>
-                <CardDescription>Recent access to your account</CardDescription>
-              </CardHeader>
-              {/* ── Fixed: Replaced plain <p> with proper card-style entries ── */}
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Chrome · Windows</p>
-                    <p className="text-xs text-muted-foreground">Pune, Maharashtra · 2 hours ago</p>
-                  </div>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-lg">Current</span>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Firefox · Android</p>
-                    <p className="text-xs text-muted-foreground">Mumbai, Maharashtra · 1 day ago</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Safari · macOS</p>
-                    <p className="text-xs text-muted-foreground">Nashik, Maharashtra · 3 days ago</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <LoginHistoryTab
+              supabase={supabase}
+              cardDescription="Recent access to your account"
+            />
           </TabsContent>
+
 
           {/* ══════════════════════════════════════════════════════════════
               PRIVACY TAB
@@ -1043,7 +1223,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <CardTitle>Privacy Controls</CardTitle>
                 <CardDescription>Manage your data privacy</CardDescription>
               </CardHeader>
-              {/* ── Fixed: Added <div> wrappers + description <p> tags ── */}
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1074,7 +1253,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 </div>
               </CardContent>
             </Card>
-            {/* ── Added: Data Management card (matches Institute file) ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Data Management</CardTitle>
@@ -1091,8 +1269,24 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
+
         </div>
       </Tabs>
+
+
+      {/* ── Floating Save Bar ──────────────────────────────────────────────────
+           Rendered outside <Tabs> so it persists across all tab switches.
+           Only appears when isDirty === true (any profile field changed).
+      ──────────────────────────────────────────────────────────────────────── */}
+      <FloatingSaveBar
+        isDirty={isDirty}
+        isPending={isPending}
+        onSave={handleSaveCandidate}
+        onDiscard={handleDiscard}
+        message="You have unsaved changes"
+      />
+
+
     </div>
   )
 }

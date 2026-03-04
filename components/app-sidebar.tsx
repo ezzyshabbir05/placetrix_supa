@@ -413,13 +413,13 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         {user ? (
-                            <SidebarMenuButton className="data-[slot=sidebar-menu-button]:!p-1.5 group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent">
+                            <SidebarMenuButton className="data-[slot=sidebar-menu-button]:p-1.5! group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent">
                                 <Image
                                     src="/placetrix.svg"
                                     alt="PlaceTrix"
                                     width={25}
                                     height={25}
-                                    className="size-5.5! dark:invert dark:brightness-0 dark:contrast-100 transition-all duration-300 group-hover/logo:scale-110 group-hover/logo:rotate-[-6deg] group-hover/logo:drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+                                    className="size-5.5! dark:invert dark:brightness-0 dark:contrast-100 transition-all duration-300 group-hover/logo:scale-110 group-hover/logo:-rotate-6 group-hover/logo:drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
                                 />
                                 <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider">
                                     PlaceTrix

@@ -20,6 +20,7 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox"
 import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
+import { LoginHistoryTab } from "./LoginHistoryTab"  // ← new import
 import {
   Building2,
   Lock,
@@ -133,7 +134,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
 
-  // Wraps any setter so calling it also marks the form as dirty
   const markDirty = useCallback(
     <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
       (value: T | ((prev: T) => T)) => {
@@ -293,24 +293,24 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
     startTransition(async () => {
       const payload: Record<string, any> = {
-        profile_id:      userProfile.id,
-        institute_name:  institutNameField.trim(),
-        institute_code:  instituteCode.trim() || null,
+        profile_id:       userProfile.id,
+        institute_name:   institutNameField.trim(),
+        institute_code:   instituteCode.trim() || null,
         established_year: establishedYear ? Number(establishedYear) : null,
-        affiliation:     affiliation || null,
-        address:         address.trim() || null,
-        city:            city.trim() || null,
-        state:           stateVal || null,
-        pincode:         pincode.trim() || null,
-        country:         country || "India",
-        phone_number:    instPhone.trim() || null,
-        email:           instEmail.trim() || null,
-        website_url:     websiteUrl.trim() || null,
-        principal_name:  principalName.trim() || null,
-        principal_email: principalEmail.trim() || null,
-        principal_phone: principalPhone.trim() || null,
-        courses:         courses.filter((c) => c.trim()),
-        social_links:    socialLinks.filter((l) => l.trim()),
+        affiliation:      affiliation || null,
+        address:          address.trim() || null,
+        city:             city.trim() || null,
+        state:            stateVal || null,
+        pincode:          pincode.trim() || null,
+        country:          country || "India",
+        phone_number:     instPhone.trim() || null,
+        email:            instEmail.trim() || null,
+        website_url:      websiteUrl.trim() || null,
+        principal_name:   principalName.trim() || null,
+        principal_email:  principalEmail.trim() || null,
+        principal_phone:  principalPhone.trim() || null,
+        courses:          courses.filter((c) => c.trim()),
+        social_links:     socialLinks.filter((l) => l.trim()),
       }
 
       const { error } = await supabase
@@ -322,7 +322,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         toast.error("Failed to save institution details. Please try again.")
       } else {
         toast.success("Institution details saved successfully!")
-        setIsDirty(false)  // ← clear dirty flag on success
+        setIsDirty(false)
       }
     })
   }
@@ -337,7 +337,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     <div className="min-h-screen w-full">
       <Tabs defaultValue="institution">
 
-
         {/* ── Tab Bar ── */}
         <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
           <TabsList variant="line" className="px-4 md:px-6 justify-start">
@@ -349,15 +348,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
           </TabsList>
         </div>
 
-
         <div className="px-4 py-6 md:px-6 md:py-8">
-
 
           {/* ══════════════════════════════════════════════════════════════
               INSTITUTION TAB
           ══════════════════════════════════════════════════════════════ */}
           <TabsContent value="institution" className="space-y-6">
-
 
             {/* Logo */}
             <Card>
@@ -375,7 +371,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 </p>
               </CardContent>
             </Card>
-
 
             {/* Basic Information */}
             <Card>
@@ -403,7 +398,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     />
                   </div>
                 </div>
-
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -438,7 +432,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
-
                 <div className="space-y-2">
                   <Label>Address<RequiredMark /></Label>
                   <Textarea
@@ -449,7 +442,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   />
                   <FieldError message={errors.address} />
                 </div>
-
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
@@ -492,7 +484,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
-
                 <div className="space-y-2">
                   <Label>Country<RequiredMark /></Label>
                   <Combobox
@@ -514,7 +505,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 </div>
               </CardContent>
             </Card>
-
 
             {/* Contact Information */}
             <Card>
@@ -556,7 +546,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 </div>
               </CardContent>
             </Card>
-
 
             {/* Administrative Contacts */}
             <Card>
@@ -602,7 +591,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
-
             {/* Courses Offered */}
             <Card>
               <CardHeader>
@@ -638,7 +626,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 </Button>
               </CardContent>
             </Card>
-
 
             {/* Social Links */}
             <Card>
@@ -775,36 +762,13 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
           {/* ══════════════════════════════════════════════════════════════
-              LOGIN HISTORY TAB
+              LOGIN HISTORY TAB  ← replaced with real component
           ══════════════════════════════════════════════════════════════ */}
           <TabsContent value="history">
-            <Card>
-              <CardHeader>
-                <CardTitle>Login History</CardTitle>
-                <CardDescription>Recent access to your college account</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Chrome · Windows</p>
-                    <p className="text-xs text-muted-foreground">Nashik, Maharashtra · 2 hours ago</p>
-                  </div>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-lg">Current</span>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Firefox · Linux</p>
-                    <p className="text-xs text-muted-foreground">Pune, Maharashtra · 1 day ago</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Safari · macOS</p>
-                    <p className="text-xs text-muted-foreground">Mumbai, Maharashtra · 3 days ago</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <LoginHistoryTab
+              supabase={supabase}
+              cardDescription="Recent access to your college account"
+            />
           </TabsContent>
 
 
@@ -872,12 +836,10 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
-
         </div>
       </Tabs>
 
-
-      {/* ── Floating Save Bar ─────────────────────────────────────────────────
+      {/* ── Floating Save Bar ──────────────────────────────────────────────────
            Rendered outside <Tabs> so it persists across all tab switches.
            Only appears when isDirty === true (any institution field changed).
       ──────────────────────────────────────────────────────────────────────── */}

@@ -1,17 +1,17 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
 
 
 export const metadata: Metadata = {
   title: "Placetrix",
   description:
     "Practice mock tests, join study groups, and track your progress with Placetrix.",
-    icons: {
-      icon: "/placetrix-light.svg",
-    },
+  icons: {
+    icon: "/placetrix-light.svg",
+  },
 };
 
 
@@ -28,7 +28,9 @@ export default function RootLayout({
           defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
-        ><TooltipProvider>{children}</TooltipProvider>
+        ><TooltipProvider>{children}
+            <Toaster position="top-center"/>
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>
