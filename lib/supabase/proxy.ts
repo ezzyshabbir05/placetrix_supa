@@ -55,16 +55,28 @@ export async function updateSession(request: NextRequest) {
         },
     )
 
-    // Do not run code between createServerClient and getClaims().
+    // Do not run code between createServerClient and the auth check.
     // A simple mistake could make it very hard to debug users being logged out.
-    const { data } = await supabase.auth.getClaims()
-    const user = data?.claims
 
-    if (isProtected(request.nextUrl.pathname) && !user) {
+    // Fast local JWT decode first — avoids a network round-trip on every
+    // public/static request.
+    const { data: claimsData } = await supabase.auth.getClaims()
+    let authenticated = !!claimsData?.claims
+
+    // For protected routes we MUST verify the session against the Supabase
+    // server. getClaims() only decodes the local JWT and has no knowledge of
+    // server-side revocations, so a revoked device would otherwise still be
+    // treated as logged in here, causing a redirect loop with the auth layout.
+    if (authenticated && isProtected(request.nextUrl.pathname)) {
+        const { data: userData } = await supabase.auth.getUser()
+        authenticated = !!userData.user
+    }
+
+    if (isProtected(request.nextUrl.pathname) && !authenticated) {
         const loginUrl = request.nextUrl.clone()
         loginUrl.pathname = "/auth/login"
 
-        // Preserve the original destination so you can redirect back after login
+        // Preserve the original destination so we can redirect back after login
         loginUrl.searchParams.set("next", request.nextUrl.pathname)
 
         return NextResponse.redirect(loginUrl)

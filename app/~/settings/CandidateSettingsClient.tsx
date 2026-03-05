@@ -41,7 +41,6 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
-
 const SOFTWARE_SKILLS = [
   "JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "Go", "Rust",
   "PHP", "Ruby", "Swift", "Kotlin", "React", "Angular", "Vue.js", "Next.js",
@@ -97,20 +96,12 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive mt-1">{message}</p>
 }
 
-/**
- * Format date as DD/MM/YYYY without locale-dependent APIs to avoid
- * SSR/client hydration mismatches.
- */
 function formatDate(date: Date): string {
   const d = String(date.getDate()).padStart(2, "0")
   const m = String(date.getMonth() + 1).padStart(2, "0")
   return `${d}/${m}/${date.getFullYear()}`
 }
 
-/**
- * Serialize a local Date to YYYY-MM-DD using local date parts.
- * Avoids the UTC-shift bug from toISOString() in non-UTC timezones.
- */
 function toLocalDateString(date: Date): string {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, "0")
@@ -118,9 +109,6 @@ function toLocalDateString(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
-/**
- * Parse a YYYY-MM-DD string as local midnight to avoid UTC-shift on display.
- */
 function parseLocalDate(str: string): Date {
   return new Date(`${str}T00:00:00`)
 }
@@ -129,6 +117,21 @@ function getInitials(firstName: string, lastName: string, email: string): string
   if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase()
   if (firstName) return firstName[0].toUpperCase()
   return email[0]?.toUpperCase() ?? "?"
+}
+
+/**
+ * Derives the full public URL from a storage path.
+ * Keeps URL construction in one place — change your Supabase client config
+ * here if you ever migrate projects; DB rows stay untouched.
+ */
+function getStorageUrl(
+  supabase: ReturnType<typeof createClient>,
+  bucket: string,
+  path: string | null
+): string | null {
+  if (!path) return null
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+  return data.publicUrl
 }
 
 
@@ -145,14 +148,21 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
 
   // ── Profile Picture ───────────────────────────────────────────────────────
+  //
+  // storedImagePath: ref holding the raw storage path saved in DB
+  //   e.g. "candidates/abc123/profile/1709123456.jpg"
+  // avatarSrc: the full URL shown in <AvatarImage>
+  //   - On initial load: clean URL (no ?t=) → browser cache hits every render
+  //   - After upload:    URL + ?v={timestamp} → one-time cache-bust, then cached
 
 
 
-  const [avatarSrc, setAvatarSrc] = useState<string | null>(
-    initialData?.profile_image_url ? `${initialData.profile_image_url}?t=${Date.now()}` : null
+  const storedImagePath = useRef<string | null>(
+    initialData?.profile_image_path ?? null
   )
-  const [storedImageUrl, setStoredImageUrl] = useState<string | null>(
-    initialData?.profile_image_url ?? null
+  const [avatarSrc, setAvatarSrc] = useState<string | null>(() =>
+    // Clean URL on load — browser caches it; no unnecessary refetch on re-renders
+    getStorageUrl(supabase, "avatars", storedImagePath.current)
   )
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
@@ -171,7 +181,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   )
   const [phoneNumber, setPhoneNumber] = useState(initialData?.phone_number ?? "")
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(
-    // Parse as local midnight to prevent UTC-shift when displaying
     initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined
   )
   const [dobOpen, setDobOpen] = useState(false)
@@ -244,8 +253,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
 
   // ── Misc ──────────────────────────────────────────────────────────────────
-
-
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const skillsAnchor = useComboboxAnchor()
@@ -345,6 +352,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
 
   // ── Avatar upload ─────────────────────────────────────────────────────────
+  //
+  // Flow:
+  //  1. Show local blob preview immediately (instant feedback)
+  //  2. Delete old file from storage (non-fatal if it fails)
+  //  3. Upload new file under a timestamped path
+  //  4. Save the PATH (not the full URL) to DB → portable across migrations
+  //  5. Update avatarSrc with a one-time ?v= cache-bust so the browser fetches
+  //     the new image exactly once; all subsequent renders use the cached result
 
 
 
@@ -353,7 +368,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     if (!file) return
 
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      toast.error("Please upload a JPEG, PNG, or WebP image.")
+      toast.error("Please upload a JPEG, PNG, or WEBP image.")
       return
     }
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
@@ -366,32 +381,51 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     setIsUploadingAvatar(true)
 
     try {
+      // ── 1. Delete old file from storage ────────────────────────────────
+      const oldPath = storedImagePath.current
+      if (oldPath) {
+        const { error: deleteError } = await supabase.storage
+          .from("avatars")
+          .remove([oldPath])
+        if (deleteError) {
+          // Non-fatal: log but don't abort — old file orphan is minor vs failed upload
+          console.warn("Could not delete old avatar:", deleteError.message)
+        }
+      }
+
+      // ── 2. Upload new file ──────────────────────────────────────────────
       const ext = file.name.split(".").pop() ?? "jpg"
-      const path = `candidates/${userProfile.id}/profile.${ext}`
+      const timestamp = Date.now()
+      const newPath = `candidates/${userProfile.id}/profile/${timestamp}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { upsert: true, contentType: file.type })
+        .upload(newPath, file, { upsert: false, contentType: file.type })
       if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path)
-
+      // ── 3. Save PATH (not full URL) to DB ──────────────────────────────
       const { error: dbError } = await supabase
         .from("candidate_profiles")
         .upsert(
-          { profile_id: userProfile.id, profile_image_url: publicUrl },
+          { profile_id: userProfile.id, profile_image_path: newPath },
           { onConflict: "profile_id" }
         )
       if (dbError) throw dbError
 
-      setStoredImageUrl(publicUrl)
-      setAvatarSrc(`${publicUrl}?t=${Date.now()}`)
+      // ── 4. Update local state ───────────────────────────────────────────
+      storedImagePath.current = newPath
+      const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)!
+
+      // ?v= bust forces browser to fetch the new image once, then caches cleanly
+      setAvatarSrc(`${newPublicUrl}?v=${timestamp}`)
       URL.revokeObjectURL(blobUrl)
       toast.success("Profile picture updated!")
     } catch (err) {
       console.error(err)
       toast.error("Failed to upload profile picture. Please try again.")
-      setAvatarSrc(storedImageUrl ? `${storedImageUrl}?t=${Date.now()}` : null)
+      // Restore previous display using clean cached URL
+      setAvatarSrc(getStorageUrl(supabase, "avatars", storedImagePath.current))
+      URL.revokeObjectURL(blobUrl)
     } finally {
       setIsUploadingAvatar(false)
       if (avatarInputRef.current) avatarInputRef.current.value = ""
@@ -487,8 +521,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
   // ── Discard ───────────────────────────────────────────────────────────────
 
-
-
   function handleDiscard() {
     setFirstName(initialData?.first_name ?? "")
     setMiddleName(initialData?.middle_name ?? "")
@@ -541,6 +573,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  // NOTE: profile_image_path is intentionally excluded from this payload.
+  // Avatar is managed independently via handleAvatarFileChange — it has its
+  // own upload + DB write flow and must never be overwritten by the form save.
 
 
 
@@ -561,8 +596,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         last_name:          lastName.trim() || null,
         gender:             GENDER_MAP[gender] ?? null,
         phone_number:       phoneNumber.trim() || null,
-        // BUG FIX: use local date parts instead of toISOString() to avoid
-        // UTC-shift in non-UTC timezones (e.g. IST = UTC+5:30)
         date_of_birth:      dateOfBirth ? toLocalDateString(dateOfBirth) : null,
         aadhaar_number:     aadhaarNumber.trim() || null,
         current_address:    currentAddress.trim() || null,
@@ -612,15 +645,13 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-
-
   const instituteNames = institutes.map((i) => i.institute_name)
 
   return (
     <div className="min-h-screen w-full">
       <Tabs defaultValue="account">
 
-        {/* ── Tab Bar (unchanged) ── */}
+        {/* ── Tab Bar ── */}
         <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
           <TabsList variant="line" className="px-4 md:px-6 justify-start">
             <TabsTrigger value="account"><User className="h-4 w-4 mr-2" />Account</TabsTrigger>
@@ -634,7 +665,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
         <div className="px-4 py-6 md:px-6 md:py-8">
 
-
           {/* ════════════════════════════════════════════════════════════════
               ACCOUNT TAB
           ════════════════════════════════════════════════════════════════ */}
@@ -645,7 +675,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               <CardHeader>
                 <CardTitle>Profile Photo</CardTitle>
                 <CardDescription>
-                  JPEG, PNG or WebP · max 2 MB · square recommended
+                  JPEG, PNG or WEBP · max 2 MB · square recommended
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1180,7 +1210,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
-
           {/* ════════════════════════════════════════════════════════════════
               NOTIFICATIONS TAB
           ════════════════════════════════════════════════════════════════ */}
@@ -1207,7 +1236,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
           </TabsContent>
-
 
           {/* ════════════════════════════════════════════════════════════════
               LOGIN HISTORY TAB

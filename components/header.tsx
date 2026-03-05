@@ -1,24 +1,25 @@
-"use client";
+"use client"
 
-import { cn } from "@/lib/utils";
-import { useScroll } from "@/hooks/use-scroll";
-import { Button } from "@/components/ui/button";
-import React from "react";
-import { MenuIcon, MoonIcon, SunIcon, XIcon } from "lucide-react";
-import { Portal, PortalBackdrop } from "./ui/landing/portal";
-import { useTheme } from "next-themes";
-import Link from "next/link";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
-import type { UserProfile } from "@/lib/supabase/profile";
+import { cn } from "@/lib/utils"
+import { useScroll } from "@/hooks/use-scroll"
+import { Button } from "@/components/ui/button"
+import React from "react"
+import { MenuIcon, MoonIcon, SunIcon, XIcon } from "lucide-react"
+import { Portal, PortalBackdrop } from "./ui/landing/portal"
+import { useTheme } from "next-themes"
+import Link from "next/link"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import type { UserProfile } from "@/lib/supabase/profile"
+import { buildStorageUrl } from "@/lib/storage"
+
+
 
 // ─── Theme Toggle ─────────────────────────────────────────────────────────────
 
+
+
 function ThemeToggle() {
-  const { setTheme, theme } = useTheme();
+  const { setTheme, theme } = useTheme()
 
   return (
     <Button
@@ -31,10 +32,14 @@ function ThemeToggle() {
       <MoonIcon className="hidden size-4.5 dark:block" />
       <span className="sr-only">Toggle theme</span>
     </Button>
-  );
+  )
 }
 
-// ─── User Avatar (shown when logged in) ──────────────────────────────────────
+
+
+// ─── User Avatar ──────────────────────────────────────────────────────────────
+
+
 
 function UserAvatar({ user }: { user: UserProfile }) {
   const initials = user.display_name
@@ -44,17 +49,25 @@ function UserAvatar({ user }: { user: UserProfile }) {
         .join("")
         .toUpperCase()
         .slice(0, 2)
-    : user.email[0].toUpperCase();
+    : user.email[0].toUpperCase()
+
+  // Derive full URL from the stored path — handles both Supabase storage
+  // paths and external OAuth URLs (Google, GitHub, etc.) transparently.
+  const avatarUrl = buildStorageUrl("avatars", user.avatar_path)
 
   return (
     <Avatar className="size-7 border-2">
-        <AvatarImage src={user.avatar_url ?? undefined} alt={user.display_name} className="object-cover" />
-        <AvatarFallback>{initials}</AvatarFallback>
-      </Avatar>
-  );
+      <AvatarImage src={avatarUrl ?? undefined} alt={user.display_name} className="object-cover" />
+      <AvatarFallback>{initials}</AvatarFallback>
+    </Avatar>
+  )
 }
 
-// ─── Auth Buttons (shown when logged out) ────────────────────────────────────
+
+
+// ─── Auth Buttons ─────────────────────────────────────────────────────────────
+
+
 
 function AuthButtons({ size }: { size: "sm" | "default" }) {
   return (
@@ -66,13 +79,17 @@ function AuthButtons({ size }: { size: "sm" | "default" }) {
         <Link href="/auth/sign-up">Get Started</Link>
       </Button>
     </>
-  );
+  )
 }
+
+
 
 // ─── Mobile Nav ───────────────────────────────────────────────────────────────
 
+
+
 function MobileNav({ user }: { user: UserProfile | null }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(false)
 
   return (
     <div className="md:hidden">
@@ -102,7 +119,6 @@ function MobileNav({ user }: { user: UserProfile | null }) {
             data-slot={open ? "open" : "closed"}
           >
             <div className="mt-12 flex flex-col gap-2">
-              {/* Theme toggle inside mobile menu too */}
               <div className="flex justify-end">
                 <ThemeToggle />
               </div>
@@ -129,17 +145,21 @@ function MobileNav({ user }: { user: UserProfile | null }) {
         </Portal>
       )}
     </div>
-  );
+  )
 }
+
+
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
+
+
 interface HeaderProps {
-  user?: UserProfile | null;
+  user?: UserProfile | null
 }
 
 export function Header({ user = null }: HeaderProps) {
-  const scrolled = useScroll(10);
+  const scrolled = useScroll(10)
 
   return (
     <header
@@ -154,9 +174,7 @@ export function Header({ user = null }: HeaderProps) {
       <nav
         className={cn(
           "flex h-14 w-full items-center justify-between px-4 md:h-12 md:transition-all md:ease-out",
-          {
-            "md:px-2": scrolled,
-          }
+          { "md:px-2": scrolled }
         )}
       >
         <a className="font-bold p-2" href="#">
@@ -177,5 +195,5 @@ export function Header({ user = null }: HeaderProps) {
         <MobileNav user={user} />
       </nav>
     </header>
-  );
+  )
 }

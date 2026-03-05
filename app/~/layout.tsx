@@ -17,8 +17,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <DashboardShell
             sidebar={
                 <Suspense
-                    // ✅ Same component, same tree — only user data differs.
-                    // NavUser + DropdownMenuTrigger + useId() exist in BOTH states.
                     fallback={<AppSidebar user={null} />}
                 >
                     <SidebarLoader />

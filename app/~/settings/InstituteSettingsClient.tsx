@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/combobox"
 import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
 import { LoginHistoryTab } from "./LoginHistoryTab"
-// Remove ImageIcon, add Avatar imports and Camera icon
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Building2, Lock, Bell, History, Shield,
@@ -83,6 +82,21 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive mt-1">{message}</p>
 }
 
+/**
+ * Derives the full public URL from a storage path.
+ * Centralised so a project migration only requires changing the Supabase
+ * client config — every stored path in the DB remains valid as-is.
+ */
+function getStorageUrl(
+  supabase: ReturnType<typeof createClient>,
+  bucket: string,
+  path: string | null
+): string | null {
+  if (!path) return null
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+  return data.publicUrl
+}
+
 
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -97,14 +111,21 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
   // ── Logo ──────────────────────────────────────────────────────────────────
+  //
+  // storedLogoPath: ref holding the raw storage path saved in DB
+  //   e.g. "institutes/abc123/logo/1709123456.png"
+  // logoSrc: the full URL shown in <AvatarImage>
+  //   - On initial load: clean URL (no ?t=) → browser cache hits every render
+  //   - After upload:    URL + ?v={timestamp} → one-time cache-bust, then cached
 
 
 
-  const [logoSrc, setLogoSrc] = useState<string | null>(
-    initialData?.logo_url ? `${initialData.logo_url}?t=${Date.now()}` : null
+  const storedLogoPath = useRef<string | null>(
+    initialData?.logo_path ?? null
   )
-  const [storedLogoUrl, setStoredLogoUrl] = useState<string | null>(
-    initialData?.logo_url ?? null
+  const [logoSrc, setLogoSrc] = useState<string | null>(() =>
+    // Clean URL on load — browser caches it; no unnecessary refetch on re-renders
+    getStorageUrl(supabase, "avatars", storedLogoPath.current)
   )
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -155,23 +176,23 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     []
   )
 
-  const handleInstituteName = markDirty(setInstituteName)
-  const handleInstituteCode = markDirty(setInstituteCode)
+  const handleInstituteName   = markDirty(setInstituteName)
+  const handleInstituteCode   = markDirty(setInstituteCode)
   const handleEstablishedYear = markDirty(setEstablishedYear)
-  const handleAffiliation = markDirty(setAffiliation)
-  const handleAddress = markDirty(setAddress)
-  const handleCity = markDirty(setCity)
-  const handleStateVal = markDirty(setStateVal)
-  const handlePincode = markDirty(setPincode)
-  const handleCountry = markDirty(setCountry)
-  const handleInstPhone = markDirty(setInstPhone)
-  const handleInstEmail = markDirty(setInstEmail)
-  const handleWebsiteUrl = markDirty(setWebsiteUrl)
-  const handlePrincipalName = markDirty(setPrincipalName)
-  const handlePrincipalEmail = markDirty(setPrincipalEmail)
-  const handlePrincipalPhone = markDirty(setPrincipalPhone)
-  const handleCourses = markDirty(setCourses)
-  const handleSocialLinks = markDirty(setSocialLinks)
+  const handleAffiliation     = markDirty(setAffiliation)
+  const handleAddress         = markDirty(setAddress)
+  const handleCity            = markDirty(setCity)
+  const handleStateVal        = markDirty(setStateVal)
+  const handlePincode         = markDirty(setPincode)
+  const handleCountry         = markDirty(setCountry)
+  const handleInstPhone       = markDirty(setInstPhone)
+  const handleInstEmail       = markDirty(setInstEmail)
+  const handleWebsiteUrl      = markDirty(setWebsiteUrl)
+  const handlePrincipalName   = markDirty(setPrincipalName)
+  const handlePrincipalEmail  = markDirty(setPrincipalEmail)
+  const handlePrincipalPhone  = markDirty(setPrincipalPhone)
+  const handleCourses         = markDirty(setCourses)
+  const handleSocialLinks     = markDirty(setSocialLinks)
 
 
 
@@ -193,6 +214,14 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
   // ── Logo upload ───────────────────────────────────────────────────────────
+  //
+  // Flow:
+  //  1. Show local blob preview immediately (instant feedback)
+  //  2. Delete old file from storage (non-fatal if it fails)
+  //  3. Upload new file under a timestamped path
+  //  4. Save the PATH (not the full URL) to DB → portable across migrations
+  //  5. Update logoSrc with a one-time ?v= cache-bust so the browser fetches
+  //     the new image exactly once; all subsequent renders use the cached result
 
 
 
@@ -201,7 +230,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     if (!file) return
 
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      toast.error("Please upload a JPEG, PNG, or WebP image.")
+      toast.error("Please upload a JPEG, PNG, or WEBP image.")
       return
     }
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
@@ -214,19 +243,32 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     setIsUploadingLogo(true)
 
     try {
+      // ── 1. Delete old file from storage ────────────────────────────────
+      const oldPath = storedLogoPath.current
+      if (oldPath) {
+        const { error: deleteError } = await supabase.storage
+          .from("avatars")
+          .remove([oldPath])
+        if (deleteError) {
+          // Non-fatal: log but don't abort — old file orphan is minor vs failed upload
+          console.warn("Could not delete old logo:", deleteError.message)
+        }
+      }
+
+      // ── 2. Upload new file ──────────────────────────────────────────────
       const ext = file.name.split(".").pop() ?? "png"
-      const path = `institutes/${userProfile.id}/logo.${ext}`
+      const timestamp = Date.now()
+      const newPath = `institutes/${userProfile.id}/logo/${timestamp}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { upsert: true, contentType: file.type })
+        .upload(newPath, file, { upsert: false, contentType: file.type })
       if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path)
-
+      // ── 3. Save PATH (not full URL) to DB ──────────────────────────────
       const { data: updatedRows, error: dbError } = await supabase
         .from("institute_profiles")
-        .update({ logo_url: publicUrl })
+        .update({ logo_path: newPath })
         .eq("profile_id", userProfile.id)
         .select("profile_id")
 
@@ -234,19 +276,25 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
       if (!updatedRows || updatedRows.length === 0) {
         toast.warning("Please save your institution details first, then re-upload the logo.")
-        setLogoSrc(storedLogoUrl ? `${storedLogoUrl}?t=${Date.now()}` : null)
+        setLogoSrc(getStorageUrl(supabase, "avatars", storedLogoPath.current))
         URL.revokeObjectURL(blobUrl)
         return
       }
 
-      setStoredLogoUrl(publicUrl)
-      setLogoSrc(`${publicUrl}?t=${Date.now()}`)
+      // ── 4. Update local state ───────────────────────────────────────────
+      storedLogoPath.current = newPath
+      const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)!
+
+      // ?v= bust forces browser to fetch the new image once, then caches cleanly
+      setLogoSrc(`${newPublicUrl}?v=${timestamp}`)
       URL.revokeObjectURL(blobUrl)
       toast.success("Logo updated successfully!")
     } catch (err) {
       console.error(err)
       toast.error("Failed to upload logo. Please try again.")
-      setLogoSrc(storedLogoUrl ? `${storedLogoUrl}?t=${Date.now()}` : null)
+      // Restore previous display using clean cached URL
+      setLogoSrc(getStorageUrl(supabase, "avatars", storedLogoPath.current))
+      URL.revokeObjectURL(blobUrl)
     } finally {
       setIsUploadingLogo(false)
       if (logoInputRef.current) logoInputRef.current.value = ""
@@ -305,16 +353,16 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
-    if (!instituteName.trim()) e.instituteName = "College name is required"
-    if (!affiliation) e.affiliation = "Affiliation is required"
-    if (!address.trim()) e.address = "Address is required"
-    if (!city.trim()) e.city = "City is required"
-    if (!stateVal) e.state = "State is required"
-    if (!pincode.trim()) e.pincode = "Pincode is required"
-    if (!country) e.country = "Country is required"
-    if (!instPhone.trim()) e.instPhone = "Contact number is required"
-    if (!instEmail.trim()) e.instEmail = "Email is required"
-    if (!principalName.trim()) e.principalName = "Principal name is required"
+    if (!instituteName.trim()) e.instituteName  = "College name is required"
+    if (!affiliation)          e.affiliation    = "Affiliation is required"
+    if (!address.trim())       e.address        = "Address is required"
+    if (!city.trim())          e.city           = "City is required"
+    if (!stateVal)             e.state          = "State is required"
+    if (!pincode.trim())       e.pincode        = "Pincode is required"
+    if (!country)              e.country        = "Country is required"
+    if (!instPhone.trim())     e.instPhone      = "Contact number is required"
+    if (!instEmail.trim())     e.instEmail      = "Email is required"
+    if (!principalName.trim()) e.principalName  = "Principal name is required"
     if (!principalEmail.trim()) e.principalEmail = "Principal email is required"
     if (!principalPhone.trim()) e.principalPhone = "Principal contact is required"
     return e
@@ -354,6 +402,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  // NOTE: logo_path is intentionally excluded from this payload.
+  // Logo is managed independently via handleLogoFileChange — it has its own
+  // upload + DB write flow and must never be overwritten by the form save.
 
 
 
@@ -367,26 +418,25 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
     startTransition(async () => {
       const payload: Record<string, any> = {
-        profile_id: userProfile.id,
-        institute_name: instituteName.trim(),
-        institute_code: instituteCode.trim() || null,
+        profile_id:       userProfile.id,
+        institute_name:   instituteName.trim(),
+        institute_code:   instituteCode.trim() || null,
         established_year: establishedYear ? Number(establishedYear) : null,
-        affiliation: affiliation || null,
-        address: address.trim() || null,
-        city: city.trim() || null,
-        state: stateVal || null,
-        pincode: pincode.trim() || null,
-        country: country || "India",
-        phone_number: instPhone.trim() || null,
-        email: instEmail.trim() || null,
-        website_url: websiteUrl.trim() || null,
-        principal_name: principalName.trim() || null,
-        principal_email: principalEmail.trim() || null,
-        principal_phone: principalPhone.trim() || null,
-        courses: courses.filter((c) => c.trim()),
-        social_links: socialLinks.filter((l) => l.trim()),
-        // Preserve existing logo on upsert — do NOT overwrite with null
-        ...(storedLogoUrl ? { logo_url: storedLogoUrl } : {}),
+        affiliation:      affiliation || null,
+        address:          address.trim() || null,
+        city:             city.trim() || null,
+        state:            stateVal || null,
+        pincode:          pincode.trim() || null,
+        country:          country || "India",
+        phone_number:     instPhone.trim() || null,
+        email:            instEmail.trim() || null,
+        website_url:      websiteUrl.trim() || null,
+        principal_name:   principalName.trim() || null,
+        principal_email:  principalEmail.trim() || null,
+        principal_phone:  principalPhone.trim() || null,
+        courses:          courses.filter((c) => c.trim()),
+        social_links:     socialLinks.filter((l) => l.trim()),
+        // logo_path deliberately omitted — managed by handleLogoFileChange
       }
 
       const { error } = await supabase
@@ -408,12 +458,11 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
 
 
-
   return (
     <div className="min-h-screen w-full">
       <Tabs defaultValue="institution">
 
-        {/* ── Tab Bar (unchanged) ── */}
+        {/* ── Tab Bar ── */}
         <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
           <TabsList variant="line" className="px-4 md:px-6 justify-start">
             <TabsTrigger value="institution"><Building2 className="h-4 w-4 mr-2" />Institution</TabsTrigger>
@@ -426,7 +475,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
         <div className="px-4 py-6 md:px-6 md:py-8">
 
-
           {/* ════════════════════════════════════════════════════════════════
               INSTITUTION TAB
           ════════════════════════════════════════════════════════════════ */}
@@ -437,7 +485,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               <CardHeader>
                 <CardTitle>College Logo</CardTitle>
                 <CardDescription>
-                  JPEG, PNG or WebP · max 2 MB · square recommended
+                  JPEG, PNG or WEBP · max 2 MB · square recommended
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -829,7 +877,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
-
           {/* ════════════════════════════════════════════════════════════════
               LOGIN HISTORY TAB
           ════════════════════════════════════════════════════════════════ */}
@@ -839,7 +886,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               cardDescription="Recent access to your college account"
             />
           </TabsContent>
-
 
           {/* ════════════════════════════════════════════════════════════════
               PRIVACY TAB
@@ -880,7 +926,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
           </TabsContent>
-
 
         </div>
       </Tabs>

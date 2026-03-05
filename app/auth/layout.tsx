@@ -10,9 +10,12 @@ export default async function AuthLayout({
     children: React.ReactNode;
 }) {
     // ── Auth guard: kick logged-in users out of auth routes ──
+    // getUser() validates with Supabase server, so revoked sessions are
+    // correctly treated as unauthenticated (getClaims only decodes the
+    // local JWT and would redirect revoked users back here, causing a loop).
     const supabase = await createClient();
-    const { data } = await supabase.auth.getClaims();
-    if (data?.claims) redirect("/~");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) redirect("/~");
 
     return (
         <main className="relative md:h-screen md:overflow-hidden lg:grid lg:grid-cols-2">

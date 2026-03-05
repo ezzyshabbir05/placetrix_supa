@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { CandidateSettingsClient } from "./CandidateSettingsClient"
 import { InstituteSettingsClient } from "./InstituteSettingsClient"
 
+
 export default async function SettingsPage() {
   const profile = await getUserProfile()
 
