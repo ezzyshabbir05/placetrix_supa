@@ -9,7 +9,7 @@ import {
 import { LayoutDashboard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export default function HomePage() {
+export default function JobsPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background">
       <Empty>
@@ -17,7 +17,7 @@ export default function HomePage() {
           <EmptyMedia variant="icon">
             <LayoutDashboard />
           </EmptyMedia>
-          <EmptyTitle>Homepage</EmptyTitle>
+          <EmptyTitle>Jobs</EmptyTitle>
           <EmptyDescription>
             This page is a work in progress. Content will appear here once ready.
           </EmptyDescription>
