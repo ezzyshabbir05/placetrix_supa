@@ -1,21 +1,33 @@
-import { Suspense } from "react";
-import { FloatingPaths } from "@/components/ui/auth_page/floating-paths";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import Link from "next/link";
+import { Suspense } from "react"
+import { FloatingPaths } from "@/components/ui/auth_page/floating-paths"
+import { createClient } from "@/lib/supabase/server"
+import { redirect } from "next/navigation"
+import Link from "next/link"
 
 export default async function AuthLayout({
     children,
 }: {
-    children: React.ReactNode;
+    children: React.ReactNode
 }) {
-    // ── Auth guard: kick logged-in users out of auth routes ──
-    // getUser() validates with Supabase server, so revoked sessions are
-    // correctly treated as unauthenticated (getClaims only decodes the
-    // local JWT and would redirect revoked users back here, causing a loop).
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) redirect("/~");
+    // ── Why getClaims() and NOT getUser() here ────────────────────────────────
+    //
+    // Auth layout must use the SAME validation method as middleware.
+    // If middleware uses getClaims() but auth layout uses getUser():
+    //
+    //   Offline + authenticated:
+    //     middleware (getClaims ✓) → /~/dashboard
+    //     getUserProfile() offline fallback ✓ → renders fine
+    //     BUT if user navigates to /auth/login:
+    //       getUser() fails → no kick-out → stays on login  ← inconsistent
+    //
+    // With getClaims() here:
+    //   Offline + valid JWT → correctly kicked to /~/ → renders via offline fallback ✓
+    //   Online + valid JWT  → correctly kicked to ~/  → renders normally ✓
+    //   Online + no session → stays on /auth/* ✓
+    // ─────────────────────────────────────────────────────────────────────────
+    const supabase = await createClient()
+    const { data: claimsData } = await supabase.auth.getClaims()
+    if (claimsData?.claims) redirect("/~")
 
     return (
         <main className="relative md:h-screen md:overflow-hidden lg:grid lg:grid-cols-2">
@@ -40,7 +52,6 @@ export default async function AuthLayout({
                     </blockquote>
                 </div>
 
-                {/* Floating animation — pointer-events-none so it never blocks clicks */}
                 <div className="absolute inset-0 pointer-events-none">
                     <Suspense fallback={null}>
                         <FloatingPaths position={1} />
@@ -52,7 +63,6 @@ export default async function AuthLayout({
             {/* ── Right Panel wrapper — children slot ── */}
             <div className="relative flex min-h-screen flex-col justify-center px-8">
 
-                {/* Decorative radial background shades */}
                 <div
                     aria-hidden
                     className="absolute inset-0 isolate -z-10 opacity-60 contain-strict"
@@ -62,10 +72,9 @@ export default async function AuthLayout({
                     <div className="absolute top-0 right-0 h-320 w-60 -translate-y-87.5 rounded-full bg-[radial-gradient(50%_50%_at_50%_50%,--theme(--color-foreground/.04)_0,--theme(--color-foreground/.01)_80%,transparent_100%)]" />
                 </div>
 
-                {/* Page content goes here */}
                 {children}
             </div>
 
         </main>
-    );
+    )
 }

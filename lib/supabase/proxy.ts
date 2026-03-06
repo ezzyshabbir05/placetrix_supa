@@ -3,19 +3,10 @@ import { NextResponse, type NextRequest } from "next/server"
 
 // ─── Route config ─────────────────────────────────────────────────────────────
 
-/**
- * All path prefixes that require an authenticated session.
- * Add new protected areas here — nowhere else.
- */
 const PROTECTED_PREFIXES = ["/~/"] as const
 
-/**
- * Paths that are always public, even if they accidentally match a
- * protected prefix pattern above.
- */
 const PUBLIC_PREFIXES = [
     "/auth/",
-    "/login",
     "/_next/",
     "/favicon.ico",
 ] as const
@@ -33,7 +24,6 @@ function isProtected(pathname: string): boolean {
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({ request })
 
-    // Always create a fresh client per request (Fluid compute safe).
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
@@ -55,33 +45,30 @@ export async function updateSession(request: NextRequest) {
         },
     )
 
-    // Do not run code between createServerClient and the auth check.
-    // A simple mistake could make it very hard to debug users being logged out.
+    // ── Why getClaims() only, never getUser() here ────────────────────────────
+    //
+    // getUser() makes a live network request on EVERY middleware execution.
+    // Offline or flaky connections cause it to fail → false logout → loop.
+    //
+    // getClaims() verifies the JWT locally via WebCrypto against the cached
+    // JWKS public key (asymmetric signing key). No network required after the
+    // initial key fetch. It also returns null for expired tokens, so expiry
+    // is still enforced correctly.
+    //
+    // Server-side revocations (a rare event) are caught one request later
+    // inside getUserProfile() where getUser() IS called and we handle its
+    // errors properly without causing a redirect loop.
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // Fast local JWT decode first — avoids a network round-trip on every
-    // public/static request.
     const { data: claimsData } = await supabase.auth.getClaims()
-    let authenticated = !!claimsData?.claims
-
-    // For protected routes we MUST verify the session against the Supabase
-    // server. getClaims() only decodes the local JWT and has no knowledge of
-    // server-side revocations, so a revoked device would otherwise still be
-    // treated as logged in here, causing a redirect loop with the auth layout.
-    if (authenticated && isProtected(request.nextUrl.pathname)) {
-        const { data: userData } = await supabase.auth.getUser()
-        authenticated = !!userData.user
-    }
+    const authenticated = !!claimsData?.claims
 
     if (isProtected(request.nextUrl.pathname) && !authenticated) {
         const loginUrl = request.nextUrl.clone()
         loginUrl.pathname = "/auth/login"
-
-        // Preserve the original destination so we can redirect back after login
         loginUrl.searchParams.set("next", request.nextUrl.pathname)
-
         return NextResponse.redirect(loginUrl)
     }
 
-    // IMPORTANT: return supabaseResponse as-is to keep cookies in sync.
     return supabaseResponse
 }

@@ -10,18 +10,14 @@ import {
 import { SiteHeader } from "@/components/site-header"
 
 
-
 // ─── Constants ────────────────────────────────────────────────────────────────
-
 
 
 const HOVER_OPEN_DELAY  = 90   // ms
 const HOVER_CLOSE_DELAY = 140  // ms
 
 
-
 // ─── Hover Context ────────────────────────────────────────────────────────────
-
 
 
 interface SidebarHoverContextValue {
@@ -44,10 +40,8 @@ export function useSidebarHoverContext() {
 }
 
 
-
 // ─── Mobile Hover Guard ───────────────────────────────────────────────────────
 // Must be inside SidebarProvider to access useSidebar.
-
 
 
 function MobileHoverGuard({
@@ -65,9 +59,7 @@ function MobileHoverGuard({
 }
 
 
-
 // ─── DashboardShell ───────────────────────────────────────────────────────────
-
 
 
 export function DashboardShell({
@@ -184,11 +176,14 @@ export function DashboardShell({
       >
         {sidebar}
 
-        <SidebarInset className="h-svh overflow-y-auto">
+        {/* ✅ flex flex-col added so flex-1 children respond correctly */}
+        <SidebarInset className="h-svh overflow-y-auto flex flex-col">
           <div className="sticky top-0 z-10 w-full bg-background border-b">
             <SiteHeader onManualToggle={onManualToggle} />
           </div>
-          <div className="flex flex-1 flex-col">
+
+          {/* ✅ min-h-0 prevents flex child from overflowing the parent */}
+          <div className="flex flex-1 flex-col min-h-0">
             <div className="@container/main flex flex-1 flex-col gap-2">
               <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
                 {children}
