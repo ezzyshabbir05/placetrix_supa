@@ -5,10 +5,7 @@ import { InstituteTestsClient } from "./InstituteTestsClient"
 
 export default async function TestsPage() {
   const profile = await getUserProfile()
-
-  if (!profile) {
-    redirect("/login")
-  }
+  if (!profile) return null
 
   // ── Candidate ──────────────────────────────────────────────────────────────
   if (profile.account_type === "candidate") {

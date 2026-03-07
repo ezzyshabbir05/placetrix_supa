@@ -62,6 +62,28 @@ const PLACEHOLDER_TESTS = [
     score: null,
     total_marks: null,
   },
+    {
+    id: "5",
+    title: "Python Programming – OOP",
+    description: null,
+    duration_minutes: 60,
+    scheduled_start: "2026-02-10T10:00:00",
+    status: "past" as const,
+    submitted: false,
+    score: null,
+    total_marks: null,
+  },
+    {
+    id: "6",
+    title: "Python Programming – OOP",
+    description: null,
+    duration_minutes: 60,
+    scheduled_start: "2026-02-10T10:00:00",
+    status: "past" as const,
+    submitted: false,
+    score: null,
+    total_marks: null,
+  },
 ]
 
 
@@ -164,7 +186,7 @@ function TestCard({ test }: { test: typeof PLACEHOLDER_TESTS[0] }) {
 
         {/* CTA — live */}
         {test.status === "live" && (
-          <Button size="sm" className="w-full sm:w-auto" disabled>
+          <Button variant={"outline"} size="sm" className="w-full sm:w-auto" >
             <PlayCircle className="h-4 w-4 mr-2" />Start Test
           </Button>
         )}
@@ -244,7 +266,7 @@ export function CandidateTestsClient() {
               {tabTests[value].length === 0
                 ? <EmptyState label={value} />
                 : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                     {tabTests[value].map((t) => (
                       <TestCard key={t.id} test={t} />
                     ))}
