@@ -167,12 +167,6 @@ export function DashboardShell({
       <SidebarProvider
         open={open}
         onOpenChange={setOpen}
-        style={
-          {
-            "--sidebar-width": "calc(var(--spacing) * 72)",
-            "--header-height": "calc(var(--spacing) * 12)",
-          } as React.CSSProperties
-        }
       >
         {sidebar}
 

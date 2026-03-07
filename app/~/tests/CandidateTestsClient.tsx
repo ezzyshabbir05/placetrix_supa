@@ -1,249 +1,250 @@
 "use client"
 
+// ─────────────────────────────────────────────────────────────────────────────
+// app/~/tests/CandidateTestsClient.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState } from "react"
+import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import {
-  CalendarClock, PlayCircle, CheckCircle2,
-  Clock, FileText, Trophy, AlertCircle, BookOpen,
+  CalendarClock,
+  PlayCircle,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Trophy,
+  AlertCircle,
+  BookOpen,
+  RotateCcw,
+  Lock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  type CandidateTest,
+  type DerivedStatus,
+  formatDuration,
+  formatDateTime,
+} from "./_types"
 
+// ─── Status config ────────────────────────────────────────────────────────────
 
-
-// ─── Placeholder data ─────────────────────────────────────────────────────────
-
-
-
-const PLACEHOLDER_TESTS = [
-  {
-    id: "1",
-    title: "Mid-Semester Assessment – Computer Science",
-    description: "Covers data structures, algorithms, and OS fundamentals.",
-    duration_minutes: 90,
-    scheduled_start: "2026-03-10T10:00:00",
-    status: "live" as const,
-    submitted: false,
-    score: null,
-    total_marks: null,
-  },
-  {
-    id: "2",
-    title: "DBMS Unit Test – SQL & Normalisation",
-    description: "Focuses on SQL queries, joins, and normalisation up to 3NF.",
-    duration_minutes: 60,
-    scheduled_start: "2026-03-15T09:00:00",
-    status: "upcoming" as const,
-    submitted: false,
-    score: null,
-    total_marks: null,
-  },
-  {
-    id: "3",
-    title: "Web Technologies – HTML/CSS/JS",
-    description: "Practical assessment on frontend fundamentals.",
-    duration_minutes: 45,
-    scheduled_start: "2026-02-20T11:00:00",
-    status: "past" as const,
-    submitted: true,
-    score: 38,
-    total_marks: 45,
-  },
-  {
-    id: "4",
-    title: "Python Programming – OOP",
-    description: null,
-    duration_minutes: 60,
-    scheduled_start: "2026-02-10T10:00:00",
-    status: "past" as const,
-    submitted: false,
-    score: null,
-    total_marks: null,
-  },
-    {
-    id: "5",
-    title: "Python Programming – OOP",
-    description: null,
-    duration_minutes: 60,
-    scheduled_start: "2026-02-10T10:00:00",
-    status: "past" as const,
-    submitted: false,
-    score: null,
-    total_marks: null,
-  },
-    {
-    id: "6",
-    title: "Python Programming – OOP",
-    description: null,
-    duration_minutes: 60,
-    scheduled_start: "2026-02-10T10:00:00",
-    status: "past" as const,
-    submitted: false,
-    score: null,
-    total_marks: null,
-  },
-]
-
-
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  })
-}
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m ? `${h}h ${m}m` : `${h}h`
-}
-
-
-
-// ─── Test Card ────────────────────────────────────────────────────────────────
-
-
-
-function TestCard({ test }: { test: typeof PLACEHOLDER_TESTS[0] }) {
-  const borderClass = {
-    live:     "border-l-4 border-l-green-500",
-    upcoming: "border-l-4 border-l-blue-400",
-    past:     "border-l-4 border-l-border",
-  }[test.status]
-
-  const statusBadge = {
-    live: (
-      <Badge className="gap-1 bg-green-500 hover:bg-green-500 border-0">
-        <PlayCircle className="h-3 w-3" />Live
+const STATUS_CONFIG: Record<DerivedStatus, { badge: React.ReactNode; border: string }> = {
+  live: {
+    border: "border-l-4 border-l-green-500",
+    badge: (
+      <Badge className="gap-1.5 bg-green-500 hover:bg-green-500 text-white border-0 shrink-0">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+        </span>
+        Live
       </Badge>
     ),
-    upcoming: (
-      <Badge variant="secondary" className="gap-1">
+  },
+  upcoming: {
+    border: "border-l-4 border-l-blue-400",
+    badge: (
+      <Badge variant="secondary" className="gap-1 shrink-0">
         <CalendarClock className="h-3 w-3" />Upcoming
       </Badge>
     ),
-    past: (
-      <Badge variant="outline" className="gap-1">
+  },
+  past: {
+    border: "border-l-4 border-l-border",
+    badge: (
+      <Badge variant="outline" className="gap-1 shrink-0">
         <CheckCircle2 className="h-3 w-3" />Ended
       </Badge>
     ),
-  }[test.status]
+  },
+}
+
+// ─── Score display ────────────────────────────────────────────────────────────
+
+function ScoreDisplay({ test }: { test: CandidateTest }) {
+  const { attempt, results_available } = test
+  if (!attempt || attempt.status !== "submitted") return null
+
+  if (!results_available) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Lock className="h-3.5 w-3.5" />
+        Results pending release
+      </div>
+    )
+  }
+
+  if (attempt.score == null || attempt.total_marks == null) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Trophy className="h-3.5 w-3.5 text-amber-500" />
+        Awaiting grading
+      </div>
+    )
+  }
+
+  const pct = attempt.percentage ?? Math.round((attempt.score / attempt.total_marks) * 100)
+  const scoreColor =
+    pct >= 75 ? "text-green-600" : pct >= 50 ? "text-amber-600" : "text-red-500"
 
   return (
-    <Card className={cn("transition-shadow hover:shadow-md", borderClass)}>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <span className="flex items-center gap-1.5 font-medium">
+          <Trophy className="h-3.5 w-3.5 text-amber-500" />
+          Score
+        </span>
+        <span className={cn("font-semibold tabular-nums", scoreColor)}>
+          {attempt.score} / {attempt.total_marks}
+          <span className="text-muted-foreground font-normal ml-1">({pct}%)</span>
+        </span>
+      </div>
+      <Progress value={pct} className="h-1.5" />
+    </div>
+  )
+}
+
+// ─── Test Card ────────────────────────────────────────────────────────────────
+
+function TestCard({ test }: { test: CandidateTest }) {
+  const { border, badge } = STATUS_CONFIG[test.derived_status]
+  const isInProgress = test.attempt?.status === "in_progress"
+  const isSubmitted  = test.attempt?.status === "submitted"
+
+  return (
+    <Card className={cn("flex flex-col transition-shadow hover:shadow-md", border)}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <CardTitle className="text-base leading-snug">{test.title}</CardTitle>
             {test.description && (
-              <CardDescription className="line-clamp-2 text-xs">{test.description}</CardDescription>
+              <CardDescription className="line-clamp-2 text-xs">
+                {test.description}
+              </CardDescription>
             )}
           </div>
-          <div className="shrink-0">{statusBadge}</div>
+          {badge}
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="flex flex-col flex-1 gap-4">
 
         {/* Meta */}
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
-            {formatDuration(test.duration_minutes)}
+            {formatDuration(test.time_limit_seconds)}
           </span>
-          <span className="flex items-center gap-1.5">
-            <CalendarClock className="h-3.5 w-3.5" />
-            {formatDateTime(test.scheduled_start)}
-          </span>
+          {test.available_from && (
+            <span className="flex items-center gap-1.5">
+              <CalendarClock className="h-3.5 w-3.5" />
+              {formatDateTime(test.available_from)}
+            </span>
+          )}
         </div>
 
-        {/* Score — past + submitted */}
-        {test.status === "past" && test.submitted && test.total_marks != null && (
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Trophy className="h-4 w-4 text-amber-500" />
-            Score:&nbsp;
-            {test.score != null
-              ? <span className="text-foreground">{test.score} / {test.total_marks}</span>
-              : <span className="text-muted-foreground">Pending grading</span>}
-          </div>
-        )}
+        {/* Score block */}
+        <ScoreDisplay test={test} />
 
-        {/* Not attempted — past */}
-        {test.status === "past" && !test.submitted && (
+        {/* Past — not attempted */}
+        {test.derived_status === "past" && !test.attempt && (
           <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-            <AlertCircle className="h-3.5 w-3.5" />Not attempted
+            <AlertCircle className="h-3.5 w-3.5" />
+            Not attempted
           </p>
         )}
 
-        {/* CTA — live */}
-        {test.status === "live" && (
-          <Button variant={"outline"} size="sm" className="w-full sm:w-auto" >
-            <PlayCircle className="h-4 w-4 mr-2" />Start Test
-          </Button>
-        )}
-
-        {/* Info — upcoming */}
-        {test.status === "upcoming" && (
+        {/* Submitted timestamp */}
+        {isSubmitted && test.attempt?.submitted_at && (
           <p className="text-xs text-muted-foreground">
-            Opens {formatDateTime(test.scheduled_start)}
+            Submitted {formatDateTime(test.attempt.submitted_at)}
           </p>
         )}
+
+        {/* Upcoming note */}
+        {test.derived_status === "upcoming" && (
+          <p className="text-xs text-muted-foreground">
+            Opens {formatDateTime(test.available_from)}
+          </p>
+        )}
+
+        {/* CTA */}
+        <div className="mt-auto">
+          {test.derived_status === "live" && !isSubmitted && (
+            <Button
+              asChild
+              size="sm"
+              variant={isInProgress ? "outline" : "default"}
+              className="w-full sm:w-auto"
+            >
+              <Link href={`tests/${test.id}/attempt`}>
+                {isInProgress ? (
+                  <><RotateCcw className="h-4 w-4 mr-2" />Resume Test</>
+                ) : (
+                  <><PlayCircle className="h-4 w-4 mr-2" />Start Test</>
+                )}
+              </Link>
+            </Button>
+          )}
+
+          {isSubmitted && test.results_available && (
+            <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
+              <Link href={`tests/${test.id}`}>
+                <FileText className="h-4 w-4 mr-2" />View Result
+              </Link>
+            </Button>
+          )}
+        </div>
 
       </CardContent>
     </Card>
   )
 }
 
-
-
 // ─── Empty State ──────────────────────────────────────────────────────────────
-
-
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground gap-3">
-      <BookOpen className="h-10 w-10 opacity-30" />
+    <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground gap-3">
+      <BookOpen className="h-10 w-10 opacity-25" />
       <p className="text-sm">No {label} tests</p>
     </div>
   )
 }
 
-
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
+type Tab = "live" | "upcoming" | "past"
 
+interface Props {
+  tests: CandidateTest[]
+}
 
-export function CandidateTestsClient() {
-  const [activeTab, setActiveTab] = useState<"live" | "upcoming" | "past">("live")
+export function CandidateTestsClient({ tests }: Props) {
+  const [activeTab, setActiveTab] = useState<Tab>("live")
 
-  const live     = PLACEHOLDER_TESTS.filter((t) => t.status === "live")
-  const upcoming = PLACEHOLDER_TESTS.filter((t) => t.status === "upcoming")
-  const past     = PLACEHOLDER_TESTS.filter((t) => t.status === "past")
+  const live     = tests.filter((t) => t.derived_status === "live")
+  const upcoming = tests.filter((t) => t.derived_status === "upcoming")
+  const past     = tests.filter((t) => t.derived_status === "past")
 
   const tabConfig = [
-    { value: "live",     label: "Live",     icon: <PlayCircle className="h-4 w-4 mr-2" />,    count: live.length },
-    { value: "upcoming", label: "Upcoming", icon: <CalendarClock className="h-4 w-4 mr-2" />, count: upcoming.length },
-    { value: "past",     label: "Past",     icon: <FileText className="h-4 w-4 mr-2" />,       count: past.length },
-  ] as const
+    { value: "live"     as const, label: "Live",     icon: <PlayCircle className="h-4 w-4 mr-2" />,    count: live.length },
+    { value: "upcoming" as const, label: "Upcoming", icon: <CalendarClock className="h-4 w-4 mr-2" />, count: upcoming.length },
+    { value: "past"     as const, label: "Past",     icon: <FileText className="h-4 w-4 mr-2" />,      count: past.length },
+  ]
 
-  const tabTests = { live, upcoming, past }
+  const tabTests: Record<Tab, CandidateTest[]> = { live, upcoming, past }
 
   return (
     <div className="min-h-screen w-full">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
 
-        {/* ── Tab Bar ── */}
+        {/* Tab Bar */}
         <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
           <TabsList variant="line" className="px-4 md:px-6 justify-start">
             {tabConfig.map(({ value, label, icon, count }) => (
@@ -260,22 +261,19 @@ export function CandidateTestsClient() {
         </div>
 
         <div className="px-4 py-6 md:px-6 md:py-8">
-
-          {tabConfig.map(({ value }) => (
+          {tabConfig.map(({ value, label }) => (
             <TabsContent key={value} value={value}>
-              {tabTests[value].length === 0
-                ? <EmptyState label={value} />
-                : (
-                  <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {tabTests[value].map((t) => (
-                      <TestCard key={t.id} test={t} />
-                    ))}
-                  </div>
-                )}
+              {tabTests[value].length === 0 ? (
+                <EmptyState label={label.toLowerCase()} />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {tabTests[value].map((t) => <TestCard key={t.id} test={t} />)}
+                </div>
+              )}
             </TabsContent>
           ))}
-
         </div>
+
       </Tabs>
     </div>
   )

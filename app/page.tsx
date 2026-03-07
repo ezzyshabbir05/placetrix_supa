@@ -76,10 +76,12 @@ function HeroSection() {
 
 
         <div className="fade-in slide-in-from-bottom-10 flex w-fit animate-in items-center justify-center gap-3 fill-mode-backwards pt-1 sm:pt-2 delay-300 duration-500 ease-out">
-          <Button size="sm" className="sm:size-default">
-            <Link href="/auth/sign-up">Start Practicing</Link>
-            <ArrowRightIcon data-icon="inline-end" />
-          </Button>
+          <Link href="/auth/sign-up">
+            <Button size="sm" className="sm:size-default">
+              Start Practicing
+              <ArrowRightIcon data-icon="inline-end" />
+            </Button>
+          </Link>
         </div>
       </div>
 
