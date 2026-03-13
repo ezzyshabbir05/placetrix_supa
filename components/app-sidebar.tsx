@@ -1,5 +1,5 @@
 "use client"
-
+import PlaceTrixLogo from "@/assets/placetrix.svg"
 import * as React from "react"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
@@ -49,58 +49,58 @@ const VALID_ACCOUNT_TYPES: AccountType[] = ["candidate", "institute", "admin", "
 
 const NAV_MAIN: Record<AccountType, NavItem[]> = {
   candidate: [
-    { title: "Home",            url: "/~/home",         icon: IconHome },
-    { title: "Job Search",      url: "/~/jobs",         icon: IconSearch },
+    { title: "Home", url: "/~/home", icon: IconHome },
+    { title: "Job Search", url: "/~/jobs", icon: IconSearch },
     { title: "My Applications", url: "/~/applications", icon: IconClipboardList },
-    { title: "Tests",           url: "/~/tests",        icon: IconChartBar },
-    { title: "Resume",          url: "/~/resume",       icon: IconFileDescription },
-    { title: "Events",          url: "/~/events",       icon: IconCalendarEvent },
+    { title: "Tests", url: "/~/tests", icon: IconChartBar },
+    { title: "Resume", url: "/~/resume", icon: IconFileDescription },
+    { title: "Events", url: "/~/events", icon: IconCalendarEvent },
   ],
   institute: [
-    { title: "Home",       url: "/~/home",       icon: IconHome },
-    { title: "Students",   url: "/~/students",   icon: IconSchool },
-    { title: "Drives",     url: "/~/drives",     icon: IconFolder },
-    { title: "Tests",      url: "/~/tests",      icon: IconChartBar },
-    { title: "Reports",    url: "/~/reports",    icon: IconReport },
+    { title: "Home", url: "/~/home", icon: IconHome },
+    { title: "Students", url: "/~/students", icon: IconSchool },
+    { title: "Drives", url: "/~/drives", icon: IconFolder },
+    { title: "Tests", url: "/~/tests", icon: IconChartBar },
+    { title: "Reports", url: "/~/reports", icon: IconReport },
     { title: "Recruiters", url: "/~/recruiters", icon: IconBriefcase },
   ],
   admin: [
-    { title: "Home",      url: "/~/home",      icon: IconHome },
-    { title: "Users",     url: "/~/users",     icon: IconUsers },
-    { title: "Groups",    url: "/~/groups",    icon: IconUsersGroup },
-    { title: "Drives",    url: "/~/drives",    icon: IconFolder },
-    { title: "Tests",     url: "/~/tests",     icon: IconChartBar },
-    { title: "Events",    url: "/~/events",    icon: IconCalendarEvent },
+    { title: "Home", url: "/~/home", icon: IconHome },
+    { title: "Users", url: "/~/users", icon: IconUsers },
+    { title: "Groups", url: "/~/groups", icon: IconUsersGroup },
+    { title: "Drives", url: "/~/drives", icon: IconFolder },
+    { title: "Tests", url: "/~/tests", icon: IconChartBar },
+    { title: "Events", url: "/~/events", icon: IconCalendarEvent },
     { title: "Analytics", url: "/~/analytics", icon: IconFileAnalytics },
-    { title: "Reports",   url: "/~/reports",   icon: IconReport },
+    { title: "Reports", url: "/~/reports", icon: IconReport },
   ],
   recruiter: [
-    { title: "Home",         url: "/~/home",       icon: IconHome },
-    { title: "Job Postings", url: "/~/postings",   icon: IconBriefcase2 },
-    { title: "Candidates",   url: "/~/candidates", icon: IconTargetArrow },
-    { title: "Drives",       url: "/~/drives",     icon: IconFolder },
-    { title: "Tests",        url: "/~/tests",      icon: IconChartBar },
-    { title: "Reports",      url: "/~/reports",    icon: IconReport },
+    { title: "Home", url: "/~/home", icon: IconHome },
+    { title: "Job Postings", url: "/~/postings", icon: IconBriefcase2 },
+    { title: "Candidates", url: "/~/candidates", icon: IconTargetArrow },
+    { title: "Drives", url: "/~/drives", icon: IconFolder },
+    { title: "Tests", url: "/~/tests", icon: IconChartBar },
+    { title: "Reports", url: "/~/reports", icon: IconReport },
   ],
 }
 
 const NAV_SECONDARY: NavItem[] = [
   { title: "Notifications", url: "/~/notifications", icon: IconBell },
-  { title: "Settings",      url: "/~/settings",      icon: IconSettings },
-  { title: "Get Help",      url: "/~/help",          icon: IconHelp },
+  { title: "Settings", url: "/~/settings", icon: IconSettings },
+  { title: "Get Help", url: "/~/help", icon: IconHelp },
 ]
 
 const ROLE_LABELS: Record<AccountType, string> = {
   candidate: "Candidate",
   institute: "Institute",
-  admin:     "Admin",
+  admin: "Admin",
   recruiter: "Recruiter",
 }
 
 const ROLE_COLORS: Record<AccountType, string> = {
   candidate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   institute: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  admin:     "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  admin: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   recruiter: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
 }
 
@@ -113,8 +113,8 @@ const ROLE_COLORS: Record<AccountType, string> = {
 type ThemeOption = { value: string; label: string; icon: Icon }
 
 const THEME_OPTIONS: ThemeOption[] = [
-  { value: "light",  label: "Light",  icon: IconSun },
-  { value: "dark",   label: "Dark",   icon: IconMoon },
+  { value: "light", label: "Light", icon: IconSun },
+  { value: "dark", label: "Dark", icon: IconMoon },
   { value: "system", label: "System", icon: IconDeviceLaptop },
 ]
 
@@ -151,8 +151,8 @@ export function NavUser({ user }: { user: UserProfile | null }) {
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
 
-  const displayName    = user?.display_name?.trim() || "User"
-  const email          = user?.email?.trim() || "No email"
+  const displayName = user?.display_name?.trim() || "User"
+  const email = user?.email?.trim() || "No email"
   const sidebarSubtitle = user?.username?.trim()
     ? `@${user.username.trim()}`
     : email
@@ -404,11 +404,11 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
             {user ? (
               <SidebarMenuButton className="data-[slot=sidebar-menu-button]:p-1.5! group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent">
                 <Image
-                  src="/placetrix.svg"
+                  src={PlaceTrixLogo}
                   alt="PlaceTrix"
                   width={25}
                   height={25}
-                  className="size-5.5! dark:invert dark:brightness-0 dark:contrast-100 transition-all duration-300 group-hover/logo:scale-110 group-hover/logo:-rotate-6 group-hover/logo:drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+                  className="size-5.5! dark:invert ..."
                 />
                 <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider">
                   PlaceTrix

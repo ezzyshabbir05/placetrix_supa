@@ -465,11 +465,11 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         {/* ── Tab Bar ── */}
         <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
           <TabsList variant="line" className="px-4 md:px-6 justify-start">
-            <TabsTrigger value="institution"><Building2 className="h-4 w-4 mr-2" />Institution</TabsTrigger>
-            <TabsTrigger value="security"><Lock className="h-4 w-4 mr-2" />Security</TabsTrigger>
-            <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />Notifications</TabsTrigger>
-            <TabsTrigger value="history"><History className="h-4 w-4 mr-2" />Login History</TabsTrigger>
-            <TabsTrigger value="privacy"><Shield className="h-4 w-4 mr-2" />Privacy</TabsTrigger>
+            <TabsTrigger value="institution"><Building2 />Institution</TabsTrigger>
+            <TabsTrigger value="security"><Lock />Security</TabsTrigger>
+            <TabsTrigger value="notifications"><Bell />Notifications</TabsTrigger>
+            <TabsTrigger value="history"><History />Login History</TabsTrigger>
+            <TabsTrigger value="privacy"><Shield />Privacy</TabsTrigger>
           </TabsList>
         </div>
 

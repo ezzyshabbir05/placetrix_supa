@@ -2,52 +2,38 @@
 // app/~/tests/[testId]/_types.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type QuestionType = "single_correct" | "multiple_correct"
+// ── Shared / primitives ───────────────────────────────────────────────────────
 
-export type OptionBase = {
-  id: string
-  option_text: string
-  order_index: number
-}
-
-export type Tag = {
+export interface Tag {
   id: string
   name: string
 }
 
-// ── Candidate detail ──────────────────────────────────────────────────────────
+// ── Candidate types ───────────────────────────────────────────────────────────
 
-export type CandidateTestDetail = {
+export interface CandidateOption {
   id: string
-  title: string
-  description: string | null
-  instructions: string | null
-  time_limit_seconds: number | null
-  available_from: string | null
-  available_until: string | null
-  results_available: boolean
-  institute_name: string | null
+  option_text: string
+  order_index: number
+  /** null when results are not yet released */
+  is_correct: boolean | null
 }
 
-export type CandidateOption = OptionBase & {
-  is_correct: boolean | null // null until results_available (comes from student_options view)
-}
-
-export type CandidateAnswerDetail = {
+export interface CandidateAnswerDetail {
   question_id: string
   question_text: string
-  question_type: QuestionType
+  question_type: "single_correct" | "multiple_correct"
   marks: number
   explanation: string | null
+  order_index: number
   is_correct: boolean | null
   marks_awarded: number | null
   selected_option_ids: string[]
   options: CandidateOption[]
   tags: Tag[]
-  order_index: number
 }
 
-export type CandidateAttemptDetail = {
+export interface CandidateAttemptDetail {
   id: string
   status: "in_progress" | "submitted"
   score: number | null
@@ -59,16 +45,32 @@ export type CandidateAttemptDetail = {
   answers: CandidateAnswerDetail[]
 }
 
-// ── Institute detail ──────────────────────────────────────────────────────────
-
-export type InstituteOption = OptionBase & {
-  is_correct: boolean
+export interface CandidateTestDetail {
+  questions: any | null
+  id: string
+  title: string
+  description: string | null
+  instructions: string | null
+  time_limit_seconds: number | null
+  available_from: string | null
+  available_until: string | null
+  results_available: boolean
+  institute_name: string | null
 }
 
-export type InstituteQuestion = {
+// ── Institute types ───────────────────────────────────────────────────────────
+
+export interface InstituteOption {
+  id: string
+  option_text: string
+  is_correct: boolean
+  order_index: number
+}
+
+export interface InstituteQuestion {
   id: string
   question_text: string
-  question_type: QuestionType
+  question_type: "single_correct" | "multiple_correct"
   order_index: number
   marks: number
   explanation: string | null
@@ -76,10 +78,11 @@ export type InstituteQuestion = {
   tags: Tag[]
 }
 
-export type InstituteAttemptRow = {
+export interface InstituteAttemptRow {
   id: string
   student_id: string
   student_name: string | null
+  student_email?: string | null
   status: "in_progress" | "submitted"
   score: number | null
   total_marks: number | null
@@ -89,7 +92,8 @@ export type InstituteAttemptRow = {
   time_spent_seconds: number | null
 }
 
-export type InstituteTestDetail = {
+export interface InstituteTestDetail {
+  institute_name: any
   id: string
   title: string
   description: string | null
@@ -101,4 +105,46 @@ export type InstituteTestDetail = {
   status: "draft" | "published"
   questions: InstituteQuestion[]
   attempts: InstituteAttemptRow[]
+}
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+
+export function formatDuration(seconds: number | null): string {
+  if (seconds == null) return "No time limit"
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0 && m > 0) return `${h}h ${m}m`
+  if (h > 0) return `${h}h`
+  return `${m} min`
+}
+
+export function formatSeconds(seconds: number | null): string {
+  if (seconds == null) return "—"
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+  return `${m}:${String(s).padStart(2, "0")}`
+}
+
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+/** Resolve percentage: prefer stored value, else compute from score/total. */
+export function resolvePct(
+  percentage: number | null,
+  score: number | null,
+  total: number | null
+): number {
+  if (percentage != null) return Math.round(percentage)
+  if (score != null && total != null && total > 0)
+    return Math.round((score / total) * 100)
+  return 0
 }

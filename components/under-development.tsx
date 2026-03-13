@@ -9,12 +9,9 @@ import {
 } from "@/components/ui/empty";
 
 interface UnderDevelopmentProps {
-  /** Override the icon (any Lucide or custom SVG component) */
   icon?: React.ReactNode;
-  /** Override the heading */
   title?: string;
-  /** Override the supporting text */
-  description?: string;
+  description?: React.ReactNode; // ← was string
 }
 
 export function UnderDevelopment({
