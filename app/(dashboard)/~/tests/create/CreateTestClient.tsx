@@ -1,7 +1,7 @@
 "use client"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// app/~/tests/create/CreateTestClient.tsx
+// app/(dashboard)/~/tests/create/CreateTestClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef, useTransition } from "react"
@@ -64,7 +64,6 @@ import {
   FileQuestion,
   ChevronRight,
   AlertCircle,
-  GripVertical,
   BookOpen,
   Clock,
   Sparkles,
@@ -785,7 +784,7 @@ function AIGenerateSheet({
 
   const handleGenerate = () => {
     if (!form.topic.trim()) { setError("Please enter a topic."); return }
-    if (!generateAction) { setError("AI generation is not connected yet."); return }
+    if (!generateAction) { setError("AI generation is not configured."); return }
     setError(null)
     startTransition(async () => {
       try {
@@ -799,8 +798,8 @@ function AIGenerateSheet({
             _warnings: [],
           }))
         )
-      } catch {
-        setError("Failed to generate questions. Please try again.")
+      } catch (err: any) {
+        setError(err?.message ?? "Failed to generate questions. Please try again.")
       }
     })
   }
@@ -1170,7 +1169,6 @@ function QuestionItem({
 }) {
   return (
     <div className="group flex items-center gap-3 rounded-md border bg-background px-3 py-2.5 transition-colors hover:bg-muted/30">
-      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30" />
       <span className="w-6 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
         {question.order_index}
       </span>
@@ -1257,18 +1255,32 @@ function AddQuestionsMenu({
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+//
+// Key changes from original:
+//   • Props.onSaveDraft and Props.onPublish now receive `testId` as the first
+//     argument so the server action knows which DB row to upsert.
+//   • handleSaveDraft auto-generates a UUID if settings haven't been confirmed
+//     yet, so "Save Draft" always works without a prior "Save & Add Questions".
+// ──────────────────────────────────────────────────────────────────────────────
 
 interface Props {
   availableTags: { id: string; name: string }[]
   generateQuestionsAction?: (input: AiGenerateForm) => Promise<QuestionForm[]>
-  /** Called when the user publishes. Receives the assembled test data. */
-  onPublish?: (settings: SettingsForm, questions: LocalQuestion[]) => Promise<void>
+  onSaveDraft?: (testId: string, settings: SettingsForm, questions: LocalQuestion[]) => Promise<void>
+  onPublish?: (testId: string, settings: SettingsForm, questions: LocalQuestion[]) => Promise<void>
 }
 
-export function CreateTestClient({ availableTags, generateQuestionsAction, onPublish }: Props) {
+export function CreateTestClient({
+  availableTags,
+  generateQuestionsAction,
+  onSaveDraft,
+  onPublish,
+}: Props) {
   const [settingsForm, setSettingsForm] = useState<SettingsForm>(defaultSettings)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [testId, setTestId] = useState<string | null>(null)
+  const [isSavingDraft, startSavingDraft] = useTransition()
+  const [saveDraftError, setSaveDraftError] = useState<string | null>(null)
   const [isPublishing, startPublish] = useTransition()
 
   const [questions, setQuestions] = useState<LocalQuestion[]>([])
@@ -1279,6 +1291,8 @@ export function CreateTestClient({ availableTags, generateQuestionsAction, onPub
   const [aiOpen, setAiOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<LocalQuestion | null>(null)
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   const appendQuestions = (forms: QuestionForm[]) => {
     setQuestions((prev) => [
@@ -1296,11 +1310,24 @@ export function CreateTestClient({ availableTags, generateQuestionsAction, onPub
     ])
   }
 
+  // Resolve or lazily create the local test UUID.
+  // This UUID is used as the actual PK in the database (we insert with it).
+  const resolveTestId = (): string => {
+    if (testId) return testId
+    const newId = crypto.randomUUID()
+    setTestId(newId)
+    return newId
+  }
+
+  // ── Settings ───────────────────────────────────────────────────────────────
+
   const handleSaveSettings = () => {
     if (!settingsForm.title.trim()) { setSettingsError("Title is required."); return }
     setSettingsError(null)
-    if (!testId) setTestId(crypto.randomUUID())
+    resolveTestId() // ensure testId is set, unlocking the questions panel
   }
+
+  // ── Question sheet ─────────────────────────────────────────────────────────
 
   const handleQuestionSheetSave = (form: QuestionForm) => {
     if (editTarget) {
@@ -1328,6 +1355,8 @@ export function CreateTestClient({ availableTags, generateQuestionsAction, onPub
 
   const handleQuestionSheetClose = () => { setManualOpen(false); setEditTarget(null) }
 
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
   const handleDeleteConfirmed = () => {
     if (!deleteTarget) return
     setQuestions((prev) =>
@@ -1338,17 +1367,42 @@ export function CreateTestClient({ availableTags, generateQuestionsAction, onPub
     setDeleteTarget(null)
   }
 
+  // ── Save Draft ─────────────────────────────────────────────────────────────
+  // Works even if the user hasn't clicked "Save & Add Questions" yet.
+
+  const handleSaveDraft = () => {
+    if (!onSaveDraft) return
+    if (!settingsForm.title.trim()) {
+      setSettingsError("Title is required to save a draft.")
+      return
+    }
+    setSettingsError(null)
+    setSaveDraftError(null)
+    const effectiveId = resolveTestId()
+    startSavingDraft(async () => {
+      try {
+        await onSaveDraft(effectiveId, settingsForm, questions)
+      } catch (err: any) {
+        setSaveDraftError(err?.message ?? "Failed to save draft. Please try again.")
+      }
+    })
+  }
+
+  // ── Publish ────────────────────────────────────────────────────────────────
+
   const handlePublish = () => {
     if (!testId || !onPublish) return
     setPublishError(null)
     startPublish(async () => {
       try {
-        await onPublish(settingsForm, questions)
+        await onPublish(testId, settingsForm, questions)
       } catch (err: any) {
         setPublishError(err?.message ?? "Failed to publish. Please try again.")
       }
     })
   }
+
+  // ── Derived ────────────────────────────────────────────────────────────────
 
   const totalMarks = questions.reduce((s, q) => s + q.marks, 0)
   const canPublish = testId !== null && questions.length > 0
@@ -1359,20 +1413,51 @@ export function CreateTestClient({ availableTags, generateQuestionsAction, onPub
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setSettingsForm((f) => ({ ...f, [key]: e.target.value }))
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen w-full">
       <div className="mx-auto space-y-6 px-4 py-6 md:px-6 md:py-8">
 
         {/* Page header */}
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={handlePublish} disabled={!canPublish || isPublishing}>
-            {isPublishing ? (
-              <><span className="mr-2 h-4 w-4 animate-spin">⋯</span>Publishing…</>
-            ) : (
-              <><Send className="mr-2 h-4 w-4" />Publish</>
-            )}
-          </Button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Create Test</h1>
+            <p className="text-sm text-muted-foreground">Draft your test and publish when ready.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveDraft}
+              disabled={isSavingDraft}
+            >
+              {isSavingDraft ? (
+                <><span className="mr-2 h-4 w-4 animate-spin">⋯</span>Saving…</>
+              ) : (
+                <><Save className="mr-2 h-4 w-4" />Save Draft</>
+              )}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handlePublish}
+              disabled={!canPublish || isPublishing}
+            >
+              {isPublishing ? (
+                <><span className="mr-2 h-4 w-4 animate-spin">⋯</span>Publishing…</>
+              ) : (
+                <><Send className="mr-2 h-4 w-4" />Publish</>
+              )}
+            </Button>
+          </div>
         </div>
+
+        {saveDraftError && (
+          <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {saveDraftError}
+          </div>
+        )}
 
         {publishError && (
           <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
@@ -1566,14 +1651,29 @@ export function CreateTestClient({ availableTags, generateQuestionsAction, onPub
 
         {/* Publish CTA */}
         {canPublish && (
-          <div className="flex items-center justify-between rounded-md border bg-muted/50 px-4 py-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-md border bg-muted/50 px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              Ready? Publish to make this test visible to students.
+              Ready? Publish to make this test visible to students or save it as a draft.
             </p>
-            <Button size="sm" onClick={handlePublish} disabled={isPublishing}>
-              <Send className="mr-2 h-4 w-4" />
-              Publish Now
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSaveDraft}
+                disabled={isSavingDraft}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Save Draft
+              </Button>
+              <Button
+                size="sm"
+                onClick={handlePublish}
+                disabled={isPublishing}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Publish Now
+              </Button>
+            </div>
           </div>
         )}
       </div>

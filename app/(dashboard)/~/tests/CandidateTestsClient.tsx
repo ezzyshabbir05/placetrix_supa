@@ -19,38 +19,12 @@ import {
   AlertCircle,
   BookOpen,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
-
+import type { CandidateTest, DerivedCandidateStatus } from "./_types"
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-
-
-type DerivedStatus = "live" | "upcoming" | "past"
 type Tab = "live" | "upcoming" | "past"
-
-
-interface CandidateTestAttempt {
-  status: "in_progress" | "submitted"
-  submitted_at?: string
-  score?: number
-  total_marks?: number
-  percentage?: number
-}
-
-
-interface CandidateTest {
-  id: string
-  title: string
-  description?: string
-  time_limit_seconds: number
-  available_from?: string
-  derived_status: DerivedStatus
-  results_available: boolean
-  attempt?: CandidateTestAttempt
-}
-
 
 interface TabConfig {
   value: Tab
@@ -60,108 +34,7 @@ interface TabConfig {
 }
 
 
-
-// ─── Placeholder Data ─────────────────────────────────────────────────────────
-
-
-
-const PLACEHOLDER_TESTS: CandidateTest[] = [
-  {
-    id: "1",
-    title: "Mathematics Mock Test – Series 1",
-    description: "Covers algebra, trigonometry, and calculus fundamentals.",
-    time_limit_seconds: 5400,
-    available_from: "2026-03-10T09:00:00",
-    derived_status: "live",
-    results_available: false,
-    attempt: { status: "in_progress" },
-  },
-  {
-    id: "2",
-    title: "Physics Chapter Test",
-    description: "Laws of motion, work, energy, and power.",
-    time_limit_seconds: 3600,
-    available_from: "2026-03-10T08:00:00",
-    derived_status: "live",
-    results_available: false,
-  },
-  {
-    id: "3",
-    title: "Chemistry Full Syllabus",
-    description: "Organic and inorganic chemistry combined test.",
-    time_limit_seconds: 7200,
-    available_from: "2026-03-12T10:00:00",
-    derived_status: "upcoming",
-    results_available: false,
-  },
-  {
-    id: "4",
-    title: "Biology Unit Test",
-    time_limit_seconds: 2700,
-    available_from: "2026-03-15T14:00:00",
-    derived_status: "upcoming",
-    results_available: false,
-  },
-  {
-    id: "5",
-    title: "English Grammar & Comprehension",
-    description: "Vocabulary, comprehension, and grammar.",
-    time_limit_seconds: 3600,
-    available_from: "2026-03-05T09:00:00",
-    derived_status: "past",
-    results_available: true,
-    attempt: {
-      status: "submitted",
-      submitted_at: "2026-03-05T10:45:00",
-      score: 78,
-      total_marks: 100,
-      percentage: 78,
-    },
-  },
-  {
-    id: "6",
-    title: "History & Civics",
-    description: "Modern Indian history and constitutional framework.",
-    time_limit_seconds: 3600,
-    available_from: "2026-03-01T09:00:00",
-    derived_status: "past",
-    results_available: true,
-    attempt: {
-      status: "submitted",
-      submitted_at: "2026-03-01T10:30:00",
-      score: 42,
-      total_marks: 80,
-      percentage: 53,
-    },
-  },
-  {
-    id: "7",
-    title: "General Science Quiz",
-    time_limit_seconds: 1800,
-    available_from: "2026-02-28T11:00:00",
-    derived_status: "past",
-    results_available: false,
-    attempt: {
-      status: "submitted",
-      submitted_at: "2026-02-28T11:29:00",
-    },
-  },
-  {
-    id: "8",
-    title: "Aptitude & Reasoning Test",
-    time_limit_seconds: 2700,
-    available_from: "2026-02-20T09:00:00",
-    derived_status: "past",
-    results_available: false,
-  },
-]
-
-
-
 // ─── Utils ────────────────────────────────────────────────────────────────────
-// TODO: extract to @/lib/format.ts and share with InstituteTestsClient
-
-
 
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -171,21 +44,16 @@ export function formatDuration(seconds: number): string {
   return `${m} min`
 }
 
-
 export function formatDateTime(dt?: string): string {
   if (!dt) return "—"
   return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
 }
 
 
-
 // ─── Status Config ────────────────────────────────────────────────────────────
 
-
-
-const STATUS_CONFIG: Record<DerivedStatus, { badge: React.ReactNode; }> = {
+const STATUS_CONFIG: Record<DerivedCandidateStatus, { badge: React.ReactNode }> = {
   live: {
-
     badge: (
       <Badge className="gap-1.5 bg-green-500 hover:bg-green-500 text-white border-0 shrink-0">
         <span className="relative flex h-1.5 w-1.5">
@@ -197,7 +65,6 @@ const STATUS_CONFIG: Record<DerivedStatus, { badge: React.ReactNode; }> = {
     ),
   },
   upcoming: {
-
     badge: (
       <Badge variant="secondary" className="gap-1 shrink-0">
         <CalendarClock className="h-3 w-3" />Upcoming
@@ -205,7 +72,6 @@ const STATUS_CONFIG: Record<DerivedStatus, { badge: React.ReactNode; }> = {
     ),
   },
   past: {
-
     badge: (
       <Badge variant="outline" className="gap-1 shrink-0">
         <CheckCircle2 className="h-3 w-3" />Ended
@@ -215,10 +81,7 @@ const STATUS_CONFIG: Record<DerivedStatus, { badge: React.ReactNode; }> = {
 }
 
 
-
 // ─── Test Card ────────────────────────────────────────────────────────────────
-
-
 
 function TestCard({ test }: { test: CandidateTest }) {
   const { badge } = STATUS_CONFIG[test.derived_status]
@@ -264,10 +127,31 @@ function TestCard({ test }: { test: CandidateTest }) {
           </p>
         )}
 
+        {/* In-progress indicator */}
+        {test.attempt?.status === "in_progress" && (
+          <p className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5" />
+            In progress — resume where you left off
+          </p>
+        )}
+
         {/* Submitted timestamp */}
         {isSubmitted && test.attempt?.submitted_at && (
           <p className="text-xs text-muted-foreground">
             Submitted {formatDateTime(test.attempt.submitted_at)}
+          </p>
+        )}
+
+        {/* Score (only when results are released) */}
+        {isSubmitted && test.results_available && test.attempt?.percentage != null && (
+          <p className="text-sm font-semibold">
+            Score:{" "}
+            <span className="text-primary">
+              {test.attempt.score}/{test.attempt.total_marks}
+            </span>{" "}
+            <span className="text-xs font-normal text-muted-foreground">
+              ({test.attempt.percentage.toFixed(1)}%)
+            </span>
           </p>
         )}
 
@@ -291,10 +175,7 @@ function TestCard({ test }: { test: CandidateTest }) {
 }
 
 
-
 // ─── Empty State ──────────────────────────────────────────────────────────────
-
-
 
 function EmptyState({ label }: { label: string }) {
   return (
@@ -311,24 +192,23 @@ function EmptyState({ label }: { label: string }) {
 }
 
 
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
+interface Props {
+  tests: CandidateTest[]
+}
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export function CandidateTestsClient() {
+export function CandidateTestsClient({ tests }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("live")
 
-  const tests = PLACEHOLDER_TESTS
-  const live = tests.filter((t) => t.derived_status === "live")
+  const live     = tests.filter((t) => t.derived_status === "live")
   const upcoming = tests.filter((t) => t.derived_status === "upcoming")
-  const past = tests.filter((t) => t.derived_status === "past")
+  const past     = tests.filter((t) => t.derived_status === "past")
 
   const tabConfig: TabConfig[] = [
-    { value: "live", label: "Live", icon: <PlayCircle className="h-3.5 w-3.5" />, count: live.length },
+    { value: "live",     label: "Live",     icon: <PlayCircle    className="h-3.5 w-3.5" />, count: live.length     },
     { value: "upcoming", label: "Upcoming", icon: <CalendarClock className="h-3.5 w-3.5" />, count: upcoming.length },
-    { value: "past", label: "Past", icon: <FileText className="h-3.5 w-3.5" />, count: past.length },
+    { value: "past",     label: "Past",     icon: <FileText      className="h-3.5 w-3.5" />, count: past.length     },
   ]
 
   const tabTests: Record<Tab, CandidateTest[]> = { live, upcoming, past }
@@ -347,7 +227,7 @@ export function CandidateTestsClient() {
                 className="gap-1.5 rounded-lg px-3 py-1.5 text-sm data-[state=active]:bg-background"
               >
                 <span>{label}</span>
-                {count != null && count > 0 && (
+                {count > 0 && (
                   <Badge variant="default" className="h-4 min-w-4 px-1 text-[10px]">
                     {count}
                   </Badge>
@@ -375,4 +255,3 @@ export function CandidateTestsClient() {
     </div>
   )
 }
-

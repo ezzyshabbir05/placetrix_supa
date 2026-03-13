@@ -2,51 +2,40 @@
 // app/~/tests/[testId]/_types.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Shared / primitives ───────────────────────────────────────────────────────
 
-export interface Tag {
-  id: string
-  name: string
-}
-
-// ── Candidate types ───────────────────────────────────────────────────────────
+// ─── Candidate ────────────────────────────────────────────────────────────────
 
 export interface CandidateOption {
   id: string
   option_text: string
+  is_correct: boolean | null   // null when results are hidden
   order_index: number
-  /** null when results are not yet released */
-  is_correct: boolean | null
 }
 
 export interface CandidateAnswerDetail {
   question_id: string
   question_text: string
-  question_type: "single_correct" | "multiple_correct"
   marks: number
-  explanation: string | null
-  order_index: number
   is_correct: boolean | null
   marks_awarded: number | null
   selected_option_ids: string[]
+  explanation: string | null
   options: CandidateOption[]
-  tags: Tag[]
+  tags: { id: string; name: string }[]
 }
 
 export interface CandidateAttemptDetail {
   id: string
   status: "in_progress" | "submitted"
+  submitted_at: string | null
   score: number | null
   total_marks: number | null
   percentage: number | null
-  started_at: string
-  submitted_at: string | null
   time_spent_seconds: number | null
   answers: CandidateAnswerDetail[]
 }
 
 export interface CandidateTestDetail {
-  questions: any | null
   id: string
   title: string
   description: string | null
@@ -56,9 +45,12 @@ export interface CandidateTestDetail {
   available_until: string | null
   results_available: boolean
   institute_name: string | null
+  /** Lightweight list — only marks needed for the pre-test totals display */
+  questions: { marks: number }[]
 }
 
-// ── Institute types ───────────────────────────────────────────────────────────
+
+// ─── Institute ────────────────────────────────────────────────────────────────
 
 export interface InstituteOption {
   id: string
@@ -71,29 +63,27 @@ export interface InstituteQuestion {
   id: string
   question_text: string
   question_type: "single_correct" | "multiple_correct"
-  order_index: number
   marks: number
+  order_index: number
   explanation: string | null
   options: InstituteOption[]
-  tags: Tag[]
+  tags: { id: string; name: string }[]
 }
 
 export interface InstituteAttemptRow {
   id: string
-  student_id: string
   student_name: string | null
-  student_email?: string | null
-  status: "in_progress" | "submitted"
+  student_email: string | null
+  status: "in_progress" | "submitted" | "abandoned" | "auto_submitted"
   score: number | null
   total_marks: number | null
   percentage: number | null
+  time_spent_seconds: number | null
   started_at: string
   submitted_at: string | null
-  time_spent_seconds: number | null
 }
 
 export interface InstituteTestDetail {
-  institute_name: any
   id: string
   title: string
   description: string | null
@@ -101,16 +91,18 @@ export interface InstituteTestDetail {
   time_limit_seconds: number | null
   available_from: string | null
   available_until: string | null
+  status: "draft" | "published" | "archived"
   results_available: boolean
-  status: "draft" | "published"
+  institute_name: string | null
   questions: InstituteQuestion[]
   attempts: InstituteAttemptRow[]
 }
 
-// ── Formatters ────────────────────────────────────────────────────────────────
 
-export function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "No time limit"
+// ─── Shared utilities ─────────────────────────────────────────────────────────
+
+export function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds) return "Untimed"
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   if (h > 0 && m > 0) return `${h}h ${m}m`
@@ -118,32 +110,28 @@ export function formatDuration(seconds: number | null): string {
   return `${m} min`
 }
 
-export function formatSeconds(seconds: number | null): string {
-  if (seconds == null) return "—"
+export function formatDateTime(dt?: string | null): string {
+  if (!dt) return "—"
+  return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+}
+
+export function formatSeconds(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return "—"
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = seconds % 60
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-  return `${m}:${String(s).padStart(2, "0")}`
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`
+  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`
+  return `${s}s`
 }
 
-export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
-}
-
-/** Resolve percentage: prefer stored value, else compute from score/total. */
+/** Resolves percentage: use DB value if present, otherwise compute from score/total. */
 export function resolvePct(
-  percentage: number | null,
-  score: number | null,
-  total: number | null
+  pct: number | null | undefined,
+  score: number | null | undefined,
+  total: number | null | undefined
 ): number {
-  if (percentage != null) return Math.round(percentage)
+  if (pct != null) return Math.round(pct)
   if (score != null && total != null && total > 0)
     return Math.round((score / total) * 100)
   return 0

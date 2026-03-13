@@ -27,29 +27,12 @@ import {
   PenLine,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { InstituteTest, DerivedInstituteStatus } from "./_types"
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-
-type InstituteTestStatus = "draft" | "upcoming" | "live" | "past"
 type Tab = "all" | "live" | "upcoming" | "past" | "drafts"
-
-
-interface InstituteTest {
-  id: string
-  title: string
-  description?: string
-  time_limit_seconds: number
-  available_from?: string
-  available_until?: string
-  derived_status: InstituteTestStatus
-  status: "draft" | "published"
-  results_available: boolean
-  question_count: number
-  attempt_count: number
-}
-
 
 interface TabConfig {
   value: Tab
@@ -59,113 +42,7 @@ interface TabConfig {
 }
 
 
-// ─── Placeholder Data ─────────────────────────────────────────────────────────
-
-
-const PLACEHOLDER_TESTS: InstituteTest[] = [
-  {
-    id: "1",
-    title: "JEE Main Mock – Full Syllabus",
-    description: "Complete JEE Main pattern test covering Physics, Chemistry, and Mathematics.",
-    time_limit_seconds: 10800,
-    available_from: "2026-03-10T09:00:00",
-    available_until: "2026-03-10T12:00:00",
-    derived_status: "live",
-    status: "published",
-    results_available: false,
-    question_count: 90,
-    attempt_count: 143,
-  },
-  {
-    id: "2",
-    title: "Chemistry – Organic Chapter Test",
-    description: "Focused on organic chemistry reactions and mechanisms.",
-    time_limit_seconds: 3600,
-    available_from: "2026-03-10T14:00:00",
-    available_until: "2026-03-10T15:00:00",
-    derived_status: "live",
-    status: "published",
-    results_available: false,
-    question_count: 30,
-    attempt_count: 67,
-  },
-  {
-    id: "3",
-    title: "Physics – Electrostatics",
-    time_limit_seconds: 5400,
-    available_from: "2026-03-14T10:00:00",
-    available_until: "2026-03-14T11:30:00",
-    derived_status: "upcoming",
-    status: "published",
-    results_available: false,
-    question_count: 45,
-    attempt_count: 0,
-  },
-  {
-    id: "4",
-    title: "Mathematics – Calculus Series 2",
-    description: "Integration, differentiation, and limits.",
-    time_limit_seconds: 7200,
-    available_from: "2026-03-18T09:00:00",
-    available_until: "2026-03-18T11:00:00",
-    derived_status: "upcoming",
-    status: "published",
-    results_available: false,
-    question_count: 50,
-    attempt_count: 0,
-  },
-  {
-    id: "5",
-    title: "Biology – Cell Biology Quiz",
-    time_limit_seconds: 2700,
-    available_from: "2026-03-05T09:00:00",
-    available_until: "2026-03-05T09:45:00",
-    derived_status: "past",
-    status: "published",
-    results_available: true,
-    question_count: 25,
-    attempt_count: 89,
-  },
-  {
-    id: "6",
-    title: "English Comprehension Test",
-    description: "Reading comprehension and vocabulary assessment.",
-    time_limit_seconds: 3600,
-    available_from: "2026-03-01T11:00:00",
-    available_until: "2026-03-01T12:00:00",
-    derived_status: "past",
-    status: "published",
-    results_available: false,
-    question_count: 40,
-    attempt_count: 112,
-  },
-  {
-    id: "7",
-    title: "Aptitude & Reasoning – Draft",
-    description: "Work in progress – questions being added.",
-    time_limit_seconds: 3600,
-    derived_status: "draft",
-    status: "draft",
-    results_available: false,
-    question_count: 12,
-    attempt_count: 0,
-  },
-  {
-    id: "8",
-    title: "General Knowledge Quiz – Draft",
-    time_limit_seconds: 1800,
-    derived_status: "draft",
-    status: "draft",
-    results_available: false,
-    question_count: 0,
-    attempt_count: 0,
-  },
-]
-
-
 // ─── Utils ────────────────────────────────────────────────────────────────────
-// TODO: extract to @/lib/format.ts and share with CandidateTestsClient
-
 
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -175,7 +52,6 @@ export function formatDuration(seconds: number): string {
   return `${m} min`
 }
 
-
 export function formatDateTime(dt?: string): string {
   if (!dt) return "—"
   return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
@@ -184,8 +60,7 @@ export function formatDateTime(dt?: string): string {
 
 // ─── Status Config ────────────────────────────────────────────────────────────
 
-
-const STATUS_CONFIG: Record<InstituteTestStatus, { badge: React.ReactNode }> = {
+const STATUS_CONFIG: Record<DerivedInstituteStatus, { badge: React.ReactNode }> = {
   live: {
     badge: (
       <Badge className="gap-1.5 bg-green-500 hover:bg-green-500 text-white border-0 shrink-0">
@@ -223,7 +98,6 @@ const STATUS_CONFIG: Record<InstituteTestStatus, { badge: React.ReactNode }> = {
 
 // ─── Test Card ────────────────────────────────────────────────────────────────
 
-
 function TestCard({ test }: { test: InstituteTest }) {
   const { badge } = STATUS_CONFIG[test.derived_status]
 
@@ -249,7 +123,7 @@ function TestCard({ test }: { test: InstituteTest }) {
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
-            {formatDuration(test.time_limit_seconds)}
+            {test.time_limit_seconds ? formatDuration(test.time_limit_seconds) : "Untimed"}
           </span>
           <span className="flex items-center gap-1.5">
             <FileQuestion className="h-3.5 w-3.5" />
@@ -307,7 +181,6 @@ function TestCard({ test }: { test: InstituteTest }) {
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
-
 function EmptyState({ isFiltered }: { isFiltered: boolean }) {
   const router = useRouter()
 
@@ -338,23 +211,25 @@ function EmptyState({ isFiltered }: { isFiltered: boolean }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+interface Props {
+  tests: InstituteTest[]
+}
 
-export function InstituteTestsClient() {
+export function InstituteTestsClient({ tests }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("all")
   const router = useRouter()
 
-  const tests = PLACEHOLDER_TESTS
-  const live = tests.filter((t) => t.derived_status === "live")
+  const live     = tests.filter((t) => t.derived_status === "live")
   const upcoming = tests.filter((t) => t.derived_status === "upcoming")
-  const past = tests.filter((t) => t.derived_status === "past")
-  const drafts = tests.filter((t) => t.derived_status === "draft")
+  const past     = tests.filter((t) => t.derived_status === "past")
+  const drafts   = tests.filter((t) => t.derived_status === "draft")
 
   const tabConfig: TabConfig[] = [
-    { value: "all",      label: "All",      icon: <LayoutList   className="h-3.5 w-3.5" />, count: tests.length   },
-    { value: "live",     label: "Live",     icon: <PlayCircle   className="h-3.5 w-3.5" />, count: live.length    },
+    { value: "all",      label: "All",      icon: <LayoutList    className="h-3.5 w-3.5" />, count: tests.length    },
+    { value: "live",     label: "Live",     icon: <PlayCircle    className="h-3.5 w-3.5" />, count: live.length     },
     { value: "upcoming", label: "Upcoming", icon: <CalendarClock className="h-3.5 w-3.5" />, count: upcoming.length },
-    { value: "past",     label: "Past",     icon: <FileText     className="h-3.5 w-3.5" />, count: past.length    },
-    { value: "drafts",   label: "Drafts",   icon: <PenLine      className="h-3.5 w-3.5" />, count: drafts.length  },
+    { value: "past",     label: "Past",     icon: <FileText      className="h-3.5 w-3.5" />, count: past.length     },
+    { value: "drafts",   label: "Drafts",   icon: <PenLine       className="h-3.5 w-3.5" />, count: drafts.length   },
   ]
 
   const tabTests: Record<Tab, InstituteTest[]> = { all: tests, live, upcoming, past, drafts }

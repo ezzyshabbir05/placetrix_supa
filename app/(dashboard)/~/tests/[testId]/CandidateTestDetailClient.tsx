@@ -344,7 +344,6 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
               <Button asChild size="lg" className="w-full sm:w-auto">
                 <Link href={`${test.id}/attempt`}>
                   Start Assessment
-                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                 </Link>
               </Button>
             </div>

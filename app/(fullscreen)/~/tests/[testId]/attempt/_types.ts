@@ -1,24 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// app/~/tests/[testId]/attempt/_types.ts
+// app/(fullscreen)/~/tests/[testId]/attempt/_types.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type AttemptOption = {
-  id: string
-  option_text: string
-  order_index: number
-}
-
-export type AttemptQuestion = {
-  id: string
-  question_text: string
-  question_type: "single_correct" | "multiple_correct"
-  order_index: number
-  marks: number
-  options: AttemptOption[]
-  tags: { id: string; name: string }[]
-}
-
-export type AttemptTest = {
+export interface AttemptTest {
   id: string
   title: string
   description: string | null
@@ -27,13 +11,26 @@ export type AttemptTest = {
   available_until: string | null
 }
 
-export type AttemptInfo = {
+export interface AttemptQuestion {
   id: string
-  started_at: string
-  time_spent_seconds: number | null
+  question_text: string
+  question_type: "single_correct" | "multiple_correct"
+  marks: number
+  order_index: number
+  tags: { id: string; name: string }[]
+  options: {
+    id: string
+    option_text: string
+    order_index: number
+  }[]
 }
 
-export type SavedAnswer = {
+export interface AttemptInfo {
+  id: string
+  started_at: string
+}
+
+export interface SavedAnswer {
   question_id: string
   selected_option_ids: string[]
 }

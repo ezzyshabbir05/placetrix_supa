@@ -41,9 +41,16 @@ import {
     AlertTriangle,
     Maximize,
     EyeOff,
+    Flag,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AttemptTest, AttemptQuestion, AttemptInfo, SavedAnswer } from "./_types"
+
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+// Number of focus-loss violations before the test is auto-submitted.
+const MAX_VIOLATIONS = 6
 
 
 // ─── Fullscreen Helpers ───────────────────────────────────────────────────────
@@ -155,11 +162,13 @@ function QuestionNavigator({
     questions,
     currentIndex,
     answers,
+    flagged,
     onJump,
 }: {
     questions: AttemptQuestion[]
     currentIndex: number
     answers: Record<string, string[]>
+    flagged: Record<string, boolean>
     onJump: (i: number) => void
 }) {
     const answeredCount = questions.filter((q) => (answers[q.id] ?? []).length > 0).length
@@ -188,21 +197,31 @@ function QuestionNavigator({
                 <div className="grid grid-cols-5 gap-2">
                     {questions.map((q, i) => {
                         const answered = (answers[q.id] ?? []).length > 0
+                        const isFlagged = flagged[q.id] ?? false
                         const isCurrent = i === currentIndex
                         return (
                             <button
                                 key={q.id}
                                 onClick={() => onJump(i)}
                                 className={cn(
-                                    "aspect-square w-full rounded-full border text-xs font-semibold transition-all",
+                                    "relative aspect-square w-full rounded-full border text-xs font-semibold transition-all",
                                     isCurrent
                                         ? "border-primary bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1"
-                                        : answered
-                                            ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-                                            : "border-border bg-background text-muted-foreground hover:border-muted-foreground hover:text-foreground"
+                                        : isFlagged
+                                            ? answered
+                                                ? "border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/40 dark:text-amber-300"
+                                                : "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+                                            : answered
+                                                ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                                                : "border-border bg-background text-muted-foreground hover:border-muted-foreground hover:text-foreground"
                                 )}
                             >
                                 {i + 1}
+                                {isFlagged && (
+                                    <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full border border-background bg-amber-500">
+                                        <Flag className="h-1.5 w-1.5 fill-white text-white" />
+                                    </span>
+                                )}
                             </button>
                         )
                     })}
@@ -217,6 +236,12 @@ function QuestionNavigator({
                 <div className="flex items-center gap-2">
                     <div className="h-3 w-3 shrink-0 rounded-sm border border-border bg-background" />
                     Not answered
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="relative h-3 w-3 shrink-0 rounded-sm border border-amber-400 bg-amber-100 dark:bg-amber-900/40">
+                        <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    </div>
+                    Flagged for review
                 </div>
             </div>
         </div>
@@ -288,7 +313,9 @@ function QuestionView({
     selectedIds,
     savingId,
     saveError,
+    isFlagged,
     onAnswer,
+    onToggleFlag,
 }: {
     question: AttemptQuestion
     index: number
@@ -296,7 +323,9 @@ function QuestionView({
     selectedIds: string[]
     savingId: string | null
     saveError: string | null
+    isFlagged: boolean
     onAnswer: (optionId: string) => void
+    onToggleFlag: () => void
 }) {
     const isSaving = savingId === question.id
 
@@ -315,6 +344,27 @@ function QuestionView({
                             ? "Single correct answer"
                             : "Select all correct answers"}
                     </Badge>
+
+                    {/* ── Flag for review ───────────────────────────────────── */}
+                    <button
+                        onClick={onToggleFlag}
+                        className={cn(
+                            "ml-auto flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1",
+                            isFlagged
+                                ? "border-amber-400 bg-amber-100 text-amber-700 hover:bg-amber-200 dark:border-amber-600 dark:bg-amber-900/40 dark:text-amber-300"
+                                : "border-border bg-background text-muted-foreground hover:border-amber-400 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/20 dark:hover:text-amber-400"
+                        )}
+                        aria-label={isFlagged ? "Remove flag" : "Flag for review"}
+                    >
+                        <Flag
+                            className={cn(
+                                "h-3 w-3 shrink-0 transition-colors",
+                                isFlagged ? "fill-amber-500 text-amber-500" : "text-muted-foreground"
+                            )}
+                        />
+                        {isFlagged ? "Flagged" : "Flag"}
+                    </button>
                 </div>
 
                 <p className="break-words text-base font-medium leading-relaxed">
@@ -460,7 +510,9 @@ function IntroScreen({
                         <EyeOff className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         <p>
                             <strong>Anti-cheat is active.</strong> Do not switch tabs, minimize the
-                            browser, or open other applications. Violations are recorded.
+                            browser, or open other applications. Violations are recorded. After{" "}
+                            <strong>{MAX_VIOLATIONS} violations</strong>, your test will be
+                            automatically submitted.
                         </p>
                     </div>
                     {hasTimer && (
@@ -471,13 +523,12 @@ function IntroScreen({
                     )}
                     <div className="flex items-start gap-2">
                         <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <p>Do not close this tab. You can resume from where you left off.</p>
+                        <p>Do not close this tab. You can resume from where you left off but timer will not pause.</p>
                     </div>
                 </div>
 
                 <div className="pt-2">
                     <Button size="lg" className="w-full sm:w-auto" onClick={onBegin}>
-                        <Maximize className="mr-2 h-4 w-4" />
                         {isResuming ? "Resume test" : "Begin test"}
                     </Button>
                 </div>
@@ -500,6 +551,13 @@ interface Props {
         selectedIds: string[]
     ) => Promise<void>
     onSubmit?: (attemptId: string, timeSpentSeconds: number) => Promise<void>
+    // Called on every detected violation — fire-and-forget, never throws.
+    onViolation?: (
+        attemptId: string,
+        type: "focus_loss" | "fullscreen_exit",
+        totalCount: number,
+        timestamp: string
+    ) => Promise<void>
 }
 
 export function AttemptClient({
@@ -509,6 +567,7 @@ export function AttemptClient({
     savedAnswers,
     onSaveAnswer,
     onSubmit,
+    onViolation,
 }: Props) {
     const isResuming = savedAnswers.length > 0
 
@@ -521,6 +580,9 @@ export function AttemptClient({
     const [answers, setAnswers] = useState<Record<string, string[]>>(
         () => Object.fromEntries(savedAnswers.map((a) => [a.question_id, a.selected_option_ids]))
     )
+
+    // flagged: tracks which question IDs are flagged for review (client-side only)
+    const [flagged, setFlagged] = useState<Record<string, boolean>>({})
 
     const [savingId, setSavingId] = useState<string | null>(null)
     const [saveError, setSaveError] = useState<string | null>(null)
@@ -540,9 +602,23 @@ export function AttemptClient({
     // ── Refs ───────────────────────────────────────────────────────────────────
     const autoSubmitted = useRef(false)
     const handleSubmitRef = useRef<((auto?: boolean) => Promise<void>) | undefined>(undefined)
+
     // Synchronous mutex: prevents dual-event firing (visibilitychange + blur)
     // from counting as two separate violations for the same user action.
     const focusGuardRef = useRef(false)
+
+    // Ref mirrors — used inside the anti-cheat effect so it only registers once
+    // (phase === "active") without isSubmitting or showFocusWarning in deps.
+    const isSubmittingRef = useRef(false)
+    const showFocusWarningRef = useRef(false)
+    // Ref mirror for violation count so closures always see the latest value.
+    const focusLostCountRef = useRef(0)
+
+
+    // ── Keep ref mirrors in sync ───────────────────────────────────────────────
+
+    useEffect(() => { isSubmittingRef.current = isSubmitting }, [isSubmitting])
+    useEffect(() => { showFocusWarningRef.current = showFocusWarning }, [showFocusWarning])
 
 
     // ── Fullscreen helpers ─────────────────────────────────────────────────────
@@ -556,34 +632,61 @@ export function AttemptClient({
     }, [])
 
 
-    // ── Event Listeners: Fullscreen & Anti-Cheat ──────────────────────────────
+    // ── Event Listeners: Fullscreen, Anti-Cheat & Copy-Block ──────────────────
+    //
+    // This effect registers ONCE when phase becomes "active" and never re-runs,
+    // because isSubmitting and showFocusWarning are read from refs instead of
+    // being in the dependency array. This closes the race window that existed
+    // when the effect tore down and re-registered listeners on every state change.
 
     useEffect(() => {
         if (phase !== "active") return
 
-        // 1. Fullscreen listener
+        // 1. Fullscreen change ─────────────────────────────────────────────────
         const handleFullscreenChange = () => {
             const active = !!getFullscreenElement()
-            if (!active && !autoSubmitted.current && !isSubmitting) {
+            if (!active && !autoSubmitted.current && !isSubmittingRef.current) {
                 setShowFullscreenWarning(true)
+                // Persist fullscreen-exit violation (fire-and-forget)
+                onViolation?.(
+                    attemptInfo.id,
+                    "fullscreen_exit",
+                    focusLostCountRef.current,
+                    new Date().toISOString()
+                ).catch(() => { /* never throw */ })
             } else {
                 setShowFullscreenWarning(false)
             }
         }
 
-        // 2. Focus-loss trigger — guarded by a ref so only one violation
-        //    is counted no matter how many events fire for the same action.
+        // 2. Focus-loss trigger ────────────────────────────────────────────────
+        //    Guarded by a ref so only one violation is counted no matter how
+        //    many events fire for the same user action.
         const triggerFocusLoss = () => {
-            if (autoSubmitted.current || isSubmitting) return
-            // Guard is synchronous: the second event sees true and exits immediately,
-            // before React even processes the first state update.
+            if (autoSubmitted.current || isSubmittingRef.current) return
             if (focusGuardRef.current) return
             focusGuardRef.current = true
 
-            // Safe to call both setters independently — no nesting, no side effects
-            // inside an updater, no StrictMode double-invocation risk.
-            setFocusLostCount((c) => c + 1)
+            focusLostCountRef.current += 1
+            const currentCount = focusLostCountRef.current
+
+            setFocusLostCount(currentCount)
             setShowFocusWarning(true)
+
+            // Persist violation to the server immediately (fire-and-forget).
+            onViolation?.(
+                attemptInfo.id,
+                "focus_loss",
+                currentCount,
+                new Date().toISOString()
+            ).catch(() => { /* never throw */ })
+
+            // Auto-submit once the threshold is crossed.
+            if (currentCount >= MAX_VIOLATIONS && !autoSubmitted.current) {
+                autoSubmitted.current = true
+                // Defer so state updates above are flushed before submission starts.
+                setTimeout(() => handleSubmitRef.current?.(true), 0)
+            }
         }
 
         const handleVisibilityChange = () => {
@@ -591,17 +694,43 @@ export function AttemptClient({
         }
 
         const handleBlur = () => {
-            // Small delay to avoid false positives from internal UI interactions
-            // (e.g. clicking a shadcn dialog which briefly blurs the window).
+            // Longer delay (200 ms) to:
+            //   a) avoid false positives from shadcn dialogs that briefly steal focus, and
+            //   b) ensure showFocusWarningRef is up-to-date before we check it.
             setTimeout(() => {
-                if (!document.hasFocus()) triggerFocusLoss()
-            }, 100)
+                // Suppress blur when the focus-warning dialog is already open —
+                // clicking "I Understand" itself causes a transient blur.
+                if (!document.hasFocus() && !showFocusWarningRef.current) {
+                    triggerFocusLoss()
+                }
+            }, 200)
         }
 
+        // 3. Copy / keyboard blocking ──────────────────────────────────────────
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const ctrl = e.ctrlKey || e.metaKey
+            // Block copy, save, view-source, print
+            if (ctrl && ["c", "p", "s", "u"].includes(e.key.toLowerCase())) {
+                e.preventDefault()
+            }
+            // Block DevTools shortcuts
+            if (ctrl && e.shiftKey && ["i", "j", "c"].includes(e.key.toLowerCase())) {
+                e.preventDefault()
+            }
+            if (e.key === "F12") e.preventDefault()
+        }
+
+        const handleCopy = (e: ClipboardEvent) => e.preventDefault()
+        const handleContextMenu = (e: MouseEvent) => e.preventDefault()
+
+        // Register all listeners
         document.addEventListener("fullscreenchange", handleFullscreenChange)
         document.addEventListener("webkitfullscreenchange", handleFullscreenChange)
         document.addEventListener("mozfullscreenchange", handleFullscreenChange)
         document.addEventListener("visibilitychange", handleVisibilityChange)
+        document.addEventListener("keydown", handleKeyDown)
+        document.addEventListener("copy", handleCopy)
+        document.addEventListener("contextmenu", handleContextMenu)
         window.addEventListener("blur", handleBlur)
 
         return () => {
@@ -609,9 +738,23 @@ export function AttemptClient({
             document.removeEventListener("webkitfullscreenchange", handleFullscreenChange)
             document.removeEventListener("mozfullscreenchange", handleFullscreenChange)
             document.removeEventListener("visibilitychange", handleVisibilityChange)
+            document.removeEventListener("keydown", handleKeyDown)
+            document.removeEventListener("copy", handleCopy)
+            document.removeEventListener("contextmenu", handleContextMenu)
             window.removeEventListener("blur", handleBlur)
         }
-    }, [phase, isSubmitting])
+        // ─── Intentionally only [phase] in deps ───────────────────────────────
+        // isSubmitting and showFocusWarning are read from their ref mirrors so
+        // this effect registers exactly once when the test becomes active.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [phase])
+
+
+    // ── Toggle flag ────────────────────────────────────────────────────────────
+
+    const toggleFlag = useCallback((questionId: string) => {
+        setFlagged((prev) => ({ ...prev, [questionId]: !prev[questionId] }))
+    }, [])
 
 
     // ── Save answer ────────────────────────────────────────────────────────────
@@ -662,7 +805,7 @@ export function AttemptClient({
 
     const handleSubmit = useCallback(
         async (auto = false) => {
-            if (isSubmitting) return
+            if (isSubmittingRef.current) return
             setIsSubmitting(true)
             setSubmitError(null)
             setShowSubmitDialog(false)
@@ -683,7 +826,7 @@ export function AttemptClient({
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [isSubmitting, attemptInfo.id, attemptInfo.started_at, onSubmit, leaveFullscreen]
+        [attemptInfo.id, attemptInfo.started_at, onSubmit, leaveFullscreen]
     )
 
     useEffect(() => {
@@ -720,6 +863,7 @@ export function AttemptClient({
     const currentAnswers = answers[currentQuestion?.id ?? ""] ?? []
     const answeredCount = questions.filter((q) => (answers[q.id] ?? []).length > 0).length
     const unansweredCount = questions.length - answeredCount
+    const flaggedCount = Object.values(flagged).filter(Boolean).length
     const progressPct = questions.length > 0
         ? Math.round((answeredCount / questions.length) * 100)
         : 0
@@ -748,7 +892,7 @@ export function AttemptClient({
     // ── Active ─────────────────────────────────────────────────────────────────
 
     return (
-        <div className="flex min-h-screen overflow-hidden bg-background">
+        <div className="flex min-h-screen overflow-hidden bg-background select-none">
 
             {/* ── Anti-Cheat: Focus Lost Dialog (highest priority) ─────────────── */}
             <AlertDialog open={showFocusWarning}>
@@ -767,8 +911,10 @@ export function AttemptClient({
                                 <div className="flex items-start gap-2.5 rounded-xl border border-destructive bg-destructive/10 p-4">
                                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                                     <p className="text-sm text-destructive">
-                                        Violation #{focusLostCount} recorded. Repeated violations may
-                                        result in your test being automatically submitted or disqualified.
+                                        Violation #{focusLostCount} of {MAX_VIOLATIONS} recorded.{" "}
+                                        {focusLostCount >= MAX_VIOLATIONS
+                                            ? "Your test is being submitted now."
+                                            : `${MAX_VIOLATIONS - focusLostCount} remaining before automatic submission.`}
                                     </p>
                                 </div>
                             </div>
@@ -777,7 +923,7 @@ export function AttemptClient({
                     <AlertDialogFooter>
                         <AlertDialogAction
                             onClick={() => {
-                                // Re-arm the guard so the next real violation is detected
+                                // Re-arm the guard so the next real violation is detected.
                                 focusGuardRef.current = false
                                 setShowFocusWarning(false)
                             }}
@@ -797,21 +943,24 @@ export function AttemptClient({
                             Fullscreen Required
                         </AlertDialogTitle>
                         <AlertDialogDescription asChild>
-                            <div className="space-y-2 pt-2">
+                            <div className="space-y-3 pt-2">
                                 <p className="text-sm text-foreground">
                                     You exited fullscreen. This test must be completed in fullscreen mode.
                                 </p>
-                                <p className="text-xs text-muted-foreground">
-                                    Your progress is saved. No answers were lost.
-                                </p>
+                                <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 p-4">
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+                                    <p className="text-sm text-amber-800 dark:text-amber-300">
+                                        Your progress is saved. No answers were lost.
+                                        Please return to fullscreen to continue the test.
+                                    </p>
+                                </div>
                             </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <Button className="w-full" onClick={enterFullscreen}>
-                            <Maximize className="mr-2 h-4 w-4" />
+                        <AlertDialogAction onClick={enterFullscreen}>
                             Return to Fullscreen
-                        </Button>
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -861,9 +1010,11 @@ export function AttemptClient({
                             selectedIds={currentAnswers}
                             savingId={savingId}
                             saveError={saveError}
+                            isFlagged={flagged[currentQuestion.id] ?? false}
                             onAnswer={(optId) =>
                                 handleAnswer(currentQuestion.id, optId, currentQuestion.question_type)
                             }
+                            onToggleFlag={() => toggleFlag(currentQuestion.id)}
                         />
                     )}
 
@@ -931,6 +1082,7 @@ export function AttemptClient({
                                 questions={questions}
                                 currentIndex={currentIndex}
                                 answers={answers}
+                                flagged={flagged}
                                 onJump={setCurrentIndex}
                             />
                         </div>
@@ -967,7 +1119,7 @@ export function AttemptClient({
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
 
-                    <div className="flex min-w-0 flex-1 items-center justify-center">
+                    <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
                         {test.time_limit_seconds && timeRemaining !== null ? (
                             <TimerDisplay
                                 timeRemaining={timeRemaining}
@@ -979,6 +1131,28 @@ export function AttemptClient({
                             <span className="text-xs tabular-nums text-muted-foreground">
                                 {currentIndex + 1} / {questions.length}
                             </span>
+                        )}
+
+                        {/* Mobile flag button — inline in bottom bar */}
+                        {currentQuestion && (
+                            <button
+                                onClick={() => toggleFlag(currentQuestion.id)}
+                                className={cn(
+                                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-all",
+                                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500",
+                                    flagged[currentQuestion.id]
+                                        ? "border-amber-400 bg-amber-100 text-amber-600 dark:border-amber-600 dark:bg-amber-900/40 dark:text-amber-400"
+                                        : "border-border bg-background text-muted-foreground hover:border-amber-400 hover:text-amber-600"
+                                )}
+                                aria-label={flagged[currentQuestion.id] ? "Remove flag" : "Flag for review"}
+                            >
+                                <Flag
+                                    className={cn(
+                                        "h-3.5 w-3.5",
+                                        flagged[currentQuestion.id] && "fill-amber-500 text-amber-500"
+                                    )}
+                                />
+                            </button>
                         )}
                     </div>
 
@@ -1031,6 +1205,7 @@ export function AttemptClient({
                             questions={questions}
                             currentIndex={currentIndex}
                             answers={answers}
+                            flagged={flagged}
                             onJump={(i) => {
                                 setCurrentIndex(i)
                                 setNavSheetOpen(false)
@@ -1073,6 +1248,16 @@ export function AttemptClient({
                                             {unansweredCount}{" "}
                                             {unansweredCount === 1 ? "question is" : "questions are"} unanswered.
                                             You cannot change answers after submitting.
+                                        </p>
+                                    </div>
+                                )}
+                                {flaggedCount > 0 && (
+                                    <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20 p-4">
+                                        <Flag className="mt-0.5 h-4 w-4 shrink-0 fill-amber-500 text-amber-600 dark:text-amber-400" />
+                                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                                            {flaggedCount}{" "}
+                                            {flaggedCount === 1 ? "question is" : "questions are"} flagged for review.
+                                            Make sure you have revisited them before submitting.
                                         </p>
                                     </div>
                                 )}
