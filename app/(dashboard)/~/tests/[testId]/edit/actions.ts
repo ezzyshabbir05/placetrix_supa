@@ -1,17 +1,12 @@
 "use server"
 
-// ─────────────────────────────────────────────────────────────────────────────
-// app/(dashboard)/~/tests/create/actions.ts
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 
-// ─── Shared local types ───────────────────────────────────────────────────────
-// (Duplicated here so actions.ts has no client-side imports)
+// ─── Shared types ─────────────────────────────────────────────────────────────
 
-type SettingsForm = {
+export type SettingsForm = {
   title: string
   description: string
   instructions: string
@@ -20,13 +15,13 @@ type SettingsForm = {
   available_until: string
 }
 
-type OptionForm = {
+export type OptionForm = {
   _key: string
   option_text: string
   is_correct: boolean
 }
 
-type LocalQuestion = {
+export type LocalQuestion = {
   id: string
   question_text: string
   question_type: "single_correct" | "multiple_correct"
@@ -35,13 +30,6 @@ type LocalQuestion = {
   tag_names: string[]
   options: OptionForm[]
   explanation: string
-}
-
-export type AiGenerateForm = {
-  topic: string
-  count: string
-  difficulty: "easy" | "medium" | "hard"
-  question_type: "single_correct" | "multiple_correct" | "mixed"
 }
 
 export type QuestionForm = {
@@ -53,13 +41,20 @@ export type QuestionForm = {
   tag_names: string[]
 }
 
+export type AiGenerateForm = {
+  topic: string
+  count: string
+  difficulty: "easy" | "medium" | "hard"
+  question_type: "single_correct" | "multiple_correct" | "mixed"
+}
 
-// ─── Core helper: upsert test + questions + options + tags ────────────────────
-//
-// Uses "delete and re-insert" for questions/options/tags:
-//   • Simplest correct strategy for a form that holds the full list in memory.
-//   • Cascade on questions table auto-removes orphaned options & question_tags.
-// ──────────────────────────────────────────────────────────────────────────────
+export type InitialTestData = {
+  settings: SettingsForm
+  questions: LocalQuestion[]
+  status: "draft" | "published"
+}
+
+// ─── Core upsert helper ───────────────────────────────────────────────────────
 
 async function saveTestToDb(
   testId: string,
@@ -70,7 +65,6 @@ async function saveTestToDb(
 ): Promise<void> {
   const supabase = await createClient()
 
-  // 1. Upsert test row (conflict on primary key)
   const { error: testError } = await supabase.from("tests").upsert(
     {
       id: testId,
@@ -91,14 +85,12 @@ async function saveTestToDb(
 
   if (questions.length === 0) return
 
-  // 2. Remove existing questions — cascade removes options & question_tags
   const { error: delError } = await supabase
     .from("questions")
     .delete()
     .eq("test_id", testId)
   if (delError) throw new Error("Failed to clear old questions: " + delError.message)
 
-  // 3. Insert questions (order_index = position in the client array, 1-based)
   const { data: insertedQuestions, error: qError } = await supabase
     .from("questions")
     .insert(
@@ -113,11 +105,9 @@ async function saveTestToDb(
     )
     .select("id, order_index")
 
-  if (qError || !insertedQuestions) {
+  if (qError || !insertedQuestions)
     throw new Error("Failed to insert questions: " + (qError?.message ?? "unknown"))
-  }
 
-  // 4. Build a flat options array across all questions and batch-insert
   const optionsPayload: {
     question_id: string
     option_text: string
@@ -143,18 +133,17 @@ async function saveTestToDb(
     if (optError) throw new Error("Failed to insert options: " + optError.message)
   }
 
-  // 5. Tags — upsert by name, then link via question_tags
   const allTagNames = [
-    ...new Set(questions.flatMap((q) => q.tag_names.map((t) => t.trim()).filter(Boolean))),
+    ...new Set(
+      questions.flatMap((q) => q.tag_names.map((t) => t.trim()).filter(Boolean))
+    ),
   ]
 
   if (allTagNames.length > 0) {
-    // Upsert tag names (ignore duplicates)
     await supabase
       .from("tags")
       .upsert(allTagNames.map((name) => ({ name })), { onConflict: "name" })
 
-    // Fetch IDs for all referenced tags
     const { data: tagRecords } = await supabase
       .from("tags")
       .select("id, name")
@@ -164,7 +153,6 @@ async function saveTestToDb(
       (tagRecords ?? []).map((t) => [t.name, t.id])
     )
 
-    // Build question_tags rows
     const questionTagsPayload: { question_id: string; tag_id: string }[] = []
 
     for (const dbQ of insertedQuestions) {
@@ -185,6 +173,65 @@ async function saveTestToDb(
   }
 }
 
+// ─── Load test for editing ────────────────────────────────────────────────────
+
+export async function loadTestAction(
+  testId: string,
+  userId: string
+): Promise<InitialTestData | null> {
+  const supabase = await createClient()
+
+  const { data: test } = await supabase
+    .from("tests")
+    .select(`
+      title, description, instructions,
+      time_limit_seconds, available_from, available_until, status,
+      questions (
+        id, question_text, question_type, marks, order_index, explanation,
+        options ( id, option_text, is_correct, order_index ),
+        question_tags ( tags ( id, name ) )
+      )
+    `)
+    .eq("id", testId)
+    .eq("institute_id", userId)   // ownership check
+    .single()
+
+  if (!test) return null
+
+  return {
+    settings: {
+      title: test.title ?? "",
+      description: test.description ?? "",
+      instructions: test.instructions ?? "",
+      time_limit_minutes: test.time_limit_seconds
+        ? String(test.time_limit_seconds / 60)
+        : "",
+      available_from: test.available_from ?? "",
+      available_until: test.available_until ?? "",
+    },
+    status: test.status as "draft" | "published",
+    questions: (test.questions ?? [])
+      .sort((a: any, b: any) => a.order_index - b.order_index)
+      .map((q: any) => ({
+        id: q.id,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        marks: q.marks,
+        order_index: q.order_index,
+        explanation: q.explanation ?? "",
+        tag_names: (q.question_tags ?? [])
+          .map((qt: any) => qt.tags?.name)
+          .filter(Boolean),
+        options: (q.options ?? [])
+          .sort((a: any, b: any) => a.order_index - b.order_index)
+          .map((o: any) => ({
+            _key: o.id,
+            option_text: o.option_text,
+            is_correct: o.is_correct,
+          })),
+      })),
+  }
+}
 
 // ─── Save Draft ───────────────────────────────────────────────────────────────
 
@@ -202,7 +249,6 @@ export async function saveDraftAction(
   await saveTestToDb(testId, user.id, settings, questions, "draft")
   revalidatePath("/~/tests")
 }
-
 
 // ─── Publish Test ─────────────────────────────────────────────────────────────
 
@@ -226,13 +272,7 @@ export async function publishTestAction(
   redirect(`/~/tests/${testId}`)
 }
 
-
 // ─── AI Question Generation ───────────────────────────────────────────────────
-//
-// Calls the Anthropic Messages API and coerces the response into the same
-// QuestionForm shape that QuestionSheet / ImportSheet produce, so they can be
-// previewed and edited before being added to the test.
-// ──────────────────────────────────────────────────────────────────────────────
 
 export async function generateQuestionsAction(
   input: AiGenerateForm
@@ -291,14 +331,12 @@ Constraints:
     }),
   })
 
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(`AI API responded with ${response.status}: ${response.statusText}`)
-  }
 
   const data = await response.json()
   const rawText: string = data.content?.[0]?.text ?? ""
 
-  // Strip accidental markdown fences the model sometimes adds
   const cleaned = rawText
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
@@ -311,11 +349,9 @@ Constraints:
     throw new Error("AI returned malformed JSON. Please try again.")
   }
 
-  if (!Array.isArray(parsed)) {
+  if (!Array.isArray(parsed))
     throw new Error("AI returned an unexpected format. Please try again.")
-  }
 
-  // Normalise each item into QuestionForm
   return parsed.map((q: any): QuestionForm => {
     const qType: "single_correct" | "multiple_correct" =
       q.question_type === "multiple_correct" ? "multiple_correct" : "single_correct"
@@ -328,19 +364,17 @@ Constraints:
         }))
       : []
 
-    // Guard: single_correct must have exactly one correct
     if (qType === "single_correct") {
-      const correct = options.filter((o) => o.is_correct)
-      if (correct.length !== 1) {
-        let fixed = false
+      let fixed = false
+      const corrects = options.filter((o) => o.is_correct)
+      if (corrects.length !== 1) {
         options = options.map((o) => {
           if (!o.is_correct) return o
           if (!fixed) { fixed = true; return o }
           return { ...o, is_correct: false }
         })
-        if (!fixed && options.length > 0) {
+        if (!fixed && options.length > 0)
           options[0] = { ...options[0], is_correct: true }
-        }
       }
     }
 

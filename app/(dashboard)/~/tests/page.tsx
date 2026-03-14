@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
 // app/~/tests/page.tsx
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
@@ -20,15 +18,14 @@ import {
 async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
   const supabase = await createClient()
 
-  // 1. Resolve the candidate's institute so we only show tests they belong to.
+  // 1. Resolve the candidate's institute
   const { data: candidateProfile } = await supabase
     .from("candidate_profiles")
     .select("institute_id")
     .eq("profile_id", userId)
     .maybeSingle()
 
-  // 2. Build the tests query. If no institute is linked yet, show all published
-  //    tests so the page is never blank for a fresh account.
+  // 2. Fetch published tests
   let testsQuery = supabase
     .from("tests")
     .select(
@@ -44,11 +41,9 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
   const { data: rawTests } = await testsQuery
   if (!rawTests?.length) return []
 
-  // 3. Fetch this candidate's attempts for the returned tests in one query.
-  //    Order ascending so the first row per test_id is the EARLIEST attempt;
-  //    we then keep the LATEST by iterating forward and overwriting.
   const testIds = rawTests.map((t) => t.id)
 
+  // 3. Fetch this candidate's latest attempt per test
   const { data: rawAttempts } = await supabase
     .from("test_attempts")
     .select("test_id, status, submitted_at, score, total_marks, percentage")
@@ -56,36 +51,74 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
     .in("test_id", testIds)
     .order("created_at", { ascending: false }) // newest first
 
-  // 4. Build a map of testId → latest attempt (first row wins because newest-first).
-  const attemptMap: Record<string, CandidateTestAttempt> = {}
+  // 4. Build a raw attempt map (score only — total_marks will be overridden below)
+  const rawAttemptMap: Record<string, {
+    status: "in_progress" | "submitted"
+    submitted_at?: string
+    score?: number
+    percentage?: number
+  }> = {}
   for (const a of rawAttempts ?? []) {
-    if (attemptMap[a.test_id]) continue // already have the latest
-    attemptMap[a.test_id] = {
+    if (rawAttemptMap[a.test_id]) continue // already have the latest
+    rawAttemptMap[a.test_id] = {
       status: a.status as "in_progress" | "submitted",
       submitted_at: a.submitted_at ?? undefined,
       score: a.score ?? undefined,
-      total_marks: a.total_marks ?? undefined,
       percentage: a.percentage ?? undefined,
     }
   }
 
-  // 5. Shape into CandidateTest[], deriving the display status from the window.
-  return rawTests.map((t): CandidateTest => ({
-    id: t.id,
-    title: t.title,
-    description: t.description ?? undefined,
-    time_limit_seconds: t.time_limit_seconds ?? 0,
-    available_from: t.available_from ?? undefined,
-    // Candidates only ever see published tests, so "draft" is not a possibility.
-    // Cast is safe because deriveStatus("published", ...) never returns "draft".
-    derived_status: deriveStatus(
-      "published",
-      t.available_from,
-      t.available_until
-    ) as CandidateTest["derived_status"],
-    results_available: t.results_available,
-    attempt: attemptMap[t.id],
-  }))
+  // 5. FIX: Fetch all questions' marks for these tests in one query,
+  //    so total_marks is based on ALL questions, not just attempted ones.
+  const { data: rawQuestions } = await supabase
+    .from("questions")
+    .select("test_id, marks")
+    .in("test_id", testIds)
+
+  // Build a map of testId → total marks across ALL questions
+  const totalMarksMap: Record<string, number> = {}
+  for (const q of rawQuestions ?? []) {
+    totalMarksMap[q.test_id] = (totalMarksMap[q.test_id] ?? 0) + (q.marks ?? 0)
+  }
+
+  // 6. Shape into CandidateTest[], with corrected total_marks and percentage
+  return rawTests.map((t): CandidateTest => {
+    const raw = rawAttemptMap[t.id]
+    const fullTotalMarks = totalMarksMap[t.id] ?? 0
+
+    let attempt: CandidateTestAttempt | undefined
+    if (raw) {
+      // Recalculate percentage using the full question set total
+      const correctedPct =
+        raw.score != null && fullTotalMarks > 0
+          ? Math.round((raw.score / fullTotalMarks) * 100)
+          : raw.percentage
+
+      attempt = {
+        status: raw.status,
+        submitted_at: raw.submitted_at,
+        score: raw.score,
+        // FIX: always use the sum of all questions' marks as denominator
+        total_marks: fullTotalMarks > 0 ? fullTotalMarks : undefined,
+        percentage: correctedPct,
+      }
+    }
+
+    return {
+      id: t.id,
+      title: t.title,
+      description: t.description ?? undefined,
+      time_limit_seconds: t.time_limit_seconds ?? 0,
+      available_from: t.available_from ?? undefined,
+      derived_status: deriveStatus(
+        "published",
+        t.available_from,
+        t.available_until
+      ) as CandidateTest["derived_status"],
+      results_available: t.results_available,
+      attempt,
+    }
+  })
 }
 
 
@@ -94,9 +127,6 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
 async function fetchInstituteTests(userId: string): Promise<InstituteTest[]> {
   const supabase = await createClient()
 
-  // Single query: tests + nested aggregate counts for questions and attempts.
-  // PostgREST returns counts as [{ count: N }] when you select a foreign table
-  // with only "count" in the column list.
   const { data: rawTests } = await supabase
     .from("tests")
     .select(
@@ -118,14 +148,13 @@ async function fetchInstituteTests(userId: string): Promise<InstituteTest[]> {
     derived_status: deriveStatus(t.status, t.available_from, t.available_until),
     status: t.status as "draft" | "published",
     results_available: t.results_available,
-    // PostgREST aggregate: [{ count: N }]
     question_count: (t.questions as unknown as { count: number }[])?.[0]?.count ?? 0,
     attempt_count: (t.test_attempts as unknown as { count: number }[])?.[0]?.count ?? 0,
   }))
 }
 
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function TestsPage() {
   const profile = await getUserProfile()
@@ -141,5 +170,5 @@ export default async function TestsPage() {
     return <InstituteTestsClient tests={tests} />
   }
 
-  redirect("/~/dashboard")
+  redirect("/~/tests")
 }

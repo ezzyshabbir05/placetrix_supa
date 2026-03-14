@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
 // app/~/tests/[testId]/page.tsx
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { notFound, redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
@@ -25,7 +23,6 @@ import type {
 
 // ─── Candidate data ───────────────────────────────────────────────────────────
 
-// app/~/tests/[testId]/page.tsx  (fetchCandidateView — full replacement)
 
 async function fetchCandidateView(
   testId: string,
@@ -33,7 +30,6 @@ async function fetchCandidateView(
 ): Promise<{ test: CandidateTestDetail; attempt: CandidateAttemptDetail | null }> {
   const supabase = await createClient()
 
-  // 1. Fetch published test
   const { data: raw } = await supabase
     .from("tests")
     .select(
@@ -46,20 +42,22 @@ async function fetchCandidateView(
 
   if (!raw || raw.status !== "published") notFound()
 
-  // 2. Institute display name
   const { data: institute } = await supabase
     .from("institute_profiles")
     .select("institute_name")
     .eq("profile_id", raw.institute_id)
     .maybeSingle()
 
-  // 3. Lightweight question list (only marks needed pre-attempt)
   const { data: rawQuestions } = await supabase
     .from("questions")
     .select("marks")
     .eq("test_id", testId)
 
-  // 4. Latest attempt for this student (any status)
+  const allQuestionsTotalMarks = (rawQuestions ?? []).reduce(
+    (sum, q) => sum + (q.marks ?? 0),
+    0
+  )
+
   const { data: rawAttempt } = await supabase
     .from("test_attempts")
     .select("id, status, submitted_at, score, total_marks, percentage, time_spent_seconds")
@@ -89,17 +87,20 @@ async function fetchCandidateView(
     status: rawAttempt.status as "in_progress" | "submitted",
     submitted_at: rawAttempt.submitted_at ?? null,
     score: rawAttempt.score ?? null,
-    total_marks: rawAttempt.total_marks ?? null,
-    percentage: rawAttempt.percentage ?? null,
+    total_marks: allQuestionsTotalMarks > 0
+      ? allQuestionsTotalMarks
+      : (rawAttempt.total_marks ?? null),
+    percentage:
+      rawAttempt.score != null && allQuestionsTotalMarks > 0
+        ? Math.round((rawAttempt.score / allQuestionsTotalMarks) * 100)
+        : (rawAttempt.percentage ?? null),
     time_spent_seconds: rawAttempt.time_spent_seconds ?? null,
   }
 
-  // 5. Full answer review — only when submitted AND results released
   if (rawAttempt.status !== "submitted" || !raw.results_available) {
     return { test, attempt: { ...attemptBase, answers: [] } }
   }
 
-  // ── FIXED: Fetch ALL questions for the test (not just answered ones) ──
   const { data: rawQFull } = await supabase
     .from("questions")
     .select(
@@ -114,13 +115,11 @@ async function fetchCandidateView(
     return { test, attempt: { ...attemptBase, answers: [] } }
   }
 
-  // Fetch answers (only for questions the student interacted with)
   const { data: rawAnswers } = await supabase
     .from("attempt_answers")
     .select("question_id, selected_option_ids, is_correct, marks_awarded")
     .eq("attempt_id", rawAttempt.id)
 
-  // Build answer lookup map keyed by question_id
   const answerMap: Record<string, {
     selected_option_ids: string[]
     is_correct: boolean | null
@@ -135,17 +134,14 @@ async function fetchCandidateView(
     }
   }
 
-  // ── Build full answer list: one entry per question, skipped if no answer row ──
   const answers: CandidateAnswerDetail[] = rawQFull.map((q) => {
     const ans = answerMap[q.id]
-
     return {
       question_id: q.id,
       question_text: q.question_text,
       marks: q.marks,
       is_correct: ans?.is_correct ?? null,
       marks_awarded: ans?.marks_awarded ?? null,
-      // Empty array = skipped
       selected_option_ids: ans?.selected_option_ids ?? [],
       explanation: (q.explanation as string) ?? null,
       options: ((q.options as any[]) ?? []).map((o) => ({
@@ -167,13 +163,13 @@ async function fetchCandidateView(
 
 // ─── Institute data ───────────────────────────────────────────────────────────
 
+
 async function fetchInstituteView(
   testId: string,
   userId: string
 ): Promise<InstituteTestDetail> {
   const supabase = await createClient()
 
-  // 1. Test row — must belong to this institute
   const { data: raw } = await supabase
     .from("tests")
     .select(
@@ -186,14 +182,12 @@ async function fetchInstituteView(
 
   if (!raw) notFound()
 
-  // 2. Institute display name
   const { data: institute } = await supabase
     .from("institute_profiles")
     .select("institute_name")
     .eq("profile_id", raw.institute_id)
     .maybeSingle()
 
-  // 3. Questions with options + tags
   const { data: rawQuestions } = await supabase
     .from("questions")
     .select(
@@ -223,7 +217,6 @@ async function fetchInstituteView(
       .flat(),
   }))
 
-  // 4. Attempts — use the attempt_details view which joins student name/email
   const { data: rawAttempts } = await supabase
     .from("attempt_details")
     .select(
@@ -234,14 +227,19 @@ async function fetchInstituteView(
     .eq("test_id", testId)
     .order("started_at", { ascending: false })
 
+  const fullTotalMarks = questions.reduce((s, q) => s + q.marks, 0)
+
   const attempts: InstituteAttemptRow[] = (rawAttempts ?? []).map((a) => ({
     id: a.id,
     student_name: a.student_name ?? null,
     student_email: a.student_email ?? null,
     status: a.status as InstituteAttemptRow["status"],
     score: a.score ?? null,
-    total_marks: a.total_marks ?? null,
-    percentage: a.percentage ?? null,
+    total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
+    percentage:
+      a.score != null && fullTotalMarks > 0
+        ? Math.round((a.score / fullTotalMarks) * 100)
+        : (a.percentage ?? null),
     time_spent_seconds: a.time_spent_seconds ?? null,
     started_at: a.started_at,
     submitted_at: a.submitted_at ?? null,
@@ -266,12 +264,17 @@ async function fetchInstituteView(
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+
 export default async function TestDetailPage({
   params,
 }: {
   params: Promise<{ testId: string }>
 }) {
   const { testId } = await params
+
+  // ── Redirect "new" to tests list ──────────────────────────────────────────
+  if (testId === "new") redirect("/~/tests")
+
   const profile = await getUserProfile()
   if (!profile) redirect("/auth/login")
 
@@ -292,5 +295,5 @@ export default async function TestDetailPage({
     )
   }
 
-  redirect("/~/dashboard")
+  redirect("/~/tests")
 }

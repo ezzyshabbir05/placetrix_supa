@@ -7,9 +7,10 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import {
   CalendarClock,
   PlayCircle,
@@ -18,7 +19,10 @@ import {
   FileText,
   AlertCircle,
   BookOpen,
+  ArrowRight,
+  Trophy,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { CandidateTest, DerivedCandidateStatus } from "./_types"
 
 
@@ -41,7 +45,7 @@ export function formatDuration(seconds: number): string {
   const m = Math.floor((seconds % 3600) / 60)
   if (h > 0 && m > 0) return `${h}h ${m}m`
   if (h > 0) return `${h}h`
-  return `${m} min`
+  return `${m}m`
 }
 
 export function formatDateTime(dt?: string): string {
@@ -50,42 +54,42 @@ export function formatDateTime(dt?: string): string {
 }
 
 
-// ─── Status Config ────────────────────────────────────────────────────────────
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<DerivedCandidateStatus, { badge: React.ReactNode }> = {
-  live: {
-    badge: (
-      <Badge className="gap-1.5 bg-green-500 hover:bg-green-500 text-white border-0 shrink-0">
+function StatusBadge({ status }: { status: DerivedCandidateStatus }) {
+  if (status === "live") {
+    return (
+      <Badge className="gap-1.5 bg-emerald-500 hover:bg-emerald-500 text-white border-0 text-[11px] px-2 py-0.5">
         <span className="relative flex h-1.5 w-1.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
           <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
         </span>
         Live
       </Badge>
-    ),
-  },
-  upcoming: {
-    badge: (
-      <Badge variant="secondary" className="gap-1 shrink-0">
-        <CalendarClock className="h-3 w-3" />Upcoming
+    )
+  }
+  if (status === "upcoming") {
+    return (
+      <Badge variant="secondary" className="gap-1 text-[11px] px-2 py-0.5">
+        <CalendarClock className="h-3 w-3" />
+        Upcoming
       </Badge>
-    ),
-  },
-  past: {
-    badge: (
-      <Badge variant="outline" className="gap-1 shrink-0">
-        <CheckCircle2 className="h-3 w-3" />Ended
-      </Badge>
-    ),
-  },
+    )
+  }
+  return (
+    <Badge variant="outline" className="gap-1 text-[11px] px-2 py-0.5 text-muted-foreground">
+      <CheckCircle2 className="h-3 w-3" />
+      Ended
+    </Badge>
+  )
 }
 
 
 // ─── Test Card ────────────────────────────────────────────────────────────────
 
 function TestCard({ test }: { test: CandidateTest }) {
-  const { badge } = STATUS_CONFIG[test.derived_status]
   const isSubmitted = test.attempt?.status === "submitted"
+  const isInProgress = test.attempt?.status === "in_progress"
 
   return (
     <Card className="border">
@@ -99,7 +103,7 @@ function TestCard({ test }: { test: CandidateTest }) {
               </CardDescription>
             )}
           </div>
-          {badge}
+          <StatusBadge status={test.derived_status} />
         </div>
       </CardHeader>
 
@@ -128,7 +132,7 @@ function TestCard({ test }: { test: CandidateTest }) {
         )}
 
         {/* In-progress indicator */}
-        {test.attempt?.status === "in_progress" && (
+        {isInProgress && (
           <p className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
             In progress — resume where you left off
@@ -175,17 +179,18 @@ function TestCard({ test }: { test: CandidateTest }) {
 }
 
 
+
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-      <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-        <BookOpen className="h-8 w-8 text-muted-foreground opacity-50" />
+    <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+      <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
+        <BookOpen className="h-5 w-5 text-muted-foreground/60" />
       </div>
-      <div className="space-y-1">
-        <p className="font-medium text-sm">No {label} tests</p>
-        <p className="text-sm text-muted-foreground">Check back later for new tests</p>
+      <div className="space-y-0.5">
+        <p className="text-sm font-medium">No {label} tests</p>
+        <p className="text-xs text-muted-foreground">Check back later for new tests</p>
       </div>
     </div>
   )
@@ -215,35 +220,52 @@ export function CandidateTestsClient({ tests }: Props) {
 
   return (
     <div className="min-h-screen w-full">
+
+      {/* Page Header */}
+      <div className="px-4 pt-8 pb-0 md:px-8">
+        <div className="space-y-0.5">
+          <h1 className="text-xl font-semibold tracking-tight">My Tests</h1>
+          <p className="text-sm text-muted-foreground">
+            {tests.length} test{tests.length !== 1 ? "s" : ""} assigned to you
+          </p>
+        </div>
+      </div>
+
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
 
         {/* Tab Bar */}
-        <div className="overflow-x-auto px-4 pt-6 md:px-6 md:pt-8">
-          <TabsList className="inline-flex h-auto min-w-max gap-1 rounded-xl bg-muted p-1">
+        <div className="overflow-x-auto px-4 pt-5 md:px-8">
+          <TabsList className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
             {tabConfig.map(({ value, label, count }) => (
               <TabsTrigger
                 key={value}
                 value={value}
-                className="gap-1.5 rounded-lg px-3 py-1.5 text-sm data-[state=active]:bg-background"
+                className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
               >
-                <span>{label}</span>
+                {label}
                 {count > 0 && (
-                  <Badge variant="default" className="h-4 min-w-4 px-1 text-[10px]">
+                  <span className={cn(
+                    "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums",
+                    activeTab === value
+                      ? "bg-foreground text-background"
+                      : "bg-muted-foreground/20 text-muted-foreground"
+                  )}>
                     {count}
-                  </Badge>
+                  </span>
                 )}
               </TabsTrigger>
             ))}
           </TabsList>
         </div>
 
-        <div className="px-4 py-6 md:px-6 md:py-8">
+        {/* Tab Contents */}
+        <div className="px-4 py-6 md:px-8">
           {tabConfig.map(({ value, label }) => (
-            <TabsContent key={value} value={value}>
+            <TabsContent key={value} value={value} className="mt-0 outline-none">
               {tabTests[value].length === 0 ? (
                 <EmptyState label={label.toLowerCase()} />
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {tabTests[value].map((t) => <TestCard key={t.id} test={t} />)}
                 </div>
               )}

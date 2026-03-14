@@ -1,5 +1,9 @@
 "use client"
 
+// ─────────────────────────────────────────────────────────────────────────────
+// app/~/tests/[id]/CandidateTestDetailClient.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+
 import type { ReactNode } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -23,9 +27,9 @@ import {
   BookOpen,
   Timer,
   CalendarX,
-  ArrowRight,
   Lightbulb,
   ListChecks,
+  Trophy,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type {
@@ -37,10 +41,7 @@ import type {
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
 
 
-
 // ─── Meta Item ────────────────────────────────────────────────────────────────
-
-
 
 function MetaItem({
   icon,
@@ -65,10 +66,7 @@ function MetaItem({
 }
 
 
-
 // ─── Option Item ──────────────────────────────────────────────────────────────
-
-
 
 function OptionItem({ opt, isSelected }: { opt: CandidateOption; isSelected: boolean }) {
   const isCorrect = opt.is_correct === true
@@ -121,10 +119,7 @@ function OptionItem({ opt, isSelected }: { opt: CandidateOption; isSelected: boo
 }
 
 
-
 // ─── Question Review Item ─────────────────────────────────────────────────────
-
-
 
 function QuestionReviewItem({
   answer,
@@ -216,17 +211,12 @@ function QuestionReviewItem({
 }
 
 
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
-
-
 
 interface Props {
   test: CandidateTestDetail
   attempt: CandidateAttemptDetail | null
 }
-
-
 
 export function CandidateTestDetailClient({ test, attempt }: Props) {
   const isSubmitted = attempt?.status === "submitted"
@@ -243,7 +233,6 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
 
   const totalMarks = test.questions?.reduce((s: number, q: { marks: number }) => s + q.marks, 0) ?? 0
   const questionCount = test.questions?.length ?? 0
-  const hasTimer = !!test.time_limit_seconds
 
   const pct =
     attempt?.score != null && attempt?.total_marks != null
@@ -256,16 +245,18 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
   if (!isSubmitted) {
     return (
       <div className="min-h-screen w-full bg-background">
-        <div className="mx-auto space-y-6 px-6 py-6 md:px-7 md:py-7 lg:px-8 lg:py-8">
+        <div className="mx-auto space-y-6 px-4 py-8 md:px-8">
 
-          {/* ── Header ──────────────────────────────────────────────────────── */}
-          <div className="space-y-2">
+          {/* ── Page Header ──────────────────────────────────────────────── */}
+          <div className="space-y-1">
             {test.institute_name && (
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {test.institute_name}
               </p>
             )}
-            <h1 className="text-xl font-bold leading-tight sm:text-2xl">{test.title}</h1>
+            <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
+              {test.title}
+            </h1>
             {test.description && (
               <p className="max-w-2xl text-sm text-muted-foreground">
                 {test.description}
@@ -273,7 +264,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
             )}
           </div>
 
-          {/* ── Meta grid ───────────────────────────────────────────────────── */}
+          {/* ── Meta grid ───────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <MetaItem
               icon={<ListChecks className="h-3.5 w-3.5" />}
@@ -301,7 +292,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
             )}
           </div>
 
-          {/* ── Instructions ────────────────────────────────────────────────── */}
+          {/* ── Instructions ────────────────────────────────────────────── */}
           {test.instructions && (
             <div className="rounded-xl border bg-muted/30 p-4">
               <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -314,7 +305,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
             </div>
           )}
 
-          {/* ── In Progress: resume banner ───────────────────────────────────── */}
+          {/* ── In Progress: resume banner ───────────────────────────────── */}
           {isInProgress && (
             <div className="space-y-2.5 rounded-xl border border-primary/20 bg-primary/5 p-4">
               <div className="flex items-start gap-2">
@@ -338,7 +329,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
             </div>
           )}
 
-          {/* ── Live: warnings + CTA ─────────────────────────────────────────── */}
+          {/* ── Live: CTA ───────────────────────────────────────────────── */}
           {!attempt && isLive && (
             <div>
               <Button asChild size="lg" className="w-full sm:w-auto">
@@ -349,7 +340,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
             </div>
           )}
 
-          {/* ── Expired ──────────────────────────────────────────────────────── */}
+          {/* ── Expired ─────────────────────────────────────────────────── */}
           {!attempt && isExpired && (
             <div className="space-y-2.5 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-xs text-destructive">
               <div className="flex items-start gap-2">
@@ -358,15 +349,12 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
               </div>
               <div className="flex items-start gap-2">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <p>
-                  Stopped accepting responses on{" "}
-                  {formatDateTime(test.available_until!)}.
-                </p>
+                <p>Stopped accepting responses on {formatDateTime(test.available_until!)}.</p>
               </div>
             </div>
           )}
 
-          {/* ── Not yet open ─────────────────────────────────────────────────── */}
+          {/* ── Not yet open ────────────────────────────────────────────── */}
           {!attempt && isNotYetOpen && (
             <div className="space-y-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
               <div className="flex items-start gap-2">
@@ -388,7 +376,6 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
 
   // ── Results view ────────────────────────────────────────────────────────────
 
-  // Derived stats
   const correctCount = attempt?.answers.filter((a) => a.is_correct === true).length ?? 0
   const incorrectCount = attempt?.answers.filter((a) => a.is_correct === false).length ?? 0
   const skippedCount = attempt?.answers.filter((a) => (a.selected_option_ids ?? []).length === 0).length ?? 0
@@ -402,16 +389,18 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
 
   return (
     <div className="min-h-screen w-full bg-background">
-      <div className="mx-auto space-y-6 px-6 py-6 md:px-7 md:py-7 lg:px-8 lg:py-8 animate-in fade-in duration-500">
+      <div className="mx-auto space-y-6 px-4 py-8 md:px-8 animate-in fade-in duration-500">
 
-        {/* ── Header ──────────────────────────────────────────────────────────── */}
-        <div className="space-y-2">
+        {/* ── Page Header ────────────────────────────────────────────────── */}
+        <div className="space-y-1">
           {test.institute_name && (
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               {test.institute_name}
             </p>
           )}
-          <h1 className="text-xl font-bold leading-tight sm:text-2xl">{test.title}</h1>
+          <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
+            {test.title}
+          </h1>
           {test.description && (
             <p className="max-w-2xl text-sm text-muted-foreground line-clamp-2">
               {test.description}
@@ -419,7 +408,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
           )}
         </div>
 
-        {/* ── Results hidden ──────────────────────────────────────────────────── */}
+        {/* ── Results hidden ──────────────────────────────────────────────── */}
         {!test.results_available ? (
           <Card className="rounded-xl">
             <CardContent className="space-y-2.5 p-5">
@@ -439,10 +428,10 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
           </Card>
         ) : (
           <>
-            {/* ── Score card (minimal) ────────────────────────────────────────── */}
+            {/* ── Score card ──────────────────────────────────────────────── */}
             <div className="rounded-xl border bg-card p-5 space-y-4">
 
-              {/* Top row: percentage (large) + time badge */}
+              {/* Top row: percentage + time badge */}
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -494,7 +483,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
 
             </div>
 
-            {/* ── Question Review ──────────────────────────────────────────────── */}
+            {/* ── Question Review ──────────────────────────────────────────── */}
             {attempt && attempt.answers.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">

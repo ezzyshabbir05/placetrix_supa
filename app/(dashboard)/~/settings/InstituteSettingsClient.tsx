@@ -1,5 +1,9 @@
 "use client"
 
+// ─────────────────────────────────────────────────────────────────────────────
+// app/~/settings/InstituteSettingsClient.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState, useTransition, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { UserProfile } from "@/lib/supabase/profile"
@@ -27,11 +31,10 @@ import {
   Building2, Lock, Bell, History, Shield,
   Upload, Plus, Minus, Mail, Globe, Phone, Loader2, Camera,
 } from "lucide-react"
-
+import { cn } from "@/lib/utils"
 
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
 
 
 const AFFILIATION_OPTIONS = [
@@ -57,9 +60,7 @@ const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
 
 
-
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 
 
 interface Props {
@@ -68,9 +69,7 @@ interface Props {
 }
 
 
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 
 
 function RequiredMark() {
@@ -82,11 +81,6 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive mt-1">{message}</p>
 }
 
-/**
- * Derives the full public URL from a storage path.
- * Centralised so a project migration only requires changing the Supabase
- * client config — every stored path in the DB remains valid as-is.
- */
 function getStorageUrl(
   supabase: ReturnType<typeof createClient>,
   bucket: string,
@@ -98,74 +92,69 @@ function getStorageUrl(
 }
 
 
+// ─── Tab config ───────────────────────────────────────────────────────────────
 
-// ─── Component ───────────────────────────────────────────────────────────────
 
+type Tab = "institution" | "security" | "notifications" | "history" | "privacy"
+
+const TABS: { value: Tab; label: string; icon: React.ReactNode }[] = [
+  { value: "institution",    label: "Institution",    icon: <Building2 className="h-3.5 w-3.5" /> },
+  { value: "security",       label: "Security",       icon: <Lock      className="h-3.5 w-3.5" /> },
+  { value: "notifications",  label: "Notifications",  icon: <Bell      className="h-3.5 w-3.5" /> },
+  { value: "history",        label: "Login History",  icon: <History   className="h-3.5 w-3.5" /> },
+  { value: "privacy",        label: "Privacy",        icon: <Shield    className="h-3.5 w-3.5" /> },
+]
+
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 
 export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   const supabase = createClient()
   const [isPending, startTransition] = useTransition()
   const [isDirty, setIsDirty] = useState(false)
-
+  const [activeTab, setActiveTab] = useState<Tab>("institution")
 
 
   // ── Logo ──────────────────────────────────────────────────────────────────
-  //
-  // storedLogoPath: ref holding the raw storage path saved in DB
-  //   e.g. "institutes/abc123/logo/1709123456.png"
-  // logoSrc: the full URL shown in <AvatarImage>
-  //   - On initial load: clean URL (no ?t=) → browser cache hits every render
-  //   - After upload:    URL + ?v={timestamp} → one-time cache-bust, then cached
 
-
-
-  const storedLogoPath = useRef<string | null>(
-    initialData?.logo_path ?? null
-  )
+  const storedLogoPath = useRef<string | null>(initialData?.logo_path ?? null)
   const [logoSrc, setLogoSrc] = useState<string | null>(() =>
-    // Clean URL on load — browser caches it; no unnecessary refetch on re-renders
     getStorageUrl(supabase, "avatars", storedLogoPath.current)
   )
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
 
-
   // ── Institute fields ──────────────────────────────────────────────────────
 
-
-
-  const [instituteName, setInstituteName] = useState(initialData?.institute_name ?? "")
-  const [instituteCode, setInstituteCode] = useState(initialData?.institute_code ?? "")
+  const [instituteName, setInstituteName]     = useState(initialData?.institute_name ?? "")
+  const [instituteCode, setInstituteCode]     = useState(initialData?.institute_code ?? "")
   const [establishedYear, setEstablishedYear] = useState(
     initialData?.established_year ? String(initialData.established_year) : ""
   )
-  const [affiliation, setAffiliation] = useState(initialData?.affiliation ?? "")
-  const [address, setAddress] = useState(initialData?.address ?? "")
-  const [city, setCity] = useState(initialData?.city ?? "")
-  const [stateVal, setStateVal] = useState(initialData?.state ?? "")
-  const [pincode, setPincode] = useState(initialData?.pincode ?? "")
-  const [country, setCountry] = useState(initialData?.country ?? "India")
-  const [instPhone, setInstPhone] = useState(initialData?.phone_number ?? "")
-  const [instEmail, setInstEmail] = useState(initialData?.email ?? "")
-  const [websiteUrl, setWebsiteUrl] = useState(initialData?.website_url ?? "")
-  const [principalName, setPrincipalName] = useState(initialData?.principal_name ?? "")
-  const [principalEmail, setPrincipalEmail] = useState(initialData?.principal_email ?? "")
-  const [principalPhone, setPrincipalPhone] = useState(initialData?.principal_phone ?? "")
-  const [courses, setCourses] = useState<string[]>(
+  const [affiliation, setAffiliation]         = useState(initialData?.affiliation ?? "")
+  const [address, setAddress]                 = useState(initialData?.address ?? "")
+  const [city, setCity]                       = useState(initialData?.city ?? "")
+  const [stateVal, setStateVal]               = useState(initialData?.state ?? "")
+  const [pincode, setPincode]                 = useState(initialData?.pincode ?? "")
+  const [country, setCountry]                 = useState(initialData?.country ?? "India")
+  const [instPhone, setInstPhone]             = useState(initialData?.phone_number ?? "")
+  const [instEmail, setInstEmail]             = useState(initialData?.email ?? "")
+  const [websiteUrl, setWebsiteUrl]           = useState(initialData?.website_url ?? "")
+  const [principalName, setPrincipalName]     = useState(initialData?.principal_name ?? "")
+  const [principalEmail, setPrincipalEmail]   = useState(initialData?.principal_email ?? "")
+  const [principalPhone, setPrincipalPhone]   = useState(initialData?.principal_phone ?? "")
+  const [courses, setCourses]                 = useState<string[]>(
     initialData?.courses?.length ? initialData.courses : [""]
   )
-  const [socialLinks, setSocialLinks] = useState<string[]>(
+  const [socialLinks, setSocialLinks]         = useState<string[]>(
     initialData?.social_links?.length ? initialData.social_links : [""]
   )
-  const [errors, setErrors] = useState<Record<string, string>>({})
-
+  const [errors, setErrors]                   = useState<Record<string, string>>({})
 
 
   // ── Dirty tracking ────────────────────────────────────────────────────────
-
-
 
   const markDirty = useCallback(
     <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
@@ -195,35 +184,18 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   const handleSocialLinks     = markDirty(setSocialLinks)
 
 
-
   // ── Warn on unsaved changes ───────────────────────────────────────────────
-
-
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault()
-        e.returnValue = ""
-      }
+      if (isDirty) { e.preventDefault(); e.returnValue = "" }
     }
     window.addEventListener("beforeunload", handler)
     return () => window.removeEventListener("beforeunload", handler)
   }, [isDirty])
 
 
-
   // ── Logo upload ───────────────────────────────────────────────────────────
-  //
-  // Flow:
-  //  1. Show local blob preview immediately (instant feedback)
-  //  2. Delete old file from storage (non-fatal if it fails)
-  //  3. Upload new file under a timestamped path
-  //  4. Save the PATH (not the full URL) to DB → portable across migrations
-  //  5. Update logoSrc with a one-time ?v= cache-bust so the browser fetches
-  //     the new image exactly once; all subsequent renders use the cached result
-
-
 
   async function handleLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -243,19 +215,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     setIsUploadingLogo(true)
 
     try {
-      // ── 1. Delete old file from storage ────────────────────────────────
       const oldPath = storedLogoPath.current
       if (oldPath) {
-        const { error: deleteError } = await supabase.storage
-          .from("avatars")
-          .remove([oldPath])
-        if (deleteError) {
-          // Non-fatal: log but don't abort — old file orphan is minor vs failed upload
-          console.warn("Could not delete old logo:", deleteError.message)
-        }
+        const { error: deleteError } = await supabase.storage.from("avatars").remove([oldPath])
+        if (deleteError) console.warn("Could not delete old logo:", deleteError.message)
       }
 
-      // ── 2. Upload new file ──────────────────────────────────────────────
       const ext = file.name.split(".").pop() ?? "png"
       const timestamp = Date.now()
       const newPath = `institutes/${userProfile.id}/logo/${timestamp}.${ext}`
@@ -265,7 +230,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         .upload(newPath, file, { upsert: false, contentType: file.type })
       if (uploadError) throw uploadError
 
-      // ── 3. Save PATH (not full URL) to DB ──────────────────────────────
       const { data: updatedRows, error: dbError } = await supabase
         .from("institute_profiles")
         .update({ logo_path: newPath })
@@ -281,18 +245,14 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         return
       }
 
-      // ── 4. Update local state ───────────────────────────────────────────
       storedLogoPath.current = newPath
       const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)!
-
-      // ?v= bust forces browser to fetch the new image once, then caches cleanly
       setLogoSrc(`${newPublicUrl}?v=${timestamp}`)
       URL.revokeObjectURL(blobUrl)
       toast.success("Logo updated successfully!")
     } catch (err) {
       console.error(err)
       toast.error("Failed to upload logo. Please try again.")
-      // Restore previous display using clean cached URL
       setLogoSrc(getStorageUrl(supabase, "avatars", storedLogoPath.current))
       URL.revokeObjectURL(blobUrl)
     } finally {
@@ -302,84 +262,54 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
-
   // ── Course handlers ───────────────────────────────────────────────────────
 
-
-
-  function addCourse() {
-    handleCourses((prev) => [...prev, ""])
-  }
-
+  function addCourse() { handleCourses((prev) => [...prev, ""]) }
   function handleCourseChange(index: number, value: string) {
-    handleCourses((prev) => {
-      const updated = [...prev]
-      updated[index] = value
-      return updated
-    })
+    handleCourses((prev) => { const u = [...prev]; u[index] = value; return u })
   }
-
   function removeCourse(index: number) {
     handleCourses((prev) => prev.filter((_, i) => i !== index))
   }
 
 
-
   // ── Social link handlers ──────────────────────────────────────────────────
 
-
-
-  function addSocialLink() {
-    handleSocialLinks((prev) => [...prev, ""])
-  }
-
+  function addSocialLink() { handleSocialLinks((prev) => [...prev, ""]) }
   function handleSocialLinkChange(index: number, value: string) {
-    handleSocialLinks((prev) => {
-      const updated = [...prev]
-      updated[index] = value
-      return updated
-    })
+    handleSocialLinks((prev) => { const u = [...prev]; u[index] = value; return u })
   }
-
   function removeSocialLink(index: number) {
     handleSocialLinks((prev) => prev.filter((_, i) => i !== index))
   }
 
 
-
   // ── Validation ────────────────────────────────────────────────────────────
-
-
 
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
-    if (!instituteName.trim()) e.instituteName  = "College name is required"
-    if (!affiliation)          e.affiliation    = "Affiliation is required"
-    if (!address.trim())       e.address        = "Address is required"
-    if (!city.trim())          e.city           = "City is required"
-    if (!stateVal)             e.state          = "State is required"
-    if (!pincode.trim())       e.pincode        = "Pincode is required"
-    if (!country)              e.country        = "Country is required"
-    if (!instPhone.trim())     e.instPhone      = "Contact number is required"
-    if (!instEmail.trim())     e.instEmail      = "Email is required"
-    if (!principalName.trim()) e.principalName  = "Principal name is required"
+    if (!instituteName.trim()) e.instituteName   = "College name is required"
+    if (!affiliation)          e.affiliation     = "Affiliation is required"
+    if (!address.trim())       e.address         = "Address is required"
+    if (!city.trim())          e.city            = "City is required"
+    if (!stateVal)             e.state           = "State is required"
+    if (!pincode.trim())       e.pincode         = "Pincode is required"
+    if (!country)              e.country         = "Country is required"
+    if (!instPhone.trim())     e.instPhone       = "Contact number is required"
+    if (!instEmail.trim())     e.instEmail       = "Email is required"
+    if (!principalName.trim()) e.principalName   = "Principal name is required"
     if (!principalEmail.trim()) e.principalEmail = "Principal email is required"
     if (!principalPhone.trim()) e.principalPhone = "Principal contact is required"
     return e
   }
 
 
-
   // ── Discard ───────────────────────────────────────────────────────────────
-
-
 
   function handleDiscard() {
     setInstituteName(initialData?.institute_name ?? "")
     setInstituteCode(initialData?.institute_code ?? "")
-    setEstablishedYear(
-      initialData?.established_year ? String(initialData.established_year) : ""
-    )
+    setEstablishedYear(initialData?.established_year ? String(initialData.established_year) : "")
     setAffiliation(initialData?.affiliation ?? "")
     setAddress(initialData?.address ?? "")
     setCity(initialData?.city ?? "")
@@ -400,13 +330,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
-
   // ── Save ──────────────────────────────────────────────────────────────────
-  // NOTE: logo_path is intentionally excluded from this payload.
-  // Logo is managed independently via handleLogoFileChange — it has its own
-  // upload + DB write flow and must never be overwritten by the form save.
-
-
 
   function handleSave() {
     const newErrors = validate()
@@ -436,7 +360,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         principal_phone:  principalPhone.trim() || null,
         courses:          courses.filter((c) => c.trim()),
         social_links:     socialLinks.filter((l) => l.trim()),
-        // logo_path deliberately omitted — managed by handleLogoFileChange
       }
 
       const { error } = await supabase
@@ -454,31 +377,44 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
-
   // ── Render ────────────────────────────────────────────────────────────────
-
 
   return (
     <div className="min-h-screen w-full">
-      <Tabs defaultValue="institution">
 
-        {/* ── Tab Bar ── */}
-        <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
-          <TabsList variant="line" className="px-4 md:px-6 justify-start">
-            <TabsTrigger value="institution"><Building2 />Institution</TabsTrigger>
-            <TabsTrigger value="security"><Lock />Security</TabsTrigger>
-            <TabsTrigger value="notifications"><Bell />Notifications</TabsTrigger>
-            <TabsTrigger value="history"><History />Login History</TabsTrigger>
-            <TabsTrigger value="privacy"><Shield />Privacy</TabsTrigger>
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
+      <div className="px-4 pt-8 pb-0 md:px-8">
+        <div className="space-y-0.5">
+          <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage your institution profile and preferences
+          </p>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
+
+        {/* ── Tab Bar ──────────────────────────────────────────────────────── */}
+        <div className="overflow-x-auto px-4 pt-5 md:px-8">
+          <TabsList className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
+            {TABS.map(({ value, label }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                {label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 
-        <div className="px-4 py-6 md:px-6 md:py-8">
+        <div className="px-4 py-6 md:px-8 md:py-8">
 
           {/* ════════════════════════════════════════════════════════════════
               INSTITUTION TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="institution" className="space-y-6">
+          <TabsContent value="institution" className="space-y-6 mt-0">
 
             {/* ── Logo ── */}
             <Card>
@@ -758,7 +694,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 {courses.map((course, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <Input
-                      placeholder={`e.g. Computer Science`}
+                      placeholder="e.g. Computer Science"
                       value={course}
                       onChange={(e) => handleCourseChange(index, e.target.value)}
                     />
@@ -809,7 +745,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
           {/* ════════════════════════════════════════════════════════════════
               SECURITY TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="security" className="space-y-6">
+          <TabsContent value="security" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Change Password</CardTitle>
@@ -852,7 +788,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
           {/* ════════════════════════════════════════════════════════════════
               NOTIFICATIONS TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="notifications">
+          <TabsContent value="notifications" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Notification Preferences</CardTitle>
@@ -861,9 +797,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               <CardContent className="space-y-4">
                 {[
                   { label: "Student Registration Alerts", desc: "Get notified when new students register" },
-                  { label: "Placement Updates", desc: "Notifications about placement activities" },
-                  { label: "System Announcements", desc: "Important system updates and changes" },
-                  { label: "Weekly Reports", desc: "Receive weekly summary of activities" },
+                  { label: "Placement Updates",           desc: "Notifications about placement activities" },
+                  { label: "System Announcements",        desc: "Important system updates and changes" },
+                  { label: "Weekly Reports",              desc: "Receive weekly summary of activities" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
                     <div>
@@ -877,20 +813,22 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
+
           {/* ════════════════════════════════════════════════════════════════
               LOGIN HISTORY TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="history">
+          <TabsContent value="history" className="mt-0">
             <LoginHistoryTab
               supabase={supabase}
               cardDescription="Recent access to your college account"
             />
           </TabsContent>
 
+
           {/* ════════════════════════════════════════════════════════════════
               PRIVACY TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="privacy" className="space-y-6">
+          <TabsContent value="privacy" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Privacy Controls</CardTitle>
@@ -898,10 +836,10 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "Public Profile", desc: "Make college info visible to recruiters" },
-                  { label: "Student Data Sharing", desc: "Allow sharing student data with verified recruiters" },
-                  { label: "Analytics & Insights", desc: "Help improve platform with usage data" },
-                  { label: "Placement Statistics", desc: "Share placement statistics publicly" },
+                  { label: "Public Profile",          desc: "Make college info visible to recruiters" },
+                  { label: "Student Data Sharing",    desc: "Allow sharing student data with verified recruiters" },
+                  { label: "Analytics & Insights",    desc: "Help improve platform with usage data" },
+                  { label: "Placement Statistics",    desc: "Share placement statistics publicly" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
                     <div>

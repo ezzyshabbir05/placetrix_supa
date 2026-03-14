@@ -1,127 +1,124 @@
+// app/~/settings/loading.tsx
+
 import { Skeleton } from "@/components/ui/skeleton"
 
-export function SettingsSkeleton() {
+export default function SettingsLoading() {
   return (
     <div className="min-h-screen w-full">
-      {/* Tab bar */}
-      <div className="w-full overflow-x-auto border-b border-border bg-background/95 backdrop-blur px-4 md:px-6">
-        <div className="flex gap-1 py-2">
+
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
+      <div className="px-4 pt-8 pb-0 md:px-8">
+        <Skeleton className="h-6 w-28 mb-1.5" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+
+      {/* ── Tab Bar ──────────────────────────────────────────────────────── */}
+      <div className="px-4 pt-5 md:px-8">
+        <div className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-9 w-28 rounded-md shrink-0" />
+            <Skeleton key={i} className="h-7 w-24 rounded-md" />
           ))}
         </div>
       </div>
 
-      <div className="px-4 py-6 md:px-6 md:py-8 space-y-6">
+      <div className="px-4 py-6 md:px-8 md:py-8 space-y-6">
 
-        {/* Upload Card */}
-        <div className="rounded-xl border bg-card p-6 space-y-4">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-4 w-52 opacity-60" />
-          <Skeleton className="h-9 w-36 rounded-md" />
-        </div>
-
-        {/* Personal / Basic Info Card */}
-        <div className="rounded-xl border bg-card p-6 space-y-6">
-          <div className="space-y-1">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-4 w-64 opacity-60" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-9 w-full" />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-9 w-full" />
-              </div>
-            ))}
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-36" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-        </div>
-
-        {/* Education / Contact Card */}
-        <div className="rounded-xl border bg-card p-6 space-y-6">
-          <div className="space-y-1">
-            <Skeleton className="h-5 w-44" />
-            <Skeleton className="h-4 w-64 opacity-60" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-9 w-full" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-9 w-full" />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-9 w-full" />
-              </div>
-            ))}
-          </div>
-          {/* SGPA / Extra rows */}
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-56" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-3 w-10" />
-                  <Skeleton className="h-9 w-full" />
-                </div>
-              ))}
+        {/* ── Avatar / Logo Card ── */}
+        <div className="rounded-xl border bg-card p-6">
+          <Skeleton className="h-5 w-32 mb-1" />
+          <Skeleton className="h-4 w-56 mb-5" />
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-20 w-20 rounded-full shrink-0" />
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-32 rounded-md" />
+              <Skeleton className="h-3.5 w-48" />
             </div>
           </div>
         </div>
 
-        {/* Professional / Courses Card */}
-        <div className="rounded-xl border bg-card p-6 space-y-6">
-          <div className="space-y-1">
-            <Skeleton className="h-5 w-48" />
-            <Skeleton className="h-4 w-64 opacity-60" />
+        {/* ── Basic / Personal Info Card ── */}
+        <div className="rounded-xl border bg-card p-6">
+          <Skeleton className="h-5 w-40 mb-1" />
+          <Skeleton className="h-4 w-60 mb-5" />
+
+          {/* 2-col row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <FieldSkeleton />
+            <FieldSkeleton />
           </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-9 w-full" />
+
+          {/* 2-col row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <FieldSkeleton />
+            <FieldSkeleton />
           </div>
-          <div className="space-y-2">
+
+          <Skeleton className="h-px w-full mb-4" />
+
+          {/* Textarea */}
+          <div className="space-y-2 mb-4">
             <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-20 w-full rounded-md" />
           </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-9 w-full" />
+
+          {/* 3-col row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <FieldSkeleton />
+            <FieldSkeleton />
+            <FieldSkeleton />
+          </div>
+
+          {/* 1 field */}
+          <FieldSkeleton />
+        </div>
+
+        {/* ── Contact / Education Card ── */}
+        <div className="rounded-xl border bg-card p-6">
+          <Skeleton className="h-5 w-44 mb-1" />
+          <Skeleton className="h-4 w-56 mb-5" />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <FieldSkeleton />
+            <FieldSkeleton />
+          </div>
+          <FieldSkeleton />
+        </div>
+
+        {/* ── Admin Contacts / Education Secondary Card ── */}
+        <div className="rounded-xl border bg-card p-6">
+          <Skeleton className="h-5 w-52 mb-1" />
+          <Skeleton className="h-4 w-48 mb-5" />
+          <Skeleton className="h-4 w-28 mb-4" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FieldSkeleton />
+            <FieldSkeleton />
+            <FieldSkeleton />
           </div>
         </div>
 
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <Skeleton className="h-9 w-32 rounded-md" />
+        {/* ── Courses / Skills Card ── */}
+        <div className="rounded-xl border bg-card p-6">
+          <Skeleton className="h-5 w-36 mb-1" />
+          <Skeleton className="h-4 w-52 mb-5" />
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-full rounded-md" />
+            <Skeleton className="h-9 w-full rounded-md" />
+            <Skeleton className="h-8 w-28 rounded-md" />
+          </div>
         </div>
+
       </div>
     </div>
   )
 }
 
-export default function Loading() {
-  return <SettingsSkeleton />
+// ─── Shared micro-skeleton for a label + input pair ───────────────────────────
+
+function FieldSkeleton() {
+  return (
+    <div className="space-y-2">
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="h-9 w-full rounded-md" />
+    </div>
+  )
 }

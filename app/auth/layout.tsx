@@ -15,7 +15,7 @@ export default async function AuthLayout({
     // If middleware uses getClaims() but auth layout uses getUser():
     //
     //   Offline + authenticated:
-    //     middleware (getClaims ✓) → /~/dashboard
+    //     middleware (getClaims ✓) → /~/home
     //     getUserProfile() offline fallback ✓ → renders fine
     //     BUT if user navigates to /auth/login:
     //       getUser() fails → no kick-out → stays on login  ← inconsistent

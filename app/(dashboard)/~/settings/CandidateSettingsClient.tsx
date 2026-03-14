@@ -1,5 +1,9 @@
 "use client"
 
+// ─────────────────────────────────────────────────────────────────────────────
+// app/~/settings/CandidateSettingsClient.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState, useEffect, useTransition, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { UserProfile } from "@/lib/supabase/profile"
@@ -37,7 +41,6 @@ import {
 } from "lucide-react"
 
 
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
@@ -65,9 +68,7 @@ const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
 
 
-
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 
 
 interface InstituteOption {
@@ -82,9 +83,7 @@ interface Props {
 }
 
 
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 
 
 function RequiredMark() {
@@ -119,11 +118,6 @@ function getInitials(firstName: string, lastName: string, email: string): string
   return email[0]?.toUpperCase() ?? "?"
 }
 
-/**
- * Derives the full public URL from a storage path.
- * Keeps URL construction in one place — change your Supabase client config
- * here if you ever migrate projects; DB rows stay untouched.
- */
 function getStorageUrl(
   supabase: ReturnType<typeof createClient>,
   bucket: string,
@@ -135,93 +129,89 @@ function getStorageUrl(
 }
 
 
+// ─── Tab config ───────────────────────────────────────────────────────────────
 
-// ─── Component ───────────────────────────────────────────────────────────────
 
+type Tab = "account" | "security" | "billing" | "notifications" | "history" | "privacy"
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: "account",       label: "Account"       },
+  { value: "security",      label: "Security"      },
+  { value: "billing",       label: "Billing"       },
+  { value: "notifications", label: "Notifications" },
+  { value: "history",       label: "Login History" },
+  { value: "privacy",       label: "Privacy"       },
+]
+
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 
 export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const supabase = createClient()
   const [isPending, startTransition] = useTransition()
   const [isDirty, setIsDirty] = useState(false)
-
+  const [activeTab, setActiveTab] = useState<Tab>("account")
 
 
   // ── Profile Picture ───────────────────────────────────────────────────────
-  //
-  // storedImagePath: ref holding the raw storage path saved in DB
-  //   e.g. "candidates/abc123/profile/1709123456.jpg"
-  // avatarSrc: the full URL shown in <AvatarImage>
-  //   - On initial load: clean URL (no ?t=) → browser cache hits every render
-  //   - After upload:    URL + ?v={timestamp} → one-time cache-bust, then cached
 
-
-
-  const storedImagePath = useRef<string | null>(
-    initialData?.profile_image_path ?? null
-  )
+  const storedImagePath = useRef<string | null>(initialData?.profile_image_path ?? null)
   const [avatarSrc, setAvatarSrc] = useState<string | null>(() =>
-    // Clean URL on load — browser caches it; no unnecessary refetch on re-renders
     getStorageUrl(supabase, "avatars", storedImagePath.current)
   )
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
 
-
   // ── Personal ──────────────────────────────────────────────────────────────
 
-
-
-  const [firstName, setFirstName] = useState(initialData?.first_name ?? "")
-  const [middleName, setMiddleName] = useState(initialData?.middle_name ?? "")
-  const [lastName, setLastName] = useState(initialData?.last_name ?? "")
-  const [gender, setGender] = useState(
+  const [firstName, setFirstName]               = useState(initialData?.first_name ?? "")
+  const [middleName, setMiddleName]             = useState(initialData?.middle_name ?? "")
+  const [lastName, setLastName]                 = useState(initialData?.last_name ?? "")
+  const [gender, setGender]                     = useState(
     initialData?.gender ? (GENDER_REVERSE[initialData.gender] ?? "") : ""
   )
-  const [phoneNumber, setPhoneNumber] = useState(initialData?.phone_number ?? "")
-  const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(
+  const [phoneNumber, setPhoneNumber]           = useState(initialData?.phone_number ?? "")
+  const [dateOfBirth, setDateOfBirth]           = useState<Date | undefined>(
     initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined
   )
-  const [dobOpen, setDobOpen] = useState(false)
-  const [aadhaarNumber, setAadhaarNumber] = useState(initialData?.aadhaar_number ?? "")
-  const [currentAddress, setCurrentAddress] = useState(initialData?.current_address ?? "")
+  const [dobOpen, setDobOpen]                   = useState(false)
+  const [aadhaarNumber, setAadhaarNumber]       = useState(initialData?.aadhaar_number ?? "")
+  const [currentAddress, setCurrentAddress]     = useState(initialData?.current_address ?? "")
   const [permanentAddress, setPermanentAddress] = useState(initialData?.permanent_address ?? "")
-
 
 
   // ── Education ─────────────────────────────────────────────────────────────
 
-
-
-  const [instituteId, setInstituteId] = useState<string>(initialData?.institute_id ?? "")
-  const [instituteName, setInstituteName] = useState("")
-  const [courseName, setCourseName] = useState(initialData?.course_name ?? "")
-  const [passoutYear, setPassoutYear] = useState(
+  const [instituteId, setInstituteId]           = useState<string>(initialData?.institute_id ?? "")
+  const [instituteName, setInstituteName]       = useState("")
+  const [courseName, setCourseName]             = useState(initialData?.course_name ?? "")
+  const [passoutYear, setPassoutYear]           = useState(
     initialData?.passout_year ? String(initialData.passout_year) : ""
   )
-  const [sscPercentage, setSscPercentage] = useState(
+  const [sscPercentage, setSscPercentage]       = useState(
     initialData?.ssc_percentage != null ? String(initialData.ssc_percentage) : ""
   )
-  const [sscPassYear, setSscPassYear] = useState(
+  const [sscPassYear, setSscPassYear]           = useState(
     initialData?.ssc_pass_year ? String(initialData.ssc_pass_year) : ""
   )
-  const [isHsc, setIsHsc] = useState(initialData?.is_hsc ?? false)
-  const [hscPercentage, setHscPercentage] = useState(
+  const [isHsc, setIsHsc]                       = useState(initialData?.is_hsc ?? false)
+  const [hscPercentage, setHscPercentage]       = useState(
     initialData?.hsc_percentage != null ? String(initialData.hsc_percentage) : ""
   )
-  const [hscPassYear, setHscPassYear] = useState(
+  const [hscPassYear, setHscPassYear]           = useState(
     initialData?.hsc_pass_year ? String(initialData.hsc_pass_year) : ""
   )
-  const [isDiploma, setIsDiploma] = useState(initialData?.is_diploma ?? false)
+  const [isDiploma, setIsDiploma]               = useState(initialData?.is_diploma ?? false)
   const [diplomaPercentage, setDiplomaPercentage] = useState(
     initialData?.diploma_percentage != null ? String(initialData.diploma_percentage) : ""
   )
-  const [diplomaPassYear, setDiplomaPassYear] = useState(
+  const [diplomaPassYear, setDiplomaPassYear]   = useState(
     initialData?.diploma_pass_year ? String(initialData.diploma_pass_year) : ""
   )
-  const [universityPrn, setUniversityPrn] = useState(initialData?.university_prn ?? "")
-  const [sgpaValues, setSgpaValues] = useState<string[]>(
+  const [universityPrn, setUniversityPrn]       = useState(initialData?.university_prn ?? "")
+  const [sgpaValues, setSgpaValues]             = useState<string[]>(
     Array.from({ length: 8 }, (_, i) => {
       const val = initialData?.[`sgpa_sem${i + 1}`]
       return val != null ? String(val) : ""
@@ -229,40 +219,30 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   )
 
 
-
   // ── Professional ──────────────────────────────────────────────────────────
 
-
-
-  const [selectedSkills, setSelectedSkills] = useState<string[]>(initialData?.skills ?? [])
-  const [linkedinUrl, setLinkedinUrl] = useState(initialData?.linkedin_url ?? "")
-  const [githubUrl, setGithubUrl] = useState(initialData?.github_url ?? "")
-  const [portfolioLinks, setPortfolioLinks] = useState<string[]>(
+  const [selectedSkills, setSelectedSkills]     = useState<string[]>(initialData?.skills ?? [])
+  const [linkedinUrl, setLinkedinUrl]           = useState(initialData?.linkedin_url ?? "")
+  const [githubUrl, setGithubUrl]               = useState(initialData?.github_url ?? "")
+  const [portfolioLinks, setPortfolioLinks]     = useState<string[]>(
     initialData?.portfolio_links?.length ? initialData.portfolio_links : [""]
   )
 
 
-
   // ── Institute Lookup ──────────────────────────────────────────────────────
 
-
-
-  const [institutes, setInstitutes] = useState<InstituteOption[]>([])
+  const [institutes, setInstitutes]             = useState<InstituteOption[]>([])
   const [availableCourses, setAvailableCourses] = useState<string[]>([])
-
 
 
   // ── Misc ──────────────────────────────────────────────────────────────────
 
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const skillsAnchor = useComboboxAnchor()
-  const defaultDobDate = new Date(2000, 0, 1)
-
+  const [errors, setErrors]   = useState<Record<string, string>>({})
+  const skillsAnchor          = useComboboxAnchor()
+  const defaultDobDate        = new Date(2000, 0, 1)
 
 
   // ── Dirty tracking ────────────────────────────────────────────────────────
-
-
 
   const markDirty = useCallback(
     <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
@@ -300,27 +280,18 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const handlePortfolioLinks    = markDirty(setPortfolioLinks)
 
 
-
   // ── Warn on unsaved changes ───────────────────────────────────────────────
-
-
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault()
-        e.returnValue = ""
-      }
+      if (isDirty) { e.preventDefault(); e.returnValue = "" }
     }
     window.addEventListener("beforeunload", handler)
     return () => window.removeEventListener("beforeunload", handler)
   }, [isDirty])
 
 
-
   // ── Load institutes ───────────────────────────────────────────────────────
-
-
 
   useEffect(() => {
     ;(async () => {
@@ -350,18 +321,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   }, [instituteId])
 
 
-
   // ── Avatar upload ─────────────────────────────────────────────────────────
-  //
-  // Flow:
-  //  1. Show local blob preview immediately (instant feedback)
-  //  2. Delete old file from storage (non-fatal if it fails)
-  //  3. Upload new file under a timestamped path
-  //  4. Save the PATH (not the full URL) to DB → portable across migrations
-  //  5. Update avatarSrc with a one-time ?v= cache-bust so the browser fetches
-  //     the new image exactly once; all subsequent renders use the cached result
-
-
 
   async function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -381,19 +341,12 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     setIsUploadingAvatar(true)
 
     try {
-      // ── 1. Delete old file from storage ────────────────────────────────
       const oldPath = storedImagePath.current
       if (oldPath) {
-        const { error: deleteError } = await supabase.storage
-          .from("avatars")
-          .remove([oldPath])
-        if (deleteError) {
-          // Non-fatal: log but don't abort — old file orphan is minor vs failed upload
-          console.warn("Could not delete old avatar:", deleteError.message)
-        }
+        const { error: deleteError } = await supabase.storage.from("avatars").remove([oldPath])
+        if (deleteError) console.warn("Could not delete old avatar:", deleteError.message)
       }
 
-      // ── 2. Upload new file ──────────────────────────────────────────────
       const ext = file.name.split(".").pop() ?? "jpg"
       const timestamp = Date.now()
       const newPath = `candidates/${userProfile.id}/profile/${timestamp}.${ext}`
@@ -403,7 +356,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         .upload(newPath, file, { upsert: false, contentType: file.type })
       if (uploadError) throw uploadError
 
-      // ── 3. Save PATH (not full URL) to DB ──────────────────────────────
       const { error: dbError } = await supabase
         .from("candidate_profiles")
         .upsert(
@@ -412,18 +364,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         )
       if (dbError) throw dbError
 
-      // ── 4. Update local state ───────────────────────────────────────────
       storedImagePath.current = newPath
       const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)!
-
-      // ?v= bust forces browser to fetch the new image once, then caches cleanly
       setAvatarSrc(`${newPublicUrl}?v=${timestamp}`)
       URL.revokeObjectURL(blobUrl)
       toast.success("Profile picture updated!")
     } catch (err) {
       console.error(err)
       toast.error("Failed to upload profile picture. Please try again.")
-      // Restore previous display using clean cached URL
       setAvatarSrc(getStorageUrl(supabase, "avatars", storedImagePath.current))
       URL.revokeObjectURL(blobUrl)
     } finally {
@@ -433,17 +381,11 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
-
   // ── Institute select ──────────────────────────────────────────────────────
-
-
 
   function handleInstituteSelect(name: string | null) {
     if (!name) {
-      setInstituteId("")
-      setInstituteName("")
-      setAvailableCourses([])
-      setIsDirty(true)
+      setInstituteId(""); setInstituteName(""); setAvailableCourses([]); setIsDirty(true)
       return
     }
     const found = institutes.find((i) => i.institute_name === name)
@@ -456,46 +398,25 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
-
-  // ── SGPA ─────────────────────────────────────────────────────────────────
-
-
+  // ── SGPA ──────────────────────────────────────────────────────────────────
 
   function handleSgpaChange(index: number, value: string) {
-    handleSgpaValues((prev) => {
-      const updated = [...prev]
-      updated[index] = value
-      return updated
-    })
+    handleSgpaValues((prev) => { const u = [...prev]; u[index] = value; return u })
   }
-
 
 
   // ── Portfolio links ───────────────────────────────────────────────────────
 
-
-
-  function addPortfolioLink() {
-    handlePortfolioLinks((prev) => [...prev, ""])
-  }
-
+  function addPortfolioLink() { handlePortfolioLinks((prev) => [...prev, ""]) }
   function handlePortfolioLinkChange(index: number, value: string) {
-    handlePortfolioLinks((prev) => {
-      const updated = [...prev]
-      updated[index] = value
-      return updated
-    })
+    handlePortfolioLinks((prev) => { const u = [...prev]; u[index] = value; return u })
   }
-
   function removePortfolioLink(index: number) {
     handlePortfolioLinks((prev) => prev.filter((_, i) => i !== index))
   }
 
 
-
   // ── Validation ────────────────────────────────────────────────────────────
-
-
 
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
@@ -518,7 +439,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
-
   // ── Discard ───────────────────────────────────────────────────────────────
 
   function handleDiscard() {
@@ -527,57 +447,37 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     setLastName(initialData?.last_name ?? "")
     setGender(initialData?.gender ? (GENDER_REVERSE[initialData.gender] ?? "") : "")
     setPhoneNumber(initialData?.phone_number ?? "")
-    setDateOfBirth(
-      initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined
-    )
+    setDateOfBirth(initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined)
     setAadhaarNumber(initialData?.aadhaar_number ?? "")
     setCurrentAddress(initialData?.current_address ?? "")
     setPermanentAddress(initialData?.permanent_address ?? "")
     setInstituteId(initialData?.institute_id ?? "")
     setCourseName(initialData?.course_name ?? "")
     setPassoutYear(initialData?.passout_year ? String(initialData.passout_year) : "")
-    setSscPercentage(
-      initialData?.ssc_percentage != null ? String(initialData.ssc_percentage) : ""
-    )
+    setSscPercentage(initialData?.ssc_percentage != null ? String(initialData.ssc_percentage) : "")
     setSscPassYear(initialData?.ssc_pass_year ? String(initialData.ssc_pass_year) : "")
     setIsHsc(initialData?.is_hsc ?? false)
-    setHscPercentage(
-      initialData?.hsc_percentage != null ? String(initialData.hsc_percentage) : ""
-    )
+    setHscPercentage(initialData?.hsc_percentage != null ? String(initialData.hsc_percentage) : "")
     setHscPassYear(initialData?.hsc_pass_year ? String(initialData.hsc_pass_year) : "")
     setIsDiploma(initialData?.is_diploma ?? false)
-    setDiplomaPercentage(
-      initialData?.diploma_percentage != null ? String(initialData.diploma_percentage) : ""
-    )
-    setDiplomaPassYear(
-      initialData?.diploma_pass_year ? String(initialData.diploma_pass_year) : ""
-    )
+    setDiplomaPercentage(initialData?.diploma_percentage != null ? String(initialData.diploma_percentage) : "")
+    setDiplomaPassYear(initialData?.diploma_pass_year ? String(initialData.diploma_pass_year) : "")
     setUniversityPrn(initialData?.university_prn ?? "")
-    setSgpaValues(
-      Array.from({ length: 8 }, (_, i) => {
-        const val = initialData?.[`sgpa_sem${i + 1}`]
-        return val != null ? String(val) : ""
-      })
-    )
+    setSgpaValues(Array.from({ length: 8 }, (_, i) => {
+      const val = initialData?.[`sgpa_sem${i + 1}`]
+      return val != null ? String(val) : ""
+    }))
     setSelectedSkills(initialData?.skills ?? [])
     setLinkedinUrl(initialData?.linkedin_url ?? "")
     setGithubUrl(initialData?.github_url ?? "")
-    setPortfolioLinks(
-      initialData?.portfolio_links?.length ? initialData.portfolio_links : [""]
-    )
+    setPortfolioLinks(initialData?.portfolio_links?.length ? initialData.portfolio_links : [""])
     setErrors({})
     setIsDirty(false)
     toast.info("Changes discarded.")
   }
 
 
-
   // ── Save ──────────────────────────────────────────────────────────────────
-  // NOTE: profile_image_path is intentionally excluded from this payload.
-  // Avatar is managed independently via handleAvatarFileChange — it has its
-  // own upload + DB write flow and must never be overwritten by the form save.
-
-
 
   function handleSave() {
     const newErrors = validate()
@@ -642,41 +542,52 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   const instituteNames = institutes.map((i) => i.institute_name)
 
   return (
     <div className="min-h-screen w-full">
-      <Tabs defaultValue="account">
 
-        {/* ── Tab Bar ── */}
-        <div className="w-full overflow-x-auto no-scrollbar pb-px border-b border-border">
-          <TabsList variant="line" className="px-4 md:px-6 justify-start">
-            <TabsTrigger value="account"><User />Account</TabsTrigger>
-            <TabsTrigger value="security"><Lock />Security</TabsTrigger>
-            <TabsTrigger value="billing"><CreditCard />Billing</TabsTrigger>
-            <TabsTrigger value="notifications"><Bell />Notifications</TabsTrigger>
-            <TabsTrigger value="history"><History />Login History</TabsTrigger>
-            <TabsTrigger value="privacy"><Shield />Privacy</TabsTrigger>
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
+      <div className="px-4 pt-8 pb-0 md:px-8">
+        <div className="space-y-0.5">
+          <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage your profile and account preferences
+          </p>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
+
+        {/* ── Tab Bar ──────────────────────────────────────────────────────── */}
+        <div className="overflow-x-auto px-4 pt-5 md:px-8">
+          <TabsList className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
+            {TABS.map(({ value, label }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                {label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 
-        <div className="px-4 py-6 md:px-6 md:py-8">
+        <div className="px-4 py-6 md:px-8 md:py-8">
 
           {/* ════════════════════════════════════════════════════════════════
               ACCOUNT TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="account" className="space-y-6">
+          <TabsContent value="account" className="space-y-6 mt-0">
 
             {/* ── Profile Photo ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Profile Photo</CardTitle>
-                <CardDescription>
-                  JPEG, PNG or WEBP · max 2 MB · square recommended
-                </CardDescription>
+                <CardDescription>JPEG, PNG or WEBP · max 2 MB · square recommended</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">
@@ -726,7 +637,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
 
-                {/* Name */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>First Name<RequiredMark /></Label>
@@ -744,7 +654,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
-                {/* Gender / Phone / DOB */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>Gender<RequiredMark /></Label>
@@ -790,10 +699,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                           captionLayout="dropdown"
                           fromYear={1950}
                           toYear={2010}
-                          onSelect={(date) => {
-                            handleDateOfBirth(date)
-                            setDobOpen(false)
-                          }}
+                          onSelect={(date) => { handleDateOfBirth(date); setDobOpen(false) }}
                         />
                       </PopoverContent>
                     </Popover>
@@ -801,7 +707,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
-                {/* Aadhaar */}
                 <div className="space-y-2">
                   <Label>Aadhaar Number</Label>
                   <Input
@@ -813,7 +718,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <FieldError message={errors.aadhaarNumber} />
                 </div>
 
-                {/* Addresses */}
                 <div className="space-y-2">
                   <Label>Current Address</Label>
                   <Textarea
@@ -855,7 +759,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
 
-                {/* Institution */}
                 <div className="space-y-2">
                   <Label>Institution<RequiredMark /></Label>
                   <Combobox items={instituteNames} value={instituteName} onValueChange={handleInstituteSelect}>
@@ -870,7 +773,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <FieldError message={errors.institute} />
                 </div>
 
-                {/* Course + Passout year */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Branch / Course<RequiredMark /></Label>
@@ -912,7 +814,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
                 <Separator />
 
-                {/* SSC */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>SSC Percentage<RequiredMark /></Label>
@@ -942,7 +843,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
-                {/* Education after SSC */}
                 <div className="space-y-3">
                   <Label>Education After SSC</Label>
                   <div className="flex gap-6">
@@ -1011,7 +911,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
                 <Separator />
 
-                {/* University PRN */}
                 <div className="space-y-2">
                   <Label>University PRN<RequiredMark /></Label>
                   <Input
@@ -1022,7 +921,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <FieldError message={errors.universityPrn} />
                 </div>
 
-                {/* SGPA */}
                 <div className="space-y-3">
                   <Label>Engineering SGPA (Semester-wise)</Label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1054,7 +952,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
 
-                {/* Resume */}
                 <div className="space-y-2">
                   <Label>Resume</Label>
                   <Input type="file" accept=".pdf,.doc,.docx" disabled />
@@ -1063,7 +960,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
                 <Separator />
 
-                {/* Skills */}
                 <div className="space-y-2">
                   <Label>Skills<RequiredMark /></Label>
                   <Combobox
@@ -1097,7 +993,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
                 <Separator />
 
-                {/* LinkedIn / GitHub */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>LinkedIn URL</Label>
@@ -1119,7 +1014,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 </div>
 
-                {/* Portfolio links */}
                 <div className="space-y-3">
                   <Label>Portfolio / Other Links</Label>
                   {portfolioLinks.map((link, index) => (
@@ -1130,12 +1024,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                         placeholder="https://yourportfolio.com"
                         type="url"
                       />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        type="button"
-                        onClick={() => removePortfolioLink(index)}
-                      >
+                      <Button variant="ghost" size="icon" type="button" onClick={() => removePortfolioLink(index)}>
                         <Minus className="h-4 w-4" />
                       </Button>
                     </div>
@@ -1155,7 +1044,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
           {/* ════════════════════════════════════════════════════════════════
               SECURITY TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="security" className="space-y-6">
+          <TabsContent value="security" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Change Password</CardTitle>
@@ -1198,7 +1087,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
           {/* ════════════════════════════════════════════════════════════════
               BILLING TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="billing">
+          <TabsContent value="billing" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Billing</CardTitle>
@@ -1210,10 +1099,11 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
+
           {/* ════════════════════════════════════════════════════════════════
               NOTIFICATIONS TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="notifications">
+          <TabsContent value="notifications" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Notification Preferences</CardTitle>
@@ -1221,9 +1111,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "Email Alerts", desc: "Receive important notifications via email" },
-                  { label: "Job Updates", desc: "Get notified about new job opportunities" },
-                  { label: "Group Notifications", desc: "Updates from groups and communities you joined" },
+                  { label: "Email Alerts",          desc: "Receive important notifications via email" },
+                  { label: "Job Updates",            desc: "Get notified about new job opportunities" },
+                  { label: "Group Notifications",    desc: "Updates from groups and communities you joined" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
                     <div>
@@ -1237,10 +1127,11 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
+
           {/* ════════════════════════════════════════════════════════════════
               LOGIN HISTORY TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="history">
+          <TabsContent value="history" className="mt-0">
             <LoginHistoryTab
               supabase={supabase}
               cardDescription="Recent access to your account"
@@ -1251,7 +1142,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
           {/* ════════════════════════════════════════════════════════════════
               PRIVACY TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="privacy" className="space-y-6">
+          <TabsContent value="privacy" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Privacy Controls</CardTitle>
@@ -1259,9 +1150,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "Public Profile", desc: "Make your profile visible to recruiters" },
-                  { label: "Resume Visible to Recruiters", desc: "Allow recruiters to view and download your resume" },
-                  { label: "Allow Data Usage", desc: "Help improve platform with usage data" },
+                  { label: "Public Profile",                   desc: "Make your profile visible to recruiters" },
+                  { label: "Resume Visible to Recruiters",     desc: "Allow recruiters to view and download your resume" },
+                  { label: "Allow Data Usage",                 desc: "Help improve platform with usage data" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
                     <div>
@@ -1286,7 +1177,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
           </TabsContent>
-
 
         </div>
       </Tabs>

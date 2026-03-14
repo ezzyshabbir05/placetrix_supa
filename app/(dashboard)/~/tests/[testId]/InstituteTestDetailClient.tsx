@@ -1,12 +1,18 @@
 "use client"
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// app/~/tests/[id]/InstituteTestDetailClient.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 import { useState, useTransition, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Progress } from "@/components/ui/progress"
 import {
   Table,
   TableBody,
@@ -53,10 +59,10 @@ import {
   BookOpen,
   Info,
   CalendarX,
-  Activity,
   Loader2,
   Trash2,
   ListChecks,
+  Pencil,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
@@ -65,7 +71,6 @@ import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_ty
 
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
-
 
 
 function StatsBar({ test }: { test: InstituteTestDetail }) {
@@ -91,7 +96,6 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
 
-      {/* Questions */}
       <Card className="rounded-xl">
         <CardContent className="p-4">
           <div className="flex items-center gap-1.5 text-muted-foreground mb-2">
@@ -103,7 +107,6 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
         </CardContent>
       </Card>
 
-      {/* Attempts */}
       <Card className="rounded-xl">
         <CardContent className="p-4">
           <div className="flex items-center gap-1.5 text-muted-foreground mb-2">
@@ -115,7 +118,6 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
         </CardContent>
       </Card>
 
-      {/* Submitted */}
       <Card className="rounded-xl">
         <CardContent className="p-4 space-y-2.5">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -129,7 +131,6 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
         </CardContent>
       </Card>
 
-      {/* Avg Score */}
       <Card className="rounded-xl border">
         <CardContent className="p-4 space-y-2.5">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -151,8 +152,34 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
 
 
 
-// ─── Answer Key Question Card ─────────────────────────────────────────────────
+// ─── Meta Item ────────────────────────────────────────────────────────────────
 
+
+function MetaItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl border bg-muted/20 p-3.5">
+      <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
+      <div>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-0.5 text-sm font-medium text-foreground">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+
+
+// ─── Question Card (Answer Key) ───────────────────────────────────────────────
 
 
 function QuestionCard({
@@ -258,7 +285,6 @@ function QuestionCard({
 // ─── Questions Tab (Answer Key) ───────────────────────────────────────────────
 
 
-
 function QuestionsTab({ questions }: { questions: InstituteQuestion[] }) {
   const totalMarks = questions.reduce((s, q) => s + q.marks, 0)
 
@@ -306,8 +332,7 @@ function QuestionsTab({ questions }: { questions: InstituteQuestion[] }) {
 
 
 
-// ─── Attempts Tab ─────────────────────────────────────────────────────────────
-
+// ─── Attempt Score ────────────────────────────────────────────────────────────
 
 
 function AttemptScore({
@@ -341,6 +366,7 @@ function AttemptScore({
 
 
 // ─── Attempts Tab ─────────────────────────────────────────────────────────────
+
 
 function AttemptsTab({
   attempts,
@@ -388,7 +414,7 @@ function AttemptsTab({
   return (
     <div className="space-y-5">
 
-      {/* Summary strip — replaces the card grid */}
+      {/* Summary strip */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-sm">
         <span>
           <span className="font-semibold tabular-nums">{submitted.length}</span>
@@ -410,12 +436,10 @@ function AttemptsTab({
         )}
       </div>
 
-      {/* ── Mobile compact list ── */}
+      {/* Mobile compact list */}
       <div className="rounded-xl border overflow-hidden divide-y md:hidden">
         {sorted.map((a) => (
           <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors">
-
-            {/* Left — name + email */}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium leading-tight">
                 {a.student_name ?? "Unknown"}
@@ -424,8 +448,6 @@ function AttemptsTab({
                 {a.student_email ?? formatDateTime(a.started_at)}
               </p>
             </div>
-
-            {/* Right — score + time stacked, then status badge */}
             <div className="flex items-center gap-2.5 shrink-0">
               <div className="text-right">
                 <AttemptScore attempt={a} resultsAvailable={resultsAvailable} />
@@ -440,12 +462,11 @@ function AttemptsTab({
                 {a.status === "submitted" ? "Submitted" : "In Progress"}
               </Badge>
             </div>
-
           </div>
         ))}
       </div>
 
-      {/* ── Desktop table (unchanged) ── */}
+      {/* Desktop table */}
       <div className="hidden overflow-hidden rounded-xl border md:block">
         <Table>
           <TableHeader>
@@ -498,31 +519,6 @@ function AttemptsTab({
 
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-
-
-
-function MetaItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode
-  label: string
-  value: string
-}) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-xl border bg-muted/20 p-3.5">
-      <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
-      <div>
-        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <p className="mt-0.5 text-sm font-medium text-foreground">{value}</p>
-      </div>
-    </div>
-  )
-}
-
 
 
 function OverviewTab({
@@ -658,7 +654,6 @@ function OverviewTab({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 
-
 interface Props {
   test: InstituteTestDetail
   onToggleResults?: () => Promise<void>
@@ -667,13 +662,13 @@ interface Props {
 }
 
 
-
 export function InstituteTestDetailClient({
   test,
   onToggleResults,
   onTogglePublish,
   onDeleteTest,
 }: Props) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState("overview")
   const [isPending, startTransition] = useTransition()
 
@@ -684,18 +679,20 @@ export function InstituteTestDetailClient({
 
   return (
     <div className="min-h-screen w-full bg-background">
-      <div className="mx-auto space-y-6 px-6 py-6 md:px-7 md:py-7 lg:px-8 lg:py-8">
+      <div className="mx-auto space-y-6 px-4 py-8 md:px-8">
 
-        {/* ── Header ──────────────────────────────────────────────────────── */}
+        {/* ── Page Header ────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2 min-w-0">
+          <div className="space-y-1 min-w-0">
             {test.institute_name && (
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {test.institute_name}
               </p>
             )}
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold leading-tight sm:text-2xl">{test.title}</h1>
+              <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
+                {test.title}
+              </h1>
               <Badge variant={test.status === "published" ? "default" : "secondary"} className="text-xs">
                 {test.status === "published" ? "Published" : "Draft"}
               </Badge>
@@ -720,6 +717,15 @@ export function InstituteTestDetailClient({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
+
+              {/* ── Edit Test ── */}
+              <DropdownMenuItem onClick={() => router.push(`/~/tests/${test.id}/edit`)}>
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                Edit Test
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
               <DropdownMenuItem onClick={() => run(onTogglePublish)} disabled={isPending}>
                 {test.status === "published" ? (
                   <><EyeOff className="mr-2 h-3.5 w-3.5" />Unpublish</>
@@ -734,12 +740,14 @@ export function InstituteTestDetailClient({
                   <><Eye className="mr-2 h-3.5 w-3.5" />Release Results</>
                 )}
               </DropdownMenuItem>
+
               <DropdownMenuSeparator />
+
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <DropdownMenuItem
+                    variant="destructive"
                     onSelect={(e) => e.preventDefault()}
-                    className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="mr-2 h-3.5 w-3.5" />
                     Delete Test
@@ -756,7 +764,7 @@ export function InstituteTestDetailClient({
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      variant={"destructive"}
                       onClick={() => run(onDeleteTest)}
                     >
                       Delete permanently
@@ -764,6 +772,7 @@ export function InstituteTestDetailClient({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -774,7 +783,7 @@ export function InstituteTestDetailClient({
         {/* ── Tabs ────────────────────────────────────────────────────────── */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="overflow-x-auto">
-            <TabsList className="inline-flex h-auto min-w-max gap-1 rounded-xl bg-muted p-1">
+            <TabsList className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
               {[
                 { value: "overview", label: "Overview", icon: <Info className="h-3.5 w-3.5" />, count: null },
                 { value: "questions", label: "Questions", icon: <ListChecks className="h-3.5 w-3.5" />, count: test.questions.length },
@@ -783,14 +792,19 @@ export function InstituteTestDetailClient({
                 <TabsTrigger
                   key={value}
                   value={value}
-                  className="gap-1.5 rounded-lg px-3 py-1.5 text-sm data-[state=active]:bg-background"
+                  className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   {icon}
                   <span>{label}</span>
                   {count != null && count > 0 && (
-                    <Badge variant="default" className="h-4 min-w-4 px-1 text-[10px]">
+                    <span className={cn(
+                      "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums",
+                      activeTab === value
+                        ? "bg-foreground text-background"
+                        : "bg-muted-foreground/20 text-muted-foreground"
+                    )}>
                       {count}
-                    </Badge>
+                    </span>
                   )}
                 </TabsTrigger>
               ))}

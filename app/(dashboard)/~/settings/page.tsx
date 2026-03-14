@@ -40,5 +40,5 @@ export default async function SettingsPage() {
     )
   }
 
-  redirect("/~/home")   // ← was "/dashboard"
+  redirect("/~/home")
 }
