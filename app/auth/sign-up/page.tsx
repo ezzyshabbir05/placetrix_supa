@@ -1,3 +1,9 @@
+// app/auth/sign-up/page.tsx
+//
+// emailRedirectTo points to /auth/confirm so that the confirmation link
+// in the verification email uses the token_hash flow (cross-device compatible)
+// when the custom email template is configured per /auth/confirm/route.ts.
+
 "use client";
 
 import type React from "react";
@@ -33,26 +39,38 @@ export default function SignUpPage() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password !== confirmPassword) { setError("Passwords do not match"); return; }
-    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
 
     const supabase = createClient();
     setIsLoading(true);
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/~`,
+          // Points to /auth/confirm → token_hash flow (cross-device compatible
+          // when custom email template is configured per /auth/confirm/route.ts).
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=/~`,
         },
       });
 
       if (error) throw error;
 
-      // ── Supabase silently "succeeds" for existing emails.
-      // An existing account always comes back with an empty identities array.
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setError("An account with this email already exists. Sign in instead.");
+      // Supabase silently "succeeds" for existing emails.
+      // An existing account always returns an empty identities array.
+      if (data.user?.identities?.length === 0) {
+        setError(
+          "An account with this email already exists. Sign in instead."
+        );
         return;
       }
 
@@ -64,16 +82,21 @@ export default function SignUpPage() {
     }
   };
 
-
   const handleGoogleSignUp = async () => {
     const supabase = createClient();
     setIsGoogleLoading(true);
     setError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/~` },
+      // OAuth always uses /auth/callback (PKCE) — same-browser, correct.
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/~`,
+      },
     });
-    if (error) { setError(error.message); setIsGoogleLoading(false); }
+    if (error) {
+      setError(error.message);
+      setIsGoogleLoading(false);
+    }
   };
 
   return (
@@ -86,7 +109,9 @@ export default function SignUpPage() {
       </div>
 
       <Button
-        className="w-full" variant="outline" type="button"
+        className="w-full"
+        variant="outline"
+        type="button"
         onClick={handleGoogleSignUp}
         disabled={isGoogleLoading || isLoading}
       >
@@ -107,23 +132,35 @@ export default function SignUpPage() {
 
         <InputGroup>
           <InputGroupInput
-            placeholder="your.email@example.com" type="email"
-            autoComplete="email" required
-            value={email} onChange={(e) => setEmail(e.target.value)}
+            placeholder="your.email@example.com"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
-          <InputGroupAddon align="inline-start"><AtSignIcon /></InputGroupAddon>
+          <InputGroupAddon align="inline-start">
+            <AtSignIcon />
+          </InputGroupAddon>
         </InputGroup>
 
         <InputGroup>
           <InputGroupInput
             placeholder="Password"
             type={showPassword ? "text" : "password"}
-            autoComplete="new-password" required
-            value={password} onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
-          <InputGroupAddon align="inline-start"><LockIcon /></InputGroupAddon>
-          <InputGroupAddon align="inline-end" className="cursor-pointer"
-            onClick={() => setShowPassword((p) => !p)}>
+          <InputGroupAddon align="inline-start">
+            <LockIcon />
+          </InputGroupAddon>
+          <InputGroupAddon
+            align="inline-end"
+            className="cursor-pointer"
+            onClick={() => setShowPassword((p) => !p)}
+          >
             {showPassword ? <EyeOffIcon /> : <EyeIcon />}
           </InputGroupAddon>
         </InputGroup>
@@ -132,12 +169,19 @@ export default function SignUpPage() {
           <InputGroupInput
             placeholder="Confirm password"
             type={showConfirm ? "text" : "password"}
-            autoComplete="new-password" required
-            value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
           />
-          <InputGroupAddon align="inline-start"><LockIcon /></InputGroupAddon>
-          <InputGroupAddon align="inline-end" className="cursor-pointer"
-            onClick={() => setShowConfirm((p) => !p)}>
+          <InputGroupAddon align="inline-start">
+            <LockIcon />
+          </InputGroupAddon>
+          <InputGroupAddon
+            align="inline-end"
+            className="cursor-pointer"
+            onClick={() => setShowConfirm((p) => !p)}
+          >
             {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
           </InputGroupAddon>
         </InputGroup>
@@ -148,23 +192,41 @@ export default function SignUpPage() {
           </p>
         )}
 
-        <Button className="w-full" type="submit" disabled={isLoading || isGoogleLoading}>
+        <Button
+          className="w-full"
+          type="submit"
+          disabled={isLoading || isGoogleLoading}
+        >
           {isLoading ? "Creating account..." : "Create Account"}
         </Button>
       </form>
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/auth/login" className="underline underline-offset-4 hover:text-primary">
+        <Link
+          href="/auth/login"
+          className="underline underline-offset-4 hover:text-primary"
+        >
           Sign in
         </Link>
       </p>
 
       <p className="text-muted-foreground text-xs text-center">
         By signing up, you agree to our{" "}
-        <Link href="/terms" className="underline underline-offset-4 hover:text-primary">Terms</Link>
-        {" "}and{" "}
-        <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">Privacy Policy</Link>.
+        <Link
+          href="/terms"
+          className="underline underline-offset-4 hover:text-primary"
+        >
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link
+          href="/privacy"
+          className="underline underline-offset-4 hover:text-primary"
+        >
+          Privacy Policy
+        </Link>
+        .
       </p>
     </div>
   );
