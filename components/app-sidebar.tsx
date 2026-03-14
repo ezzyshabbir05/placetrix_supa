@@ -33,9 +33,6 @@ import { buildStorageUrl } from "@/lib/storage"
 
 
 
-// ─── Role-based nav definitions ──────────────────────────────────────────────
-
-
 
 type NavItem = {
   title: string
