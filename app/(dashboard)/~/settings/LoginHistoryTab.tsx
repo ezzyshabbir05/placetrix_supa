@@ -30,9 +30,7 @@ import {
   CalendarClock,
 } from "lucide-react"
 
-
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 
 interface SessionEntry {
   id: string
@@ -49,9 +47,7 @@ interface ParsedUA {
   device: "desktop" | "mobile" | "tablet"
 }
 
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 
 function parseUserAgent(ua: string | null): ParsedUA {
   if (!ua) return { browser: "Unknown Browser", os: "Unknown OS", device: "desktop" }
@@ -148,13 +144,14 @@ function DeviceIcon({ device }: { device: "desktop" | "mobile" | "tablet" }) {
   return <Monitor className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
 }
 
+// ── Skeleton: no individual borders, just stacked rows with dividers ──────────
 function SessionSkeleton() {
   return (
-    <div className="space-y-3">
+    <div className="divide-y">
       {[1, 2, 3].map((i) => (
         <div
           key={i}
-          className="flex items-center gap-3 p-3 border rounded-lg"
+          className="flex items-center gap-3 py-3"
           style={{ opacity: 1 - (i - 1) * 0.2 }}
         >
           <div className="h-5 w-5 rounded bg-muted animate-pulse shrink-0" />
@@ -169,9 +166,7 @@ function SessionSkeleton() {
   )
 }
 
-
 // ─── Component ────────────────────────────────────────────────────────────────
-
 
 interface LoginHistoryTabProps {
   supabase: SupabaseClient
@@ -195,23 +190,21 @@ export function LoginHistoryTab({
         data: { session },
       } = await supabase.auth.getSession()
 
-      // ── Guard: no active session ──────────────────────────────────────────
       if (!session?.user?.id) {
         setSessions([])
         return
       }
 
-      const userId = session.user.id // ← current user's UUID
+      const userId = session.user.id
 
       if (session.access_token) {
         setCurrentSessionId(getSessionIdFromJwt(session.access_token))
       }
 
-      // ── Scoped query: only this user's sessions ───────────────────────────
       const { data, error } = await supabase
         .from("user_sessions")
         .select("id, created_at, updated_at, not_after, ip, user_agent")
-        .eq("user_id", userId)          // ← key change
+        .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(20)
 
@@ -232,9 +225,7 @@ export function LoginHistoryTab({
   async function handleRevoke(sessionId: string) {
     setRevokingId(sessionId)
     try {
-      const { error } = await supabase.rpc("revoke_session", {
-        p_session_id: sessionId,
-      })
+      const { error } = await supabase.rpc("revoke_session", { p_session_id: sessionId })
       if (error) throw error
       setSessions((prev) => prev.filter((s) => s.id !== sessionId))
       toast.success("Session revoked successfully.")
@@ -257,9 +248,7 @@ export function LoginHistoryTab({
     let failCount = 0
     for (const s of others) {
       try {
-        const { error } = await supabase.rpc("revoke_session", {
-          p_session_id: s.id,
-        })
+        const { error } = await supabase.rpc("revoke_session", { p_session_id: s.id })
         if (error) throw error
         successCount++
         setSessions((prev) => prev.filter((x) => x.id !== s.id))
@@ -269,9 +258,7 @@ export function LoginHistoryTab({
     }
     setRevokingAll(false)
     if (failCount === 0)
-      toast.success(
-        `${successCount} other session${successCount !== 1 ? "s" : ""} revoked successfully.`
-      )
+      toast.success(`${successCount} other session${successCount !== 1 ? "s" : ""} revoked successfully.`)
     else
       toast.warning(`${successCount} revoked, ${failCount} failed.`)
   }
@@ -287,12 +274,7 @@ export function LoginHistoryTab({
               <CardTitle>Login History</CardTitle>
               <CardDescription>{cardDescription}</CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadSessions}
-              disabled={loading}
-            >
+            <Button variant="outline" size="sm" onClick={loadSessions} disabled={loading}>
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -305,7 +287,7 @@ export function LoginHistoryTab({
 
         <CardContent className="space-y-3">
 
-          {/* ── Revoke-All Banner ───────────────────────────────────────── */}
+          {/* ── Revoke-All Banner ─────────────────────────────────────────── */}
           {!loading && otherCount > 0 && (
             <div className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 gap-3">
               <div className="flex items-center gap-2 min-w-0">
@@ -316,12 +298,7 @@ export function LoginHistoryTab({
               </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={revokingAll}
-                    className="shrink-0"
-                  >
+                  <Button variant="destructive" size="sm" disabled={revokingAll} className="shrink-0">
                     {revokingAll ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
@@ -335,10 +312,8 @@ export function LoginHistoryTab({
                     <AlertDialogTitle>Revoke All Other Sessions?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This will immediately sign out{" "}
-                      <strong>
-                        {otherCount} other device{otherCount !== 1 ? "s" : ""}
-                      </strong>
-                      . Your current session will remain active.
+                      <strong>{otherCount} other device{otherCount !== 1 ? "s" : ""}</strong>.
+                      Your current session will remain active.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -355,127 +330,129 @@ export function LoginHistoryTab({
             </div>
           )}
 
-          {/* ── Loading Skeleton ────────────────────────────────────────── */}
+          {/* ── Loading Skeleton ──────────────────────────────────────────── */}
           {loading && <SessionSkeleton />}
 
-          {/* ── Empty State ─────────────────────────────────────────────── */}
+          {/* ── Empty State ───────────────────────────────────────────────── */}
           {!loading && sessions.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No login history found.
             </p>
           )}
 
-          {/* ── Session Rows ─────────────────────────────────────────────── */}
-          {!loading &&
-            sessions.map((session) => {
-              const { browser, os, device } = parseUserAgent(session.user_agent)
-              const isCurrent = session.id === currentSessionId
-              const expired = isExpired(session.not_after)
-              const expiryLabel = formatExpiryDate(session.not_after)
-              const isRevoking = revokingId === session.id
+          {/* ── Session Rows ──────────────────────────────────────────────── */}
+          {!loading && (
+            // ↓ divide-y replaces the per-row border
+            <div className="divide-y">
+              {sessions.map((session) => {
+                const { browser, os, device } = parseUserAgent(session.user_agent)
+                const isCurrent = session.id === currentSessionId
+                const expired = isExpired(session.not_after)
+                const expiryLabel = formatExpiryDate(session.not_after)
+                const isRevoking = revokingId === session.id
 
-              return (
-                <div
-                  key={session.id}
-                  className={cn(
-                    "flex items-start justify-between gap-3 rounded-lg border p-3 transition-colors",
-                    isCurrent && "border-primary/40 bg-primary/5",
-                    expired && !isCurrent && "opacity-55"
-                  )}
-                >
-                  {/* Left: icon + info */}
-                  <div className="flex items-start gap-3 min-w-0">
-                    <DeviceIcon device={device} />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium">
-                          {browser} · {os}
-                        </p>
-                        {isCurrent && (
-                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            Current
-                          </span>
-                        )}
-                        {expired && (
-                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-                            Expired
-                          </span>
-                        )}
-                      </div>
+                return (
+                  <div
+                    key={session.id}
+                    className={cn(
+                      "flex items-start justify-between gap-3 py-3",
+                      // subtle left accent replaces the full row border for "current"
+                      expired && !isCurrent && "opacity-55"
+                    )}
+                  >
+                    {/* Left: icon + info */}
+                    <div className="flex items-start gap-3 min-w-0">
+                      <DeviceIcon device={device} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">
+                            {browser} · {os}
+                          </p>
+                          {isCurrent && (
+                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                              Current
+                            </span>
+                          )}
+                          {expired && (
+                            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                              Expired
+                            </span>
+                          )}
+                        </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        {session.ip && (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {session.ip && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              {session.ip}
+                            </span>
+                          )}
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            {session.ip}
+                            <Clock className="h-3 w-3" />
+                            Signed in {formatTimeAgo(session.created_at)}
                           </span>
-                        )}
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          Signed in {formatTimeAgo(session.created_at)}
-                        </span>
-                        {session.updated_at &&
-                          session.updated_at !== session.created_at && (
+                          {session.updated_at && session.updated_at !== session.created_at && (
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <RefreshCw className="h-3 w-3" />
                               Active {formatTimeAgo(session.updated_at)}
                             </span>
                           )}
-                        {expiryLabel && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <CalendarClock className="h-3 w-3" />
-                            Expires {expiryLabel}
-                          </span>
-                        )}
+                          {expiryLabel && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <CalendarClock className="h-3 w-3" />
+                              Expires {expiryLabel}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Right: revoke button (hidden for current session) */}
-                  {!isCurrent && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isRevoking || revokingAll}
-                          className="shrink-0 text-destructive hover:border-destructive/50 hover:text-destructive"
-                        >
-                          {isRevoking ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <LogOut className="h-3.5 w-3.5" />
-                          )}
-                          <span className="ml-1.5 hidden sm:inline">Revoke</span>
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Revoke This Session?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            The device using{" "}
-                            <strong>
-                              {browser} on {os}
-                            </strong>
-                            {session.ip ? ` (IP: ${session.ip})` : ""} will be
-                            signed out immediately. This cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => handleRevoke(session.id)}
+                    {/* Right: revoke button */}
+                    {!isCurrent && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isRevoking || revokingAll}
+                            className="shrink-0 text-destructive hover:border-destructive/50 hover:text-destructive"
                           >
-                            Yes, Revoke
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </div>
-              )
-            })}
+                            {isRevoking ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <LogOut className="h-3.5 w-3.5" />
+                            )}
+                            <span className="ml-1.5 hidden sm:inline">Revoke</span>
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Revoke This Session?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              The device using{" "}
+                              <strong>{browser} on {os}</strong>
+                              {session.ip ? ` (IP: ${session.ip})` : ""} will be signed out
+                              immediately. This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => handleRevoke(session.id)}
+                            >
+                              Yes, Revoke
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
         </CardContent>
       </Card>
     </div>

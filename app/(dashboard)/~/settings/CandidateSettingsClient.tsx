@@ -36,8 +36,8 @@ import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
 import { LoginHistoryTab } from "./LoginHistoryTab"
 import { cn } from "@/lib/utils"
 import {
-  User, Lock, CreditCard, Bell, History, Shield,
   Upload, Plus, Minus, Copy, CalendarIcon, Loader2, Camera,
+  CheckCircle2, XCircle, AtSign, Lock,
 } from "lucide-react"
 
 
@@ -67,9 +67,13 @@ const YEAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(2025 - i))
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
 
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid" | "unchanged"
 
 interface InstituteOption {
   profile_id: string
@@ -144,6 +148,29 @@ const TABS: { value: Tab; label: string }[] = [
 ]
 
 
+// ─── Username status indicator ────────────────────────────────────────────────
+
+
+function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
+  if (status === "checking")
+    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+  if (status === "available")
+    return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+  if (status === "taken" || status === "invalid")
+    return <XCircle className="h-4 w-4 text-destructive" />
+  return null
+}
+
+function usernameStatusMessage(status: UsernameStatus): { text: string; className: string } | null {
+  if (status === "checking")   return { text: "Checking availability…",         className: "text-muted-foreground" }
+  if (status === "available")  return { text: "Username is available!",          className: "text-emerald-600 dark:text-emerald-400" }
+  if (status === "taken")      return { text: "Username is already taken.",      className: "text-destructive" }
+  if (status === "invalid")    return { text: "3–20 characters: letters, numbers, underscores only.", className: "text-destructive" }
+  if (status === "unchanged")  return { text: "This is your current username.",  className: "text-muted-foreground" }
+  return null
+}
+
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 
@@ -152,6 +179,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const [isPending, startTransition] = useTransition()
   const [isDirty, setIsDirty] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>("account")
+
+
+  // ── Username ──────────────────────────────────────────────────────────────
+
+  const [username, setUsername]               = useState(userProfile.username ?? "")
+  const [usernameStatus, setUsernameStatus]   = useState<UsernameStatus>("idle")
+  const usernameDebounceRef                   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initialUsername                       = useRef(userProfile.username ?? "")
 
 
   // ── Profile Picture ───────────────────────────────────────────────────────
@@ -278,6 +313,48 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const handleLinkedinUrl       = markDirty(setLinkedinUrl)
   const handleGithubUrl         = markDirty(setGithubUrl)
   const handlePortfolioLinks    = markDirty(setPortfolioLinks)
+
+
+  // ── Username change handler with debounced availability check ─────────────
+
+  function handleUsernameChange(value: string) {
+    const trimmed = value.trim()
+    setUsername(trimmed)
+    setIsDirty(true)
+
+    if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current)
+
+    if (trimmed === "") {
+      setUsernameStatus("idle")
+      return
+    }
+    if (trimmed === initialUsername.current) {
+      setUsernameStatus("unchanged")
+      return
+    }
+    if (!USERNAME_REGEX.test(trimmed)) {
+      setUsernameStatus("invalid")
+      return
+    }
+
+    setUsernameStatus("checking")
+    usernameDebounceRef.current = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("check_username_available", {
+        p_username: trimmed,
+        p_user_id:  userProfile.id,
+      })
+      if (error) {
+        setUsernameStatus("idle")
+        return
+      }
+      setUsernameStatus(data === true ? "available" : "taken")
+    }, 500)
+  }
+
+  // cleanup debounce on unmount
+  useEffect(() => {
+    return () => { if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current) }
+  }, [])
 
 
   // ── Warn on unsaved changes ───────────────────────────────────────────────
@@ -420,6 +497,15 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
+
+    // Username
+    if (username && !USERNAME_REGEX.test(username))
+      e.username = "3–20 characters: letters, numbers, and underscores only."
+    if (usernameStatus === "taken")
+      e.username = "This username is already taken."
+    if (usernameStatus === "checking")
+      e.username = "Please wait for username availability check to complete."
+
     if (!firstName.trim())     e.firstName     = "First name is required"
     if (!lastName.trim())      e.lastName      = "Last name is required"
     if (!gender)               e.gender        = "Gender is required"
@@ -442,6 +528,8 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   // ── Discard ───────────────────────────────────────────────────────────────
 
   function handleDiscard() {
+    setUsername(userProfile.username ?? "")
+    setUsernameStatus("idle")
     setFirstName(initialData?.first_name ?? "")
     setMiddleName(initialData?.middle_name ?? "")
     setLastName(initialData?.last_name ?? "")
@@ -488,6 +576,28 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     }
 
     startTransition(async () => {
+      // ── 1. Update username on profiles table (if changed) ────────────────
+      const trimmedUsername = username.trim() || null
+      if (trimmedUsername !== (userProfile.username ?? null)) {
+        const { error: usernameError } = await supabase
+          .from("profiles")
+          .update({ username: trimmedUsername })
+          .eq("id", userProfile.id)
+
+        if (usernameError) {
+          console.error(usernameError)
+          // Postgres unique violation
+          if (usernameError.code === "23505") {
+            setErrors((prev) => ({ ...prev, username: "This username is already taken." }))
+            setUsernameStatus("taken")
+          } else {
+            toast.error("Failed to update username. Please try again.")
+          }
+          return
+        }
+      }
+
+      // ── 2. Upsert candidate profile ──────────────────────────────────────
       const isFirstSave = !initialData?.profile_updated
       const payload: Record<string, any> = {
         profile_id:         userProfile.id,
@@ -537,6 +647,11 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
       } else {
         toast.success("Profile saved successfully!")
         setIsDirty(false)
+        // Keep username status as unchanged after a successful save
+        if (trimmedUsername) {
+          initialUsername.current = trimmedUsername
+          setUsernameStatus("unchanged")
+        }
       }
     })
   }
@@ -545,6 +660,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   const instituteNames = institutes.map((i) => i.institute_name)
+  const usernameMsg    = usernameStatusMessage(usernameStatus)
 
   return (
     <div className="min-h-screen w-full">
@@ -582,6 +698,58 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               ACCOUNT TAB
           ════════════════════════════════════════════════════════════════ */}
           <TabsContent value="account" className="space-y-6 mt-0">
+
+            {/* ── Account Settings (Username) ── */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Account Settings</CardTitle>
+                <CardDescription>
+                  Your unique username is used to identify you on the platform
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="max-w-sm space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <div className="relative">
+                    <AtSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="username"
+                      placeholder="your_username"
+                      className={cn(
+                        "pl-9 pr-9",
+                        !!initialUsername.current && "cursor-not-allowed opacity-60",
+                        errors.username && "border-destructive focus-visible:ring-destructive"
+                      )}
+                      value={username}
+                      maxLength={20}
+                      readOnly={!!initialUsername.current}
+                      disabled={!!initialUsername.current}
+                      onChange={(e) => handleUsernameChange(e.target.value.replace(/\s/g, ""))}
+                      autoComplete="username"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {initialUsername.current
+                        ? null
+                        : <UsernameStatusIcon status={usernameStatus} />
+                      }
+                    </span>
+                  </div>
+                  {initialUsername.current
+                    ? <p className="text-xs text-muted-foreground">Username cannot be changed once set.</p>
+                    : errors.username
+                      ? <FieldError message={errors.username} />
+                      : usernameMsg && (
+                          <p className={cn("text-xs", usernameMsg.className)}>{usernameMsg.text}</p>
+                        )
+                  }
+                  {!initialUsername.current && (
+                    <p className="text-xs text-muted-foreground">
+                      3–20 characters · letters, numbers, and underscores only · cannot be changed after saving
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* ── Profile Photo ── */}
             <Card>

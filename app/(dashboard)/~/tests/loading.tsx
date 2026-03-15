@@ -52,12 +52,12 @@ export default function TestsLoading() {
       </div>
 
       {/* Tab Bar */}
-      <div className="overflow-x-auto px-4 pt-5 md:px-8">
-        <div className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
+      <div className="overflow-hidden px-4 pt-5 md:px-8">
+        <div className="flex h-9 gap-0.5 rounded-lg bg-muted p-1">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton
               key={i}
-              className="h-7 rounded-md"
+              className="h-7 shrink-0 rounded-md"
               style={{ width: `${[52, 52, 76, 52, 60][i]}px` }}
             />
           ))}
