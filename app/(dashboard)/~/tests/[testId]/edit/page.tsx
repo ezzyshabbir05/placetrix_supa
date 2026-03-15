@@ -22,7 +22,7 @@ export default async function TestEditorPage({ params }: Props) {
   } = await supabase.auth.getUser()
   if (!user) redirect("/auth/login")
 
-  // ── Account-type guard ──────────────────────────────────────────────────────
+  // ── Account-type guard (must resolve before parallel fetches) ───────────────
   const { data: profile } = await supabase
     .from("profiles")
     .select("account_type")
@@ -31,15 +31,13 @@ export default async function TestEditorPage({ params }: Props) {
 
   if (profile?.account_type !== "institute") redirect("/~/tests")
 
-  // ── Tags ────────────────────────────────────────────────────────────────────
-  const { data: tags } = await supabase
-    .from("tags")
-    .select("id, name")
-    .order("name")
-
-  // ── Determine mode ──────────────────────────────────────────────────────────
+  // ── Parallel fetches: tags + test data are independent of each other ─────────
   const isNew = testId === "new"
-  const initialData = isNew ? null : await loadTestAction(testId, user.id)
+
+  const [{ data: tags }, initialData] = await Promise.all([
+    supabase.from("tags").select("id, name").order("name"),
+    isNew ? Promise.resolve(null) : loadTestAction(testId, user.id),
+  ])
 
   // Bounce if editing a test that doesn't exist or belongs to someone else
   if (!isNew && !initialData) redirect("/~/tests")

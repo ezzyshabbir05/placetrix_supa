@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 
+
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
 export type SettingsForm = {
@@ -54,6 +55,7 @@ export type InitialTestData = {
   status: "draft" | "published"
 }
 
+
 // ─── Core upsert helper ───────────────────────────────────────────────────────
 
 async function saveTestToDb(
@@ -65,6 +67,18 @@ async function saveTestToDb(
 ): Promise<void> {
   const supabase = await createClient()
 
+  // Ownership guard: if test already exists it must belong to this user
+  const { data: existing } = await supabase
+    .from("tests")
+    .select("institute_id")
+    .eq("id", testId)
+    .maybeSingle()
+
+  if (existing && existing.institute_id !== userId) {
+    throw new Error("Access denied.")
+  }
+
+  // 1. Upsert the test record
   const { error: testError } = await supabase.from("tests").upsert(
     {
       id: testId,
@@ -83,30 +97,57 @@ async function saveTestToDb(
   )
   if (testError) throw new Error("Failed to save test: " + testError.message)
 
+  // 2. Fetch existing question IDs so we can diff
+  const { data: existingRows } = await supabase
+    .from("questions")
+    .select("id")
+    .eq("test_id", testId)
+
+  const existingIds = new Set((existingRows ?? []).map((r) => r.id as string))
+  const incomingIds = new Set(questions.map((q) => q.id))
+
+  // 3. Delete only questions that the user removed
+  const removedIds = [...existingIds].filter((id) => !incomingIds.has(id))
+  if (removedIds.length > 0) {
+    const { error: delError } = await supabase
+      .from("questions")
+      .delete()
+      .in("id", removedIds)
+    if (delError) throw new Error("Failed to delete removed questions: " + delError.message)
+  }
+
   if (questions.length === 0) return
 
-  const { error: delError } = await supabase
+  // 4. Upsert questions WITH their existing `id`
+  //    → existing questions are UPDATED in-place (same UUID preserved)
+  //    → new questions are INSERTED with the client-generated UUID
+  const { data: upsertedQuestions, error: qError } = await supabase
     .from("questions")
-    .delete()
-    .eq("test_id", testId)
-  if (delError) throw new Error("Failed to clear old questions: " + delError.message)
-
-  const { data: insertedQuestions, error: qError } = await supabase
-    .from("questions")
-    .insert(
+    .upsert(
       questions.map((q, i) => ({
+        id: q.id,
         test_id: testId,
         question_text: q.question_text,
         question_type: q.question_type,
         marks: q.marks,
         order_index: i + 1,
         explanation: q.explanation?.trim() || null,
-      }))
+      })),
+      { onConflict: "id" }
     )
     .select("id, order_index")
 
-  if (qError || !insertedQuestions)
-    throw new Error("Failed to insert questions: " + (qError?.message ?? "unknown"))
+  if (qError || !upsertedQuestions)
+    throw new Error("Failed to upsert questions: " + (qError?.message ?? "unknown"))
+
+  // 5. Rebuild options: delete + re-insert (safe — no external FKs to options)
+  const questionIds = upsertedQuestions.map((q) => q.id)
+
+  const { error: delOptError } = await supabase
+    .from("options")
+    .delete()
+    .in("question_id", questionIds)
+  if (delOptError) throw new Error("Failed to clear options: " + delOptError.message)
 
   const optionsPayload: {
     question_id: string
@@ -115,7 +156,7 @@ async function saveTestToDb(
     order_index: number
   }[] = []
 
-  for (const dbQ of insertedQuestions) {
+  for (const dbQ of upsertedQuestions) {
     const localQ = questions[dbQ.order_index - 1]
     if (!localQ) continue
     localQ.options.forEach((opt, oi) => {
@@ -132,6 +173,13 @@ async function saveTestToDb(
     const { error: optError } = await supabase.from("options").insert(optionsPayload)
     if (optError) throw new Error("Failed to insert options: " + optError.message)
   }
+
+  // 6. Rebuild question_tags: delete + re-insert
+  const { error: delQtError } = await supabase
+    .from("question_tags")
+    .delete()
+    .in("question_id", questionIds)
+  if (delQtError) throw new Error("Failed to clear question tags: " + delQtError.message)
 
   const allTagNames = [
     ...new Set(
@@ -155,7 +203,7 @@ async function saveTestToDb(
 
     const questionTagsPayload: { question_id: string; tag_id: string }[] = []
 
-    for (const dbQ of insertedQuestions) {
+    for (const dbQ of upsertedQuestions) {
       const localQ = questions[dbQ.order_index - 1]
       if (!localQ) continue
       for (const tagName of localQ.tag_names) {
@@ -172,6 +220,7 @@ async function saveTestToDb(
     }
   }
 }
+
 
 // ─── Load test for editing ────────────────────────────────────────────────────
 
@@ -193,7 +242,7 @@ export async function loadTestAction(
       )
     `)
     .eq("id", testId)
-    .eq("institute_id", userId)   // ownership check
+    .eq("institute_id", userId)
     .single()
 
   if (!test) return null
@@ -233,6 +282,7 @@ export async function loadTestAction(
   }
 }
 
+
 // ─── Save Draft ───────────────────────────────────────────────────────────────
 
 export async function saveDraftAction(
@@ -250,6 +300,7 @@ export async function saveDraftAction(
   revalidatePath("/~/tests")
 }
 
+
 // ─── Publish Test ─────────────────────────────────────────────────────────────
 
 export async function publishTestAction(
@@ -260,6 +311,13 @@ export async function publishTestAction(
   if (!settings.title.trim()) throw new Error("Title is required.")
   if (questions.length === 0)
     throw new Error("Add at least one question before publishing.")
+  if (
+    settings.available_from &&
+    settings.available_until &&
+    settings.available_from >= settings.available_until
+  ) {
+    throw new Error('"Available Until" must be after "Available From".')
+  }
 
   const supabase = await createClient()
   const {
@@ -271,6 +329,7 @@ export async function publishTestAction(
   revalidatePath("/~/tests")
   redirect(`/~/tests/${testId}`)
 }
+
 
 // ─── AI Question Generation ───────────────────────────────────────────────────
 

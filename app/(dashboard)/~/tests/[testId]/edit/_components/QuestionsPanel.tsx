@@ -4,9 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  PlusCircle, Sparkles, Upload, Trash2, Pencil, GripVertical
-} from "lucide-react"
+import { PlusCircle, Sparkles, Upload, Trash2, Pencil } from "lucide-react"
 import { QuestionSheet } from "./QuestionSheet"
 import { AiGenerateSheet } from "./AiGenerateSheet"
 import { ImportSheet } from "./ImportSheet"
@@ -64,6 +62,7 @@ export function QuestionsPanel({
     setQuestionSheetOpen(false)
   }
 
+  // ── AI import handler ───────────────────────────────────────────────────────
   function handleAiImport(forms: QuestionForm[]) {
     const newLocals: LocalQuestion[] = forms.map((form, i) => ({
       id: crypto.randomUUID(),
@@ -77,6 +76,22 @@ export function QuestionsPanel({
     }))
     setQuestions((prev) => [...prev, ...newLocals])
     setAiSheetOpen(false)
+  }
+
+  // ── JSON import handler (separate from AI) ──────────────────────────────────
+  function handleJsonImport(forms: QuestionForm[]) {
+    const newLocals: LocalQuestion[] = forms.map((form, i) => ({
+      id: crypto.randomUUID(),
+      question_text: form.question_text,
+      question_type: form.question_type,
+      marks: parseFloat(form.marks) || 1,
+      order_index: questions.length + i + 1,
+      explanation: form.explanation,
+      tag_names: form.tag_names,
+      options: form.options,
+    }))
+    setQuestions((prev) => [...prev, ...newLocals])
+    setImportSheetOpen(false)
   }
 
   function handleDelete(id: string) {
@@ -142,8 +157,7 @@ export function QuestionsPanel({
                   key={q.id}
                   className="flex items-start gap-3 rounded-lg border bg-card p-3"
                 >
-                  <GripVertical className="mt-0.5 size-4 shrink-0 text-muted-foreground/40" />
-                  <span className="mt-0.5 text-xs font-medium text-muted-foreground w-5 shrink-0">
+                  <span className="mt-0.5 w-5 shrink-0 text-center text-xs font-medium text-muted-foreground">
                     {idx + 1}.
                   </span>
                   <div className="min-w-0 flex-1 space-y-1">
@@ -187,9 +201,11 @@ export function QuestionsPanel({
         </CardContent>
       </Card>
 
+      {/* ── Question add/edit sheet — mode prop now correctly passed ── */}
       <QuestionSheet
         open={questionSheetOpen}
         onOpenChange={setQuestionSheetOpen}
+        mode={editingQuestion ? "edit" : "add"}
         defaultValues={
           editingQuestion
             ? {
@@ -213,10 +229,11 @@ export function QuestionsPanel({
         onImport={handleAiImport}
       />
 
+      {/* ── ImportSheet now uses its own dedicated handler ── */}
       <ImportSheet
         open={importSheetOpen}
         onOpenChange={setImportSheetOpen}
-        onImport={handleAiImport}
+        onImport={handleJsonImport}
       />
     </>
   )

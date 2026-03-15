@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
 import type { SettingsForm } from "../actions"
 
 interface Props {
@@ -26,6 +26,11 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
   const set = (key: keyof SettingsForm) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const dateRangeInvalid =
+    !!form.available_from &&
+    !!form.available_until &&
+    form.available_from >= form.available_until
 
   return (
     <Card>
@@ -80,31 +85,40 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="available_from">Available From</Label>
-            <Input
-              id="available_from"
-              type="datetime-local"
-              value={form.available_from}
-              onChange={set("available_from")}
-            />
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="available_from">Available From</Label>
+              <Input
+                id="available_from"
+                type="datetime-local"
+                value={form.available_from}
+                onChange={set("available_from")}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="available_until">Available Until</Label>
+              <Input
+                id="available_until"
+                type="datetime-local"
+                value={form.available_until}
+                onChange={set("available_until")}
+              />
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="available_until">Available Until</Label>
-            <Input
-              id="available_until"
-              type="datetime-local"
-              value={form.available_until}
-              onChange={set("available_until")}
-            />
-          </div>
+          {/* Date range validation warning */}
+          {dateRangeInvalid && (
+            <p className="flex items-center gap-1.5 text-xs text-destructive">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              "Available Until" must be after "Available From".
+            </p>
+          )}
         </div>
 
         <div className="pt-1">
           <Button
             size="sm"
-            disabled={isSaving || !form.title.trim()}
+            disabled={isSaving || !form.title.trim() || dateRangeInvalid}
             onClick={() => onSave(form)}
           >
             {isSaving && <Loader2 className="mr-2 size-4 animate-spin" />}
