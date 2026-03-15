@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
   // param gives the reset-password page its own layer of confirmation.
   if (type === "recovery") {
     return NextResponse.redirect(
-      `${origin}/auth/reset-password?mode=recovery`
+      `${origin}/auth/change-password?mode=recovery`
     );
   }
 

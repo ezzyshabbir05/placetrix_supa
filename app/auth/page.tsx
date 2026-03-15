@@ -1,3 +1,5 @@
-export default function Page(){
-    return <>404</>
+import { redirect } from "next/navigation"
+
+export default function AuthenticationRoutePage() {
+  redirect("/auth/login")
 }
