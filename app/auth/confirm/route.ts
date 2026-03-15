@@ -28,18 +28,19 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const { searchParams, origin } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = searchParams.get("next") ?? "/~";
 
   if (!token_hash || !type) {
-    redirect(
-      `/auth/error?error=${encodeURIComponent("Invalid verification link — missing token or type")}`
+    return NextResponse.redirect(
+      `${origin}/auth/error?error=${encodeURIComponent(
+        "Invalid verification link — missing token or type"
+      )}`
     );
   }
 
@@ -47,16 +48,23 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.auth.verifyOtp({ type, token_hash });
 
   if (error) {
-    redirect(
-      `/auth/error?error=${encodeURIComponent(error.message)}`
+    return NextResponse.redirect(
+      `${origin}/auth/error?error=${encodeURIComponent(error.message)}`
     );
   }
 
   // Recovery tokens always go to the password reset page so the user
   // can immediately set a new password within the established session.
+  //
+  // ?mode=recovery tells the reset-password page that this visit came via a
+  // legitimate reset link (not a logged-in user who navigated here directly).
+  // The auth layout's recovery exception also uses the pathname — the query
+  // param gives the reset-password page its own layer of confirmation.
   if (type === "recovery") {
-    redirect("/auth/reset-password");
+    return NextResponse.redirect(
+      `${origin}/auth/reset-password?mode=recovery`
+    );
   }
 
-  redirect(next);
+  return NextResponse.redirect(`${origin}${next}`);
 }

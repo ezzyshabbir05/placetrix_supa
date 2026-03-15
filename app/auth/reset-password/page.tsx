@@ -8,9 +8,11 @@
 //     On success → shows "check your email" confirmation.
 //
 //   Step 2 — Recovery session present (user arrived via email link):
-//     /auth/confirm verified the token_hash server-side (cross-device ✓)
-//     and established a recovery session in cookies before redirecting here.
-//     Page detects the session and shows the "set new password" form.
+//     /auth/confirm verified the token_hash server-side (cross-device ✓),
+//     established a recovery session in cookies, and redirected here with
+//     ?mode=recovery before redirecting here.
+//     Page detects BOTH the session AND ?mode=recovery and shows the
+//     "set new password" form.
 //     On submit → calls supabase.auth.updateUser({ password }).
 //     Signs out to invalidate the recovery session, then shows success.
 //
@@ -19,8 +21,9 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -47,7 +50,34 @@ type PageState =
   | "expired"
   | "success";
 
+// ── Suspense wrapper ─────────────────────────────────────────────────────────
+// useSearchParams() requires a Suspense boundary in Next.js App Router.
+// The outer export provides it; all logic lives in ResetPasswordContent.
+
 export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex sm:w-sm items-center justify-center py-12">
+          <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+// ── Page content ─────────────────────────────────────────────────────────────
+
+function ResetPasswordContent() {
+  const searchParams = useSearchParams();
+
+  // true only when the user arrived via /auth/confirm?type=recovery.
+  // Prevents logged-in users who navigate here directly from seeing the
+  // password form — they should use the email flow to get a proper link.
+  const isRecoveryMode = searchParams.get("mode") === "recovery";
+
   const [pageState, setPageState] = useState<PageState>("loading");
 
   // Email form state
@@ -63,10 +93,15 @@ export default function ResetPasswordPage() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // On mount: check for an active recovery session.
-  // If one exists, the user arrived here via their reset email link
-  // (token was already verified by /auth/confirm), so show the password form.
-  // If not, show the email-request form.
+  // On mount: show the password form only when BOTH conditions are true:
+  //   1. An active session exists (set by /auth/confirm's verifyOtp call)
+  //   2. ?mode=recovery is present (we arrived via a legitimate reset link)
+  //
+  // Checking both prevents two edge cases:
+  //   - A logged-in user navigating to /auth/reset-password directly
+  //     (session ✓ but no mode param → email-form, correct)
+  //   - A logged-out user who somehow has mode=recovery in the URL
+  //     (mode ✓ but no session → email-form, correct — updateUser would fail anyway)
   useEffect(() => {
     const checkSession = async () => {
       const supabase = createClient();
@@ -74,14 +109,14 @@ export default function ResetPasswordPage() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (session) {
+      if (session && isRecoveryMode) {
         setPageState("password-form");
       } else {
         setPageState("email-form");
       }
     };
     checkSession();
-  }, []);
+  }, [isRecoveryMode]);
 
   // ── Step 1: Send reset email ─────────────────────────────────────────────
   const handleSendEmail = async (e: React.FormEvent) => {
@@ -258,8 +293,11 @@ export default function ResetPasswordPage() {
             Please request a new one.
           </p>
         </div>
-        <Button asChild className="w-full" onClick={() => setPageState("email-form")}>
-          <span>Request New Link</span>
+        <Button
+          className="w-full"
+          onClick={() => setPageState("email-form")}
+        >
+          Request New Link
         </Button>
         <Button asChild variant="outline" className="w-full">
           <Link href="/auth/login">Back to Sign In</Link>

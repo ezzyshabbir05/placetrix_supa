@@ -22,7 +22,15 @@ function isProtected(pathname: string): boolean {
 // ─── Session updater ──────────────────────────────────────────────────────────
 
 export async function updateSession(request: NextRequest) {
-    let supabaseResponse = NextResponse.next({ request })
+    // Forward pathname so Server Layouts can read it via headers().
+    // This is needed for the /auth/layout.tsx recovery-flow exception —
+    // the layout has no other way to know the current route.
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-pathname", request.nextUrl.pathname)
+
+    let supabaseResponse = NextResponse.next({
+        request: { headers: requestHeaders },
+    })
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,7 +44,11 @@ export async function updateSession(request: NextRequest) {
                     cookiesToSet.forEach(({ name, value }) =>
                         request.cookies.set(name, value),
                     )
-                    supabaseResponse = NextResponse.next({ request })
+                    // Re-create response with the forwarded headers so
+                    // x-pathname is not lost when cookies are refreshed.
+                    supabaseResponse = NextResponse.next({
+                        request: { headers: requestHeaders },
+                    })
                     cookiesToSet.forEach(({ name, value, options }) =>
                         supabaseResponse.cookies.set(name, value, options),
                     )

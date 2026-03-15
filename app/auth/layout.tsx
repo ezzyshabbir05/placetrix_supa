@@ -1,6 +1,5 @@
-// app/auth/layout.tsx
-
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import { FloatingPaths } from "@/components/ui/auth_page/floating-paths";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -26,14 +25,26 @@ export default async function AuthLayout({
   //   Offline + valid JWT → correctly kicked to /~/ → renders via offline fallback ✓
   //   Online + valid JWT  → correctly kicked to ~/  → renders normally ✓
   //   Online + no session → stays on /auth/* ✓
-  //
-  // Exception: /auth/reset-password needs an active recovery session to work,
-  // so we intentionally do NOT redirect away from it even for authenticated
-  // users. The reset-password page handles its own session validation.
   // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Recovery-flow exception ───────────────────────────────────────────────
+  //
+  // /auth/confirm verifies the recovery token server-side via verifyOtp(),
+  // which creates a FULL authenticated session before redirecting here.
+  // Without this exception, that valid session would be caught by the
+  // redirect below and send the user to /~ instead of the password form.
+  //
+  // We read the pathname from the x-pathname header forwarded by middleware
+  // (lib/supabase/proxy.ts) since layouts have no direct access to the URL.
+  // ─────────────────────────────────────────────────────────────────────────
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") ?? "";
+  const isRecoveryRoute = pathname.startsWith("/auth/reset-password");
+
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
-  if (claimsData?.claims) redirect("/~");
+
+  if (claimsData?.claims && !isRecoveryRoute) redirect("/~");
 
   return (
     <main className="relative md:h-screen md:overflow-hidden lg:grid lg:grid-cols-2">
