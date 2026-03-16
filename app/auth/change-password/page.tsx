@@ -1,21 +1,25 @@
 // app/auth/change-password/page.tsx
 //
-// Step 2 of the password reset flow.
+// Fallback for the LINK-based recovery flow only.
 //
-// The user arrives here after /auth/confirm verifies their recovery token,
-// establishes a session via verifyOtp(), and redirects with ?mode=recovery.
+// Users arrive here when they click a password reset link in their email
+// (rather than entering an OTP code). The flow is:
+//
+//   /auth/confirm verifies the token_hash server-side → session established
+//   → redirects here with ?mode=recovery
+//
+// The primary reset flow is now OTP-based via /auth/reset-password.
+// This page exists for users who click links from older email templates,
+// or if you have "link + code" in the same template.
 //
 // Session check on mount:
 //   session + mode=recovery  → password-form   (correct path ✓)
 //   session + no mode param  → redirect to /auth/reset-password
-//                              (logged-in user navigated here directly —
-//                               we never silently update a live account)
 //   no session               → expired         (link already used / invalid)
 //
 // On success: signs out to invalidate the one-time recovery session.
 //
 // States: loading → password-form | expired | success
-
 "use client";
 
 import type React from "react";
@@ -29,12 +33,12 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import {
+  CheckCircleIcon,
   EyeIcon,
   EyeOffIcon,
-  LockIcon,
-  CheckCircleIcon,
-  ShieldAlertIcon,
   Loader2Icon,
+  LockIcon,
+  ShieldAlertIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -64,61 +68,61 @@ function ChangePasswordContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // ── Session check ──────────────────────────────────────────────────────────
   useEffect(() => {
     const checkSession = async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
 
       if (session && isRecoveryMode) {
         setPageState("password-form");
       } else if (session && !isRecoveryMode) {
-        // Authenticated user who navigated here directly — bounce them back.
+        // Authenticated user who navigated here directly — bounce back.
         router.replace("/auth/reset-password");
       } else {
         // No session: link expired, already used, or never valid.
         setPageState("expired");
       }
     };
+
     checkSession();
   }, [isRecoveryMode, router]);
 
+  // ── Update password ────────────────────────────────────────────────────────
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPasswordError(null);
+    setError(null);
 
     if (password !== confirmPassword) {
-      setPasswordError("Passwords do not match");
+      setError("Passwords do not match");
       return;
     }
     if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
+      setError("Password must be at least 6 characters");
       return;
     }
 
     const supabase = createClient();
-    setPasswordLoading(true);
+    setIsLoading(true);
 
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+
       // Invalidate the recovery session so the link cannot be reused.
       await supabase.auth.signOut();
       setPageState("success");
     } catch (err: unknown) {
-      setPasswordError(
-        err instanceof Error ? err.message : "An error occurred"
-      );
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
-      setPasswordLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // ── Loading ────────────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (pageState === "loading") {
     return (
       <div className="mx-auto flex sm:w-sm items-center justify-center py-12">
@@ -127,7 +131,7 @@ function ChangePasswordContent() {
     );
   }
 
-  // ── Expired ────────────────────────────────────────────────────────────
+  // ── Expired ────────────────────────────────────────────────────────────────
   if (pageState === "expired") {
     return (
       <div className="mx-auto space-y-4 sm:w-sm text-center">
@@ -142,7 +146,7 @@ function ChangePasswordContent() {
           </p>
         </div>
         <Button asChild className="w-full">
-          <Link href="/auth/reset-password">Request New Link</Link>
+          <Link href="/auth/reset-password">Request New Reset</Link>
         </Button>
         <Button asChild variant="outline" className="w-full">
           <Link href="/auth/login">Back to Sign In</Link>
@@ -151,7 +155,7 @@ function ChangePasswordContent() {
     );
   }
 
-  // ── Success ────────────────────────────────────────────────────────────
+  // ── Success ────────────────────────────────────────────────────────────────
   if (pageState === "success") {
     return (
       <div className="mx-auto space-y-4 sm:w-sm text-center">
@@ -159,9 +163,7 @@ function ChangePasswordContent() {
           <CheckCircleIcon className="h-7 w-7 text-green-500" />
         </div>
         <div className="space-y-1">
-          <h1 className="font-bold text-2xl tracking-wide">
-            Password Updated!
-          </h1>
+          <h1 className="font-bold text-2xl tracking-wide">Password Updated!</h1>
           <p className="text-base text-muted-foreground">
             Your password has been reset successfully. Sign in with your new
             password to continue.
@@ -174,7 +176,7 @@ function ChangePasswordContent() {
     );
   }
 
-  // ── Password form ──────────────────────────────────────────────────────
+  // ── Password form ──────────────────────────────────────────────────────────
   return (
     <div className="mx-auto space-y-4 sm:w-sm">
       <div className="flex flex-col space-y-1">
@@ -231,14 +233,14 @@ function ChangePasswordContent() {
           Must be at least 6 characters.
         </p>
 
-        {passwordError && (
+        {error && (
           <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2">
-            {passwordError}
+            {error}
           </p>
         )}
 
-        <Button className="w-full" type="submit" disabled={passwordLoading}>
-          {passwordLoading ? (
+        <Button className="w-full" type="submit" disabled={isLoading}>
+          {isLoading ? (
             <>
               <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
               Updating...

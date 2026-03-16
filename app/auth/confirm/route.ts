@@ -1,9 +1,17 @@
 // app/auth/confirm/route.ts
 //
-// Handles ALL email-based verification flows using token_hash (OTP method).
-// This is DEVICE-INDEPENDENT — unlike the PKCE code flow used for OAuth,
-// token_hash verification requires no stored verifier, so links work from
-// any device or browser.
+// Fallback handler for LINK-based email verification flows (token_hash / OTP method).
+//
+// This route is NOT part of the primary OTP flow — users entering a 6-digit
+// code in the UI are verified client-side via supabase.auth.verifyOtp().
+//
+// This route handles cases where:
+//   - A user clicks a link in an older-style email template
+//   - Your email template contains both a code and a link ({{ .ConfirmationURL }})
+//   - You need cross-device link support as a fallback
+//
+// This is DEVICE-INDEPENDENT — unlike PKCE code flow used for OAuth,
+// token_hash requires no stored verifier, so links work from any device.
 //
 // Handles:
 //   - Email address confirmation after sign-up  (type=signup)
@@ -11,19 +19,19 @@
 //   - Email change confirmation                 (type=email_change)
 //   - Magic link sign-in                        (type=magiclink)
 //
-// ── Required Supabase Email Template Configuration ────────────────────────────
+// ── Supabase Email Template Configuration (link-based fallback) ───────────────
 //
-// For cross-device support, update your Supabase email templates in:
-//   Dashboard → Authentication → Email Templates
+// If you want to support BOTH OTP codes and clickable links in the same email,
+// include both {{ .Token }} and {{ .ConfirmationURL }} in your template:
 //
-// Confirm signup template — "Confirm your mail" action URL:
-//   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/~
+// Confirm signup:
+//   Your code: {{ .Token }}
+//   Or click: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/~
 //
-// Reset password template — "Reset Password" action URL:
-//   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/auth/reset-password
+// Reset password:
+//   Your code: {{ .Token }}
+//   Or click: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery
 //
-// This bypasses Supabase's own verification redirect (which adds a PKCE code)
-// and sends the token_hash directly to your app, enabling cross-device use.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "@/lib/supabase/server";
@@ -56,10 +64,8 @@ export async function GET(request: NextRequest) {
   // Recovery tokens always go to the password reset page so the user
   // can immediately set a new password within the established session.
   //
-  // ?mode=recovery tells the reset-password page that this visit came via a
+  // ?mode=recovery tells change-password that this visit came via a
   // legitimate reset link (not a logged-in user who navigated here directly).
-  // The auth layout's recovery exception also uses the pathname — the query
-  // param gives the reset-password page its own layer of confirmation.
   if (type === "recovery") {
     return NextResponse.redirect(
       `${origin}/auth/change-password?mode=recovery`
