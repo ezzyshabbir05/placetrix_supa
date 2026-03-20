@@ -1,86 +1,76 @@
-import { createServerClient } from "@supabase/ssr"
-import { NextResponse, type NextRequest } from "next/server"
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import type { Database } from "@/types/supabase";
 
-// ─── Route config ─────────────────────────────────────────────────────────────
+// ─── Route configuration ───────────────────────────────────────────────────────
 
-const PROTECTED_PREFIXES = ["/~/"] as const
+const PROTECTED_PREFIXES = ["/~/"] as const;
+const PUBLIC_PREFIXES    = ["/auth/", "/_next/", "/favicon.ico"] as const;
 
-const PUBLIC_PREFIXES = [
-    "/auth/",
-    "/_next/",
-    "/favicon.ico",
-] as const
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function isProtected(pathname: string): boolean {
-    const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
-    if (isPublic) return false
-    return PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
+function isProtectedRoute(pathname: string): boolean {
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return false;
+  return PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
-// ─── Session updater ──────────────────────────────────────────────────────────
+function buildLoginRedirect(request: NextRequest): NextResponse {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/auth/login";
+  loginUrl.searchParams.set("next", request.nextUrl.pathname);
+  return NextResponse.redirect(loginUrl);
+}
 
-export async function updateSession(request: NextRequest) {
-    // Forward pathname so Server Layouts can read it via headers().
-    // This is needed for the /auth/layout.tsx recovery-flow exception —
-    // the layout has no other way to know the current route.
-    const requestHeaders = new Headers(request.headers)
-    requestHeaders.set("x-pathname", request.nextUrl.pathname)
+// ─── updateSession ─────────────────────────────────────────────────────────────
 
-    let supabaseResponse = NextResponse.next({
-        request: { headers: requestHeaders },
-    })
+export async function updateSession(request: NextRequest): Promise<NextResponse> {
+  const requestHeaders = new Headers(request.headers);
+  // Forward pathname for server layouts (e.g. auth recovery-flow exceptions).
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
 
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-        {
-            cookies: {
-                getAll() {
-                    return request.cookies.getAll()
-                },
-                setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value }) =>
-                        request.cookies.set(name, value),
-                    )
-                    // Re-create response with the forwarded headers so
-                    // x-pathname is not lost when cookies are refreshed.
-                    supabaseResponse = NextResponse.next({
-                        request: { headers: requestHeaders },
-                    })
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options),
-                    )
-                },
-            },
+  let supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll(cookiesToSet) {
+          for (const { name, value } of cookiesToSet) {
+            request.cookies.set(name, value);
+          }
+          // Re-create response to preserve x-pathname header after cookie refresh.
+          supabaseResponse = NextResponse.next({
+            request: { headers: requestHeaders },
+          });
+          for (const { name, value, options } of cookiesToSet) {
+            supabaseResponse.cookies.set(name, value, options);
+          }
         },
-    )
+      },
+    },
+  );
 
-    // ── Why getClaims() only, never getUser() here ────────────────────────────
-    //
-    // getUser() makes a live network request on EVERY middleware execution.
-    // Offline or flaky connections cause it to fail → false logout → loop.
-    //
-    // getClaims() verifies the JWT locally via WebCrypto against the cached
-    // JWKS public key (asymmetric signing key). No network required after the
-    // initial key fetch. It also returns null for expired tokens, so expiry
-    // is still enforced correctly.
-    //
-    // Server-side revocations (a rare event) are caught one request later
-    // inside getUserProfile() where getUser() IS called and we handle its
-    // errors properly without causing a redirect loop.
-    // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * ── getClaims() only — never getUser() in middleware ─────────────────────
+   *
+   * getClaims() verifies the JWT locally against the cached JWKS public key
+   * (asymmetric signing). Zero network round-trips after the initial key fetch.
+   * getUser() hits the Auth server on EVERY middleware invocation — thousands
+   * of requests/sec on a busy app. [web:6][web:12]
+   *
+   * Revoked sessions are caught on the next protected page render inside
+   * getUserProfile() where getUser() IS called and errors are handled safely.
+   */
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const isAuthenticated = !!claimsData?.claims;
 
-    const { data: claimsData } = await supabase.auth.getClaims()
-    const authenticated = !!claimsData?.claims
+  if (isProtectedRoute(request.nextUrl.pathname) && !isAuthenticated) {
+    return buildLoginRedirect(request);
+  }
 
-    if (isProtected(request.nextUrl.pathname) && !authenticated) {
-        const loginUrl = request.nextUrl.clone()
-        loginUrl.pathname = "/auth/login"
-        loginUrl.searchParams.set("next", request.nextUrl.pathname)
-        return NextResponse.redirect(loginUrl)
-    }
-
-    return supabaseResponse
+  return supabaseResponse;
 }

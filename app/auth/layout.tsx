@@ -2,7 +2,6 @@
 //
 // Auth layout — redirects already-authenticated users to /~.
 //
-// Uses getClaims() (JWT validation) instead of getUser() (network call) to
 // stay consistent with middleware. This means offline users with a valid JWT
 // are also correctly redirected away from auth pages.
 //
@@ -12,18 +11,18 @@
 import { Suspense } from "react";
 import { headers } from "next/headers";
 import { FloatingPaths } from "@/components/ui/auth_page/floating-paths";
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { getUserProfile } from "@/lib/supabase/profile";
 
 export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
-  if (claimsData?.claims) redirect("/~");
+  const profile = await getUserProfile()
+  if (profile) return redirect("/~")
+
 
   return (
     <main className="relative md:h-screen md:overflow-hidden lg:grid lg:grid-cols-2">

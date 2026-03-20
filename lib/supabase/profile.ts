@@ -1,29 +1,22 @@
-import { redirect } from "next/navigation"
-import { AuthApiError } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase/server"
-import { cache } from "react"
+import { redirect }      from "next/navigation";
+import { AuthApiError }  from "@supabase/supabase-js";
+import { createClient }  from "@/lib/supabase/server";
+import { cache }         from "react";
 
-export type AccountType = "candidate" | "institute" | "admin" | "recruiter"
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+export type AccountType = "candidate" | "institute" | "admin" | "recruiter";
 
 export interface UserProfile {
-  id: string
-  display_name: string
-  email: string
-  avatar_path: string | null
-  username: string | null
-  account_type: AccountType
+  id:           string;
+  display_name: string;
+  email:        string;
+  avatar_path:  string | null;
+  username:     string | null;
+  account_type: AccountType;
 }
 
-// ─── Error classification ──────────────────────────────────────────────────────
-//
-// These are the ONLY Supabase error codes that conclusively mean the session
-// has been actively revoked server-side. Everything else (network timeouts,
-// transient 401s from proxies/CDNs, DNS failures, etc.) should be treated as
-// an offline/unreachable scenario and fall back to the local JWT instead.
-//
-// DO NOT add generic HTTP status codes here — a 401 can come from many sources
-// that have nothing to do with session revocation.
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── Session revocation codes ──────────────────────────────────────────────────
 
 const REVOKED_SESSION_CODES = new Set([
   "session_not_found",
@@ -32,130 +25,121 @@ const REVOKED_SESSION_CODES = new Set([
   "invalid_refresh_token",
   "user_not_found",
   "user_banned",
-])
+]);
 
 function isDefinitiveRevocation(error: AuthApiError): boolean {
-  // Code-based check — most reliable
-  if (error.code && REVOKED_SESSION_CODES.has(error.code)) return true
+  if (error.code && REVOKED_SESSION_CODES.has(error.code)) return true;
 
-  // Fallback: status + message heuristic for Supabase servers that omit `code`
-  if (
+  // Fallback heuristic for Supabase servers that omit `code`.
+  return (
     error.status === 401 &&
-    typeof error.message === "string" &&
-    /session[_\s]not[_\s]found|invalid[_\s]refresh[_\s]token/i.test(error.message)
-  ) {
-    return true
-  }
-
-  return false
+    /session[_\s]not[_\s]found|invalid[_\s]refresh[_\s]token/i.test(
+      error.message ?? "",
+    )
+  );
 }
 
-// ─── Offline profile builder ───────────────────────────────────────────────────
-//
-// Decodes the locally-cached JWT (no network) and builds a minimal UserProfile
-// from standard claims. Called whenever we cannot reach the Supabase API.
-// ──────────────────────────────────────────────────────────────────────────────
+// ─── Fallback profile builders ─────────────────────────────────────────────────
 
-async function offlineProfileFromClaims(
+/**
+ * Builds a minimal UserProfile from standard JWT claims — no network call.
+ * Used when Supabase Auth is unreachable but a valid local JWT exists.
+ */
+async function profileFromClaims(
   supabase: Awaited<ReturnType<typeof createClient>>,
 ): Promise<UserProfile | null> {
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims) return null;
 
-  const c    = claimsData.claims
-  const meta = (c.user_metadata ?? {}) as Record<string, unknown>
+  const { sub, email, user_metadata: meta = {} } = data.claims as {
+    sub: string;
+    email?: string;
+    user_metadata?: Record<string, unknown>;
+  };
 
-  // OAuth providers (Google, GitHub …) populate full_name / avatar_url in
-  // user_metadata automatically. username and account_type are app-level fields
-  // that live in the DB, not the JWT → safe offline defaults are used instead.
   return {
-    id:           c.sub as string,
-    email:        (c.email as string)                              ?? "",
-    display_name: (meta.full_name  as string)
-               ?? (meta.name       as string)
-               ?? (c.email         as string)
-               ?? "User",
+    id:           sub,
+    email:        email ?? "",
+    display_name: (meta.full_name as string)
+                ?? (meta.name     as string)
+                ?? email
+                ?? "User",
     avatar_path:  (meta.avatar_url as string) ?? null,
-    username:     null,            // not in standard JWT
-    account_type: "candidate",     // safe offline default
-  }
+    username:     null,           // not in standard JWT claims
+    account_type: "candidate",    // safe offline default
+  };
+}
+
+/**
+ * Builds a minimal UserProfile from the auth `user` object (no DB query).
+ * Used when the session is valid but the DB profile row is unreachable.
+ */
+function profileFromAuthUser(
+  user: NonNullable<
+    Awaited<ReturnType<Awaited<ReturnType<typeof createClient>>["auth"]["getUser"]>>["data"]["user"]
+  >,
+): UserProfile {
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  return {
+    id:           user.id,
+    email:        user.email ?? "",
+    display_name: (meta.full_name as string)
+                ?? (meta.name     as string)
+                ?? user.email
+                ?? "User",
+    avatar_path:  (meta.avatar_url as string) ?? null,
+    username:     null,
+    account_type: "candidate",
+  };
 }
 
 // ─── getUserProfile ────────────────────────────────────────────────────────────
 //
-// Resolution order:
+//  Resolution order:
 //
-//   1. getUser() succeeds (online, valid session)
-//      → fetch full DB profile and return it.
-//
-//   2. getUser() fails with AuthApiError that is a DEFINITIVE revocation
-//      → session was actively invalidated server-side.
-//         Sign out locally and redirect to login.
-//
-//   3. getUser() fails with AuthApiError that is NOT a definitive revocation
-//      → treat as "server unreachable / transient error".
-//         Fall through to step 5 (local JWT fallback).
-//
-//   4. getUser() fails with any other error class
-//      (AuthRetryableFetchError, TypeError, NetworkError, …)
-//      → definitely offline or DNS failure.
-//         Fall through to step 5.
-//
-//   5. getClaims() succeeds  → return minimal offline profile (no redirect).
-//      getClaims() fails     → JWT absent or expired → return null (no redirect;
-//                              middleware already blocked the protected route).
-//
-// The middleware uses getClaims() (local, no network) so it will have already
-// redirected unauthenticated users before this function is reached on any
-// protected route. Returning null here is therefore safe — it will render
-// loading skeletons without a forced sign-out loop.
+//  1. getUser() succeeds  → fetch DB profile → return full profile.
+//                           DB unreachable   → return auth-user fallback.
+//  2. AuthApiError that IS a definitive revocation
+//     → sign out locally + redirect to login.
+//  3. AuthApiError that is NOT a definitive revocation (transient 5xx, CDN, …)
+//     → treat as unreachable → try local JWT (step 5).
+//  4. Non-AuthApiError (NetworkError, TypeError, …)
+//     → definitely offline → try local JWT (step 5).
+//  5. getClaims() succeeds → return minimal offline profile.
+//     getClaims() fails    → JWT absent/expired → return null.
+//                            (Middleware already blocked unauthenticated access.)
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  // ── Step 1: Online path ────────────────────────────────────────────────────
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  // ── 1. Online + valid session ──────────────────────────────────────────────
   if (user) {
-    const { data: profile, error } = await supabase
+    const { data: profile, error: dbError } = await supabase
       .from("profiles")
       .select("id, display_name, email, account_type, avatar_path, username")
       .eq("id", user.id)
-      .single()
+      .single();
 
-    if (error || !profile) {
-      // DB is unreachable even though auth succeeded (e.g. DB cold-start).
-      // Fall back to a minimal profile built from auth user fields rather than
-      // returning null and causing a blank render.
-      return {
-        id:           user.id,
-        email:        user.email ?? "",
-        display_name: (user.user_metadata?.full_name as string)
-                   ?? (user.user_metadata?.name       as string)
-                   ?? user.email
-                   ?? "User",
-        avatar_path:  (user.user_metadata?.avatar_url as string) ?? null,
-        username:     null,
-        account_type: "candidate",
-      }
+    if (dbError || !profile) {
+      // DB unreachable (cold-start, network blip) — degrade gracefully.
+      return profileFromAuthUser(user);
     }
 
-    return profile as UserProfile
+    return profile as UserProfile;
   }
 
-  // ── 2 & 3. AuthApiError ────────────────────────────────────────────────────
+  // ── Step 2 & 3: AuthApiError ───────────────────────────────────────────────
   if (authError instanceof AuthApiError) {
     if (isDefinitiveRevocation(authError)) {
-      // Session was actively revoked server-side — force re-authentication.
-      await supabase.auth.signOut({ scope: "local" })
-      redirect("/auth/login")
+      await supabase.auth.signOut({ scope: "local" });
+      redirect("/auth/login");
     }
-
-    // Any other AuthApiError (transient 5xx, CDN 401, rate limit, …) —
-    // do NOT sign out. Treat as unreachable and try the local JWT.
+    // Transient/ambiguous error — fall through to local JWT.
   }
 
-  // ── 4 & 5. Network failure or ambiguous error — use local JWT ──────────────
-  return offlineProfileFromClaims(supabase)
-})
+  // ── Step 4 & 5: Offline / network failure — use local JWT ─────────────────
+  return profileFromClaims(supabase);
+});
