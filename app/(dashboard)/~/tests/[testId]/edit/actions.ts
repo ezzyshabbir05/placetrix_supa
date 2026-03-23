@@ -3,10 +3,9 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
 
-
-// ─── Shared types ─────────────────────────────────────────────────────────────
-
+// --- Shared types ---
 export type SettingsForm = {
   title: string
   description: string
@@ -55,9 +54,7 @@ export type InitialTestData = {
   status: "draft" | "published"
 }
 
-
-// ─── Core upsert helper ───────────────────────────────────────────────────────
-
+// --- Database Helpers ---
 async function saveTestToDb(
   testId: string,
   userId: string,
@@ -67,7 +64,6 @@ async function saveTestToDb(
 ): Promise<void> {
   const supabase = await createClient()
 
-  // Ownership guard: if test already exists it must belong to this user
   const { data: existing } = await supabase
     .from("tests")
     .select("institute_id")
@@ -78,7 +74,6 @@ async function saveTestToDb(
     throw new Error("Access denied.")
   }
 
-  // 1. Upsert the test record
   const { error: testError } = await supabase.from("tests").upsert(
     {
       id: testId,
@@ -97,7 +92,6 @@ async function saveTestToDb(
   )
   if (testError) throw new Error("Failed to save test: " + testError.message)
 
-  // 2. Fetch existing question IDs so we can diff
   const { data: existingRows } = await supabase
     .from("questions")
     .select("id")
@@ -106,7 +100,6 @@ async function saveTestToDb(
   const existingIds = new Set((existingRows ?? []).map((r) => r.id as string))
   const incomingIds = new Set(questions.map((q) => q.id))
 
-  // 3. Delete only questions that the user removed
   const removedIds = [...existingIds].filter((id) => !incomingIds.has(id))
   if (removedIds.length > 0) {
     const { error: delError } = await supabase
@@ -118,9 +111,6 @@ async function saveTestToDb(
 
   if (questions.length === 0) return
 
-  // 4. Upsert questions WITH their existing `id`
-  //    → existing questions are UPDATED in-place (same UUID preserved)
-  //    → new questions are INSERTED with the client-generated UUID
   const { data: upsertedQuestions, error: qError } = await supabase
     .from("questions")
     .upsert(
@@ -140,7 +130,6 @@ async function saveTestToDb(
   if (qError || !upsertedQuestions)
     throw new Error("Failed to upsert questions: " + (qError?.message ?? "unknown"))
 
-  // 5. Rebuild options: delete + re-insert (safe — no external FKs to options)
   const questionIds = upsertedQuestions.map((q) => q.id)
 
   const { error: delOptError } = await supabase
@@ -149,12 +138,7 @@ async function saveTestToDb(
     .in("question_id", questionIds)
   if (delOptError) throw new Error("Failed to clear options: " + delOptError.message)
 
-  const optionsPayload: {
-    question_id: string
-    option_text: string
-    is_correct: boolean
-    order_index: number
-  }[] = []
+  const optionsPayload: any[] = []
 
   for (const dbQ of upsertedQuestions) {
     const localQ = questions[dbQ.order_index - 1]
@@ -174,7 +158,6 @@ async function saveTestToDb(
     if (optError) throw new Error("Failed to insert options: " + optError.message)
   }
 
-  // 6. Rebuild question_tags: delete + re-insert
   const { error: delQtError } = await supabase
     .from("question_tags")
     .delete()
@@ -201,7 +184,7 @@ async function saveTestToDb(
       (tagRecords ?? []).map((t) => [t.name, t.id])
     )
 
-    const questionTagsPayload: { question_id: string; tag_id: string }[] = []
+    const questionTagsPayload: any[] = []
 
     for (const dbQ of upsertedQuestions) {
       const localQ = questions[dbQ.order_index - 1]
@@ -220,9 +203,6 @@ async function saveTestToDb(
     }
   }
 }
-
-
-// ─── Load test for editing ────────────────────────────────────────────────────
 
 export async function loadTestAction(
   testId: string,
@@ -282,26 +262,18 @@ export async function loadTestAction(
   }
 }
 
-
-// ─── Save Draft ───────────────────────────────────────────────────────────────
-
 export async function saveDraftAction(
   testId: string,
   settings: SettingsForm,
   questions: LocalQuestion[]
 ): Promise<void> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("Not authenticated")
 
   await saveTestToDb(testId, user.id, settings, questions, "draft")
   revalidatePath("/~/tests")
 }
-
-
-// ─── Publish Test ─────────────────────────────────────────────────────────────
 
 export async function publishTestAction(
   testId: string,
@@ -309,20 +281,10 @@ export async function publishTestAction(
   questions: LocalQuestion[]
 ): Promise<void> {
   if (!settings.title.trim()) throw new Error("Title is required.")
-  if (questions.length === 0)
-    throw new Error("Add at least one question before publishing.")
-  if (
-    settings.available_from &&
-    settings.available_until &&
-    settings.available_from >= settings.available_until
-  ) {
-    throw new Error('"Available Until" must be after "Available From".')
-  }
+  if (questions.length === 0) throw new Error("Add at least one question.")
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("Not authenticated")
 
   await saveTestToDb(testId, user.id, settings, questions, "published")
@@ -330,122 +292,193 @@ export async function publishTestAction(
   redirect(`/~/tests/${testId}`)
 }
 
-
 // ─── AI Question Generation ───────────────────────────────────────────────────
+
+const DIFFICULTY_MARKS: Record<AiGenerateForm["difficulty"], number> = {
+  easy: 1,
+  medium: 2,
+  hard: 3,
+}
+
+/**
+ * Cleans raw AI output and enforces correctness rules before returning to UI:
+ * - single_correct  → exactly 1 correct option (pins first encountered correct, resets rest)
+ * - multiple_correct → at least 2 correct options (forces first 2 if model under-counted)
+ * - Drops questions with missing text or fewer than 2 options
+ */
+function sanitizeQuestions(raw: any[], marksDefault: number): QuestionForm[] {
+  return raw
+    .filter(
+      (q) =>
+        q?.question_text?.trim() &&
+        Array.isArray(q?.options) &&
+        q.options.length >= 2
+    )
+    .map((q): QuestionForm => {
+      const qType: "single_correct" | "multiple_correct" =
+        q.question_type === "multiple_correct" ? "multiple_correct" : "single_correct"
+
+      let options: OptionForm[] = (q.options as any[]).map((o) => ({
+        _key: crypto.randomUUID(),
+        option_text: String(o.option_text ?? "").trim(),
+        is_correct: !!o.is_correct,
+      }))
+
+      if (qType === "single_correct") {
+        // Pin first correct option; reset all others to false
+        let pinned = false
+        options = options.map((o, i) => {
+          if (o.is_correct && !pinned) {
+            pinned = true
+            return o
+          }
+          // If no correct option found at all, make the first one correct
+          if (i === options.length - 1 && !pinned) {
+            return { ...o, is_correct: true }
+          }
+          return { ...o, is_correct: false }
+        })
+      } else {
+        // Ensure at least 2 correct options for multiple_correct
+        const correctCount = options.filter((o) => o.is_correct).length
+        if (correctCount < 2) {
+          let forced = 0
+          options = options.map((o) => {
+            if (forced < 2 && !o.is_correct) {
+              forced++
+              return { ...o, is_correct: true }
+            }
+            return o
+          })
+        }
+      }
+
+      return {
+        question_text: String(q.question_text).trim(),
+        question_type: qType,
+        marks: String(q.marks ?? marksDefault),
+        explanation: String(q.explanation ?? "").trim(),
+        tag_names: Array.isArray(q.tag_names)
+          ? q.tag_names.map((t: any) => String(t).trim()).filter(Boolean)
+          : [],
+        options,
+      }
+    })
+}
 
 export async function generateQuestionsAction(
   input: AiGenerateForm
 ): Promise<QuestionForm[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error("AI generation is not configured on this server.")
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error("AI generation is not configured.")
 
   const count = Math.min(20, Math.max(1, parseInt(input.count, 10) || 5))
+  const marksDefault = DIFFICULTY_MARKS[input.difficulty]
 
   const typeInstruction =
     input.question_type === "mixed"
-      ? 'Mix "single_correct" and "multiple_correct" types across the questions.'
-      : `Set "question_type" to "${input.question_type}" for every question.`
+      ? `Distribute types evenly: roughly half "single_correct" (exactly 1 correct option) and half "multiple_correct" (2–3 correct options).`
+      : input.question_type === "multiple_correct"
+      ? `All questions must be "multiple_correct" with exactly 2–3 correct options out of 4.`
+      : `All questions must be "single_correct" with exactly 1 correct option out of 4.`
 
-  const marksHint =
-    input.difficulty === "easy" ? 1 : input.difficulty === "medium" ? 1 : 2
-
-  const prompt = `Generate exactly ${count} ${input.difficulty}-difficulty multiple-choice questions on the topic: "${input.topic}".
-${typeInstruction}
-
-Return ONLY a valid JSON array. No markdown, no code fences, no explanation — just raw JSON.
-
-Required schema for each element:
-{
-  "question_text": "string (clear, complete question)",
-  "question_type": "single_correct" | "multiple_correct",
-  "marks": ${marksHint},
-  "explanation": "string (why the answer is correct)",
-  "tag_names": ["topic tag"],
-  "options": [
-    { "option_text": "string", "is_correct": true | false },
-    ...exactly 4 options total...
-  ]
-}
-
-Constraints:
-- single_correct → exactly 1 option has is_correct: true
-- multiple_correct → 2 or more options have is_correct: true
-- All distractors must be plausible, not obviously wrong
-- question_text must be self-contained (no references to external figures)`
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+  const schema = {
+    type: SchemaType.ARRAY,
+    items: {
+      type: SchemaType.OBJECT,
+      properties: {
+        question_text: { type: SchemaType.STRING },
+        question_type: {
+          type: SchemaType.STRING,
+          enum: ["single_correct", "multiple_correct"],
+        },
+        marks: { type: SchemaType.NUMBER },
+        explanation: { type: SchemaType.STRING },
+        tag_names: {
+          type: SchemaType.ARRAY,
+          items: { type: SchemaType.STRING },
+        },
+        options: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              option_text: { type: SchemaType.STRING },
+              is_correct: { type: SchemaType.BOOLEAN },
+            },
+            required: ["option_text", "is_correct"],
+          },
+        },
+      },
+      required: [
+        "question_text",
+        "question_type",
+        "marks",
+        "explanation",
+        "tag_names",
+        "options",
+      ],
     },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4096,
-      system:
-        "You are an expert educator creating assessment questions. " +
-        "Return only valid JSON arrays with no surrounding text or markdown.",
-      messages: [{ role: "user", content: prompt }],
-    }),
+  } as const
+
+  // System instruction is set at model level so it acts as a persistent role
+  // across retries without being diluted by the user-turn prompt
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    systemInstruction: `You are an expert exam question author for educational assessments.
+
+STRICT RULES you must follow for every question:
+1. Every question has EXACTLY 4 options — no more, no less.
+2. "single_correct" → exactly 1 option with is_correct=true; the other 3 must be is_correct=false.
+3. "multiple_correct" → exactly 2 or 3 options with is_correct=true; the rest must be is_correct=false.
+4. All distractors (incorrect options) must be plausible but unambiguously wrong to a knowledgeable person.
+5. The "explanation" field must (a) confirm why the correct answer(s) are right, and (b) briefly explain why the main distractor is wrong.
+6. "tag_names": provide 1–3 short topic tags (e.g. "photosynthesis", "linear algebra", "Ohm's law").
+7. Assign marks based on difficulty — easy: ${DIFFICULTY_MARKS.easy}, medium: ${DIFFICULTY_MARKS.medium}, hard: ${DIFFICULTY_MARKS.hard}.
+8. Vary cognitive levels across the batch: include recall, application, and analysis questions.
+9. Never repeat similar or near-identical questions within the same batch.`,
   })
 
-  if (!response.ok)
-    throw new Error(`AI API responded with ${response.status}: ${response.statusText}`)
+  const prompt = `Generate exactly ${count} questions on the topic: "${input.topic}".
+Difficulty: ${input.difficulty}. Default marks per question: ${marksDefault}.
+${typeInstruction}`
 
-  const data = await response.json()
-  const rawText: string = data.content?.[0]?.text ?? ""
+  const attempt = async (): Promise<QuestionForm[]> => {
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema as any,
+        temperature: 0.65,
+        topP: 0.95,
+      },
+    })
 
-  const cleaned = rawText
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim()
+    const text = result.response.text()
+    const parsed: any[] = JSON.parse(text)
+    const questions = sanitizeQuestions(parsed, marksDefault)
 
-  let parsed: any[]
-  try {
-    parsed = JSON.parse(cleaned)
-  } catch {
-    throw new Error("AI returned malformed JSON. Please try again.")
+    if (questions.length === 0) {
+      throw new Error("No valid questions returned by the AI. Please try again.")
+    }
+
+    return questions
   }
 
-  if (!Array.isArray(parsed))
-    throw new Error("AI returned an unexpected format. Please try again.")
-
-  return parsed.map((q: any): QuestionForm => {
-    const qType: "single_correct" | "multiple_correct" =
-      q.question_type === "multiple_correct" ? "multiple_correct" : "single_correct"
-
-    let options: OptionForm[] = Array.isArray(q.options)
-      ? q.options.map((o: any) => ({
-          _key: crypto.randomUUID(),
-          option_text: String(o?.option_text ?? "").trim(),
-          is_correct: Boolean(o?.is_correct),
-        }))
-      : []
-
-    if (qType === "single_correct") {
-      let fixed = false
-      const corrects = options.filter((o) => o.is_correct)
-      if (corrects.length !== 1) {
-        options = options.map((o) => {
-          if (!o.is_correct) return o
-          if (!fixed) { fixed = true; return o }
-          return { ...o, is_correct: false }
-        })
-        if (!fixed && options.length > 0)
-          options[0] = { ...options[0], is_correct: true }
-      }
+  try {
+    return await attempt()
+  } catch (firstError) {
+    // One silent retry to handle transient model / JSON parse failures
+    try {
+      return await attempt()
+    } catch (retryError) {
+      console.error("[generateQuestionsAction] Failed after retry:", retryError)
+      throw new Error(
+        retryError instanceof Error
+          ? `AI generation failed: ${retryError.message}`
+          : "Failed to generate questions. Please try again."
+      )
     }
-
-    return {
-      question_text: String(q.question_text ?? "").trim(),
-      question_type: qType,
-      marks: String(q.marks ?? marksHint),
-      explanation: String(q.explanation ?? "").trim(),
-      tag_names: Array.isArray(q.tag_names)
-        ? q.tag_names.map((t: any) => String(t).trim()).filter(Boolean)
-        : [],
-      options,
-    }
-  })
+  }
 }

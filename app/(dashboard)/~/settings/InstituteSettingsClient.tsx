@@ -9,13 +9,25 @@ import { createClient } from "@/lib/supabase/client"
 import { UserProfile } from "@/lib/supabase/profile"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardAction } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import {
   Combobox,
   ComboboxContent,
@@ -25,11 +37,12 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox"
 import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
-import { LoginHistoryTab } from "./LoginHistoryTab"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Upload, Plus, Minus, Mail, Globe, Phone, Loader2, Camera,
-  CheckCircle2, XCircle, AtSign, Lock,
+  CheckCircle2, XCircle, AtSign,
+  Monitor, Smartphone, Tablet, RefreshCw, LogOut, MapPin, Clock,
+  ShieldAlert, CalendarClock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -72,6 +85,21 @@ interface Props {
   initialData: Record<string, any> | null
 }
 
+interface SessionEntry {
+  id: string;
+  created_at: string | null;
+  updated_at: string | null;
+  not_after: string | null;
+  ip: unknown;              // ← matches Supabase generated type
+  user_agent: string | null;
+}
+
+interface ParsedUA {
+  browser: string
+  os: string
+  device: "desktop" | "mobile" | "tablet"
+}
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,6 +123,71 @@ function getStorageUrl(
   return data.publicUrl
 }
 
+function parseUserAgent(ua: string | null): ParsedUA {
+  if (!ua) return { browser: "Unknown Browser", os: "Unknown OS", device: "desktop" }
+
+  let browser = "Unknown Browser"
+  let os = "Unknown OS"
+  let device: "desktop" | "mobile" | "tablet" = "desktop"
+
+  if (ua.includes("Edg/") || ua.includes("EdgA/") || ua.includes("Edge/")) browser = "Edge"
+  else if (ua.includes("SamsungBrowser/")) browser = "Samsung Browser"
+  else if (ua.includes("OPR/") || ua.includes("Opera/")) browser = "Opera"
+  else if (ua.includes("Chrome/") && !ua.includes("Chromium/")) browser = "Chrome"
+  else if (ua.includes("Firefox/") || ua.includes("FxiOS/")) browser = "Firefox"
+  else if (ua.includes("Safari/") && !ua.includes("Chrome/")) browser = "Safari"
+  else if (ua.includes("MSIE") || ua.includes("Trident/")) browser = "Internet Explorer"
+
+  if (ua.includes("iPhone")) { os = "iOS"; device = "mobile" }
+  else if (ua.includes("iPad")) { os = "iPadOS"; device = "tablet" }
+  else if (ua.includes("Android")) { os = "Android"; device = ua.includes("Mobile") ? "mobile" : "tablet" }
+  else if (ua.includes("Windows NT")) os = "Windows"
+  else if (ua.includes("Macintosh") || ua.includes("Mac OS X")) os = "macOS"
+  else if (ua.includes("CrOS")) os = "ChromeOS"
+  else if (ua.includes("Linux")) os = "Linux"
+
+  return { browser, os, device }
+}
+
+function getSessionIdFromJwt(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]))
+    return payload.session_id ?? null
+  } catch {
+    return null
+  }
+}
+
+function formatTimeAgo(dateStr: string | null): string {
+  if (!dateStr) return "Unknown"
+  const date = new Date(dateStr)
+  const diffMs = Date.now() - date.getTime()
+  const diffSecs = Math.floor(Math.abs(diffMs) / 1000)
+  const diffMins = Math.floor(diffSecs / 60)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffSecs < 60) return "Just now"
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 30) return `${diffDays}d ago`
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+}
+
+function formatExpiry(dateStr: string | null): string | null {
+  if (!dateStr) return null
+  const date = new Date(dateStr)
+  if (date < new Date()) return null
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  })
+}
+
+function isExpired(not_after: string | null): boolean {
+  return !!not_after && new Date(not_after) < new Date()
+}
+
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
@@ -102,15 +195,15 @@ function getStorageUrl(
 type Tab = "institution" | "security" | "notifications" | "history" | "privacy"
 
 const TABS: { value: Tab; label: string }[] = [
-  { value: "institution",    label: "Institution"    },
-  { value: "security",       label: "Security"       },
-  { value: "notifications",  label: "Notifications"  },
-  { value: "history",        label: "Login History"  },
-  { value: "privacy",        label: "Privacy"        },
+  { value: "institution", label: "Institution" },
+  { value: "security", label: "Security" },
+  { value: "notifications", label: "Notifications" },
+  { value: "history", label: "Login History" },
+  { value: "privacy", label: "Privacy" },
 ]
 
 
-// ─── Username status indicator ────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
@@ -124,13 +217,21 @@ function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
 }
 
 function usernameStatusMessage(status: UsernameStatus): { text: string; className: string } | null {
-  if (status === "checking")   return { text: "Checking availability…",         className: "text-muted-foreground" }
-  if (status === "available")  return { text: "Username is available!",          className: "text-emerald-600 dark:text-emerald-400" }
-  if (status === "taken")      return { text: "Username is already taken.",      className: "text-destructive" }
-  if (status === "invalid")    return { text: "3–20 characters: letters, numbers, underscores only.", className: "text-destructive" }
-  if (status === "unchanged")  return { text: "This is your current username.",  className: "text-muted-foreground" }
+  if (status === "checking") return { text: "Checking availability…", className: "text-muted-foreground" }
+  if (status === "available") return { text: "Username is available!", className: "text-emerald-600 dark:text-emerald-400" }
+  if (status === "taken") return { text: "Username is already taken.", className: "text-destructive" }
+  if (status === "invalid") return { text: "3–20 characters: letters, numbers, underscores only.", className: "text-destructive" }
+  if (status === "unchanged") return { text: "This is your current username.", className: "text-muted-foreground" }
   return null
 }
+
+function DeviceIcon({ device }: { device: "desktop" | "mobile" | "tablet" }) {
+  const cls = "h-4 w-4 text-muted-foreground shrink-0 mt-0.5"
+  if (device === "mobile") return <Smartphone className={cls} />
+  if (device === "tablet") return <Tablet className={cls} />
+  return <Monitor className={cls} />
+}
+
 
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -145,10 +246,10 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
   // ── Username ──────────────────────────────────────────────────────────────
 
-  const [username, setUsername]               = useState(userProfile.username ?? "")
-  const [usernameStatus, setUsernameStatus]   = useState<UsernameStatus>("idle")
-  const usernameDebounceRef                   = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initialUsername                       = useRef(userProfile.username ?? "")
+  const [username, setUsername] = useState(userProfile.username ?? "")
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle")
+  const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initialUsername = useRef(userProfile.username ?? "")
 
 
   // ── Logo ──────────────────────────────────────────────────────────────────
@@ -163,30 +264,39 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
   // ── Institute fields ──────────────────────────────────────────────────────
 
-  const [instituteName, setInstituteName]     = useState(initialData?.institute_name ?? "")
-  const [instituteCode, setInstituteCode]     = useState(initialData?.institute_code ?? "")
+  const [instituteName, setInstituteName] = useState(initialData?.institute_name ?? "")
+  const [instituteCode, setInstituteCode] = useState(initialData?.institute_code ?? "")
   const [establishedYear, setEstablishedYear] = useState(
     initialData?.established_year ? String(initialData.established_year) : ""
   )
-  const [affiliation, setAffiliation]         = useState(initialData?.affiliation ?? "")
-  const [address, setAddress]                 = useState(initialData?.address ?? "")
-  const [city, setCity]                       = useState(initialData?.city ?? "")
-  const [stateVal, setStateVal]               = useState(initialData?.state ?? "")
-  const [pincode, setPincode]                 = useState(initialData?.pincode ?? "")
-  const [country, setCountry]                 = useState(initialData?.country ?? "India")
-  const [instPhone, setInstPhone]             = useState(initialData?.phone_number ?? "")
-  const [instEmail, setInstEmail]             = useState(initialData?.email ?? "")
-  const [websiteUrl, setWebsiteUrl]           = useState(initialData?.website_url ?? "")
-  const [principalName, setPrincipalName]     = useState(initialData?.principal_name ?? "")
-  const [principalEmail, setPrincipalEmail]   = useState(initialData?.principal_email ?? "")
-  const [principalPhone, setPrincipalPhone]   = useState(initialData?.principal_phone ?? "")
-  const [courses, setCourses]                 = useState<string[]>(
+  const [affiliation, setAffiliation] = useState(initialData?.affiliation ?? "")
+  const [address, setAddress] = useState(initialData?.address ?? "")
+  const [city, setCity] = useState(initialData?.city ?? "")
+  const [stateVal, setStateVal] = useState(initialData?.state ?? "")
+  const [pincode, setPincode] = useState(initialData?.pincode ?? "")
+  const [country, setCountry] = useState(initialData?.country ?? "India")
+  const [instPhone, setInstPhone] = useState(initialData?.phone_number ?? "")
+  const [instEmail, setInstEmail] = useState(initialData?.email ?? "")
+  const [websiteUrl, setWebsiteUrl] = useState(initialData?.website_url ?? "")
+  const [principalName, setPrincipalName] = useState(initialData?.principal_name ?? "")
+  const [principalEmail, setPrincipalEmail] = useState(initialData?.principal_email ?? "")
+  const [principalPhone, setPrincipalPhone] = useState(initialData?.principal_phone ?? "")
+  const [courses, setCourses] = useState<string[]>(
     initialData?.courses?.length ? initialData.courses : [""]
   )
-  const [socialLinks, setSocialLinks]         = useState<string[]>(
+  const [socialLinks, setSocialLinks] = useState<string[]>(
     initialData?.social_links?.length ? initialData.social_links : [""]
   )
-  const [errors, setErrors]                   = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+
+  // ── Login History ─────────────────────────────────────────────────────────
+
+  const [sessions, setSessions] = useState<SessionEntry[]>([])
+  const [sessionsLoading, setSessLoading] = useState(true)
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [revokingAll, setRevokingAll] = useState(false)
 
 
   // ── Dirty tracking ────────────────────────────────────────────────────────
@@ -200,26 +310,26 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     []
   )
 
-  const handleInstituteName   = markDirty(setInstituteName)
-  const handleInstituteCode   = markDirty(setInstituteCode)
+  const handleInstituteName = markDirty(setInstituteName)
+  const handleInstituteCode = markDirty(setInstituteCode)
   const handleEstablishedYear = markDirty(setEstablishedYear)
-  const handleAffiliation     = markDirty(setAffiliation)
-  const handleAddress         = markDirty(setAddress)
-  const handleCity            = markDirty(setCity)
-  const handleStateVal        = markDirty(setStateVal)
-  const handlePincode         = markDirty(setPincode)
-  const handleCountry         = markDirty(setCountry)
-  const handleInstPhone       = markDirty(setInstPhone)
-  const handleInstEmail       = markDirty(setInstEmail)
-  const handleWebsiteUrl      = markDirty(setWebsiteUrl)
-  const handlePrincipalName   = markDirty(setPrincipalName)
-  const handlePrincipalEmail  = markDirty(setPrincipalEmail)
-  const handlePrincipalPhone  = markDirty(setPrincipalPhone)
-  const handleCourses         = markDirty(setCourses)
-  const handleSocialLinks     = markDirty(setSocialLinks)
+  const handleAffiliation = markDirty(setAffiliation)
+  const handleAddress = markDirty(setAddress)
+  const handleCity = markDirty(setCity)
+  const handleStateVal = markDirty(setStateVal)
+  const handlePincode = markDirty(setPincode)
+  const handleCountry = markDirty(setCountry)
+  const handleInstPhone = markDirty(setInstPhone)
+  const handleInstEmail = markDirty(setInstEmail)
+  const handleWebsiteUrl = markDirty(setWebsiteUrl)
+  const handlePrincipalName = markDirty(setPrincipalName)
+  const handlePrincipalEmail = markDirty(setPrincipalEmail)
+  const handlePrincipalPhone = markDirty(setPrincipalPhone)
+  const handleCourses = markDirty(setCourses)
+  const handleSocialLinks = markDirty(setSocialLinks)
 
 
-  // ── Username change handler with debounced availability check ─────────────
+  // ── Username change handler ───────────────────────────────────────────────
 
   function handleUsernameChange(value: string) {
     const trimmed = value.trim()
@@ -228,34 +338,21 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
     if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current)
 
-    if (trimmed === "") {
-      setUsernameStatus("idle")
-      return
-    }
-    if (trimmed === initialUsername.current) {
-      setUsernameStatus("unchanged")
-      return
-    }
-    if (!USERNAME_REGEX.test(trimmed)) {
-      setUsernameStatus("invalid")
-      return
-    }
+    if (trimmed === "") { setUsernameStatus("idle"); return }
+    if (trimmed === initialUsername.current) { setUsernameStatus("unchanged"); return }
+    if (!USERNAME_REGEX.test(trimmed)) { setUsernameStatus("invalid"); return }
 
     setUsernameStatus("checking")
     usernameDebounceRef.current = setTimeout(async () => {
       const { data, error } = await supabase.rpc("check_username_available", {
         p_username: trimmed,
-        p_user_id:  userProfile.id,
+        p_user_id: userProfile.id,
       })
-      if (error) {
-        setUsernameStatus("idle")
-        return
-      }
+      if (error) { setUsernameStatus("idle"); return }
       setUsernameStatus(data === true ? "available" : "taken")
     }, 500)
   }
 
-  // cleanup debounce on unmount
   useEffect(() => {
     return () => { if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current) }
   }, [])
@@ -361,6 +458,71 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   }
 
 
+  // ── Login History handlers ────────────────────────────────────────────────
+
+  const loadSessions = useCallback(async () => {
+    setSessLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user?.id) { setSessions([]); return }
+
+      if (session.access_token) setCurrentSessionId(getSessionIdFromJwt(session.access_token))
+
+      const { data, error } = await supabase
+        .from("user_sessions")
+        .select("id, created_at, updated_at, not_after, ip, user_agent")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+
+      if (error) throw error
+      setSessions(data ?? [])
+    } catch {
+      toast.error("Failed to load login history.")
+    } finally {
+      setSessLoading(false)
+    }
+  }, [supabase])
+
+  useEffect(() => { loadSessions() }, [loadSessions])
+
+  async function handleRevokeSession(sessionId: string) {
+    setRevokingId(sessionId)
+    try {
+      const { error } = await supabase.rpc("revoke_session", { p_session_id: sessionId })
+      if (error) throw error
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+      toast.success("Session revoked.")
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to revoke session.")
+    } finally {
+      setRevokingId(null)
+    }
+  }
+
+  async function handleRevokeAllSessions() {
+    const others = sessions.filter((s) => s.id !== currentSessionId)
+    if (!others.length) { toast.info("No other active sessions."); return }
+
+    setRevokingAll(true)
+    let ok = 0, fail = 0
+    for (const s of others) {
+      try {
+        const { error } = await supabase.rpc("revoke_session", { p_session_id: s.id })
+        if (error) throw error
+        ok++
+        setSessions((prev) => prev.filter((x) => x.id !== s.id))
+      } catch { fail++ }
+    }
+    setRevokingAll(false)
+    fail === 0
+      ? toast.success(`${ok} session${ok !== 1 ? "s" : ""} revoked.`)
+      : toast.warning(`${ok} revoked, ${fail} failed.`)
+  }
+
+  const otherSessionCount = sessions.filter((s) => s.id !== currentSessionId).length
+
+
   // ── Validation ────────────────────────────────────────────────────────────
 
   function validate(): Record<string, string> {
@@ -373,16 +535,16 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     if (usernameStatus === "checking")
       e.username = "Please wait for username availability check to complete."
 
-    if (!instituteName.trim()) e.instituteName   = "College name is required"
-    if (!affiliation)          e.affiliation     = "Affiliation is required"
-    if (!address.trim())       e.address         = "Address is required"
-    if (!city.trim())          e.city            = "City is required"
-    if (!stateVal)             e.state           = "State is required"
-    if (!pincode.trim())       e.pincode         = "Pincode is required"
-    if (!country)              e.country         = "Country is required"
-    if (!instPhone.trim())     e.instPhone       = "Contact number is required"
-    if (!instEmail.trim())     e.instEmail       = "Email is required"
-    if (!principalName.trim()) e.principalName   = "Principal name is required"
+    if (!instituteName.trim()) e.instituteName = "College name is required"
+    if (!affiliation) e.affiliation = "Affiliation is required"
+    if (!address.trim()) e.address = "Address is required"
+    if (!city.trim()) e.city = "City is required"
+    if (!stateVal) e.state = "State is required"
+    if (!pincode.trim()) e.pincode = "Pincode is required"
+    if (!country) e.country = "Country is required"
+    if (!instPhone.trim()) e.instPhone = "Contact number is required"
+    if (!instEmail.trim()) e.instEmail = "Email is required"
+    if (!principalName.trim()) e.principalName = "Principal name is required"
     if (!principalEmail.trim()) e.principalEmail = "Principal email is required"
     if (!principalPhone.trim()) e.principalPhone = "Principal contact is required"
     return e
@@ -428,7 +590,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     }
 
     startTransition(async () => {
-      // ── 1. Update username on profiles table (if changed) ────────────────
+      // ── 1. Update username (if changed) ──────────────────────────────────
       const trimmedUsername = username.trim() || null
       if (trimmedUsername !== (userProfile.username ?? null)) {
         const { error: usernameError } = await supabase
@@ -448,31 +610,28 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         }
       }
 
-      // ── 2. Upsert institute profile ──────────────────────────────────────
-      // ✅ FIX: Removed `Record<string, any>` type annotation so TypeScript
-      //         infers the type and matches it against the generated DB schema.
+      // ── 2. Upsert institute profile ───────────────────────────────────────
       const payload = {
-        profile_id:       userProfile.id,
-        institute_name:   instituteName.trim(),
-        institute_code:   instituteCode.trim() || null,
+        profile_id: userProfile.id,
+        institute_name: instituteName.trim(),
+        institute_code: instituteCode.trim() || null,
         established_year: establishedYear ? Number(establishedYear) : null,
-        affiliation:      affiliation || null,
-        address:          address.trim() || null,
-        city:             city.trim() || null,
-        state:            stateVal || null,
-        pincode:          pincode.trim() || null,
-        country:          country || "India",
-        phone_number:     instPhone.trim() || null,
-        email:            instEmail.trim() || null,
-        website_url:      websiteUrl.trim() || null,
-        principal_name:   principalName.trim() || null,
-        principal_email:  principalEmail.trim() || null,
-        principal_phone:  principalPhone.trim() || null,
-        courses:          courses.filter((c) => c.trim()),
-        social_links:     socialLinks.filter((l) => l.trim()),
+        affiliation: affiliation || null,
+        address: address.trim() || null,
+        city: city.trim() || null,
+        state: stateVal || null,
+        pincode: pincode.trim() || null,
+        country: country || "India",
+        phone_number: instPhone.trim() || null,
+        email: instEmail.trim() || null,
+        website_url: websiteUrl.trim() || null,
+        principal_name: principalName.trim() || null,
+        principal_email: principalEmail.trim() || null,
+        principal_phone: principalPhone.trim() || null,
+        courses: courses.filter((c) => c.trim()),
+        social_links: socialLinks.filter((l) => l.trim()),
       }
 
-      // ✅ FIX: Destructure `{ error }` instead of assigning `error` directly
       const { error } = await supabase
         .from("institute_profiles")
         .upsert(payload, { onConflict: "profile_id" })
@@ -511,7 +670,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
 
-        {/* ── Tab Bar ──────────────────────────────────────────────────────── */}
+        {/* ── Tab Bar ────────────────────────────────────────────────────── */}
         <div className="overflow-x-auto px-4 pt-5 md:px-8">
           <TabsList className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
             {TABS.map(({ value, label }) => (
@@ -573,8 +732,8 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     : errors.username
                       ? <FieldError message={errors.username} />
                       : usernameMsg && (
-                          <p className={cn("text-xs", usernameMsg.className)}>{usernameMsg.text}</p>
-                        )
+                        <p className={cn("text-xs", usernameMsg.className)}>{usernameMsg.text}</p>
+                      )
                   }
                   {!initialUsername.current && (
                     <p className="text-xs text-muted-foreground">
@@ -589,9 +748,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
             <Card>
               <CardHeader>
                 <CardTitle>College Logo</CardTitle>
-                <CardDescription>
-                  JPEG, PNG or WEBP · max 2 MB · square recommended
-                </CardDescription>
+                <CardDescription>JPEG, PNG or WEBP · max 2 MB · square recommended</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">
@@ -910,6 +1067,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
           </TabsContent>
 
+
           {/* ════════════════════════════════════════════════════════════════
               SECURITY TAB
           ════════════════════════════════════════════════════════════════ */}
@@ -965,9 +1123,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               <CardContent className="space-y-4">
                 {[
                   { label: "Student Registration Alerts", desc: "Get notified when new students register" },
-                  { label: "Placement Updates",           desc: "Notifications about placement activities" },
-                  { label: "System Announcements",        desc: "Important system updates and changes" },
-                  { label: "Weekly Reports",              desc: "Receive weekly summary of activities" },
+                  { label: "Placement Updates", desc: "Notifications about placement activities" },
+                  { label: "System Announcements", desc: "Important system updates and changes" },
+                  { label: "Weekly Reports", desc: "Receive weekly summary of activities" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
                     <div>
@@ -985,12 +1143,220 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
           {/* ════════════════════════════════════════════════════════════════
               LOGIN HISTORY TAB
           ════════════════════════════════════════════════════════════════ */}
-          <TabsContent value="history" className="mt-0">
-            <LoginHistoryTab
-              supabase={supabase}
-              cardDescription="Recent access to your college account"
-            />
+                    <TabsContent value="history" className="mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Login History
+                </CardTitle>
+                <CardDescription>Devices currently signed in to your account</CardDescription>
+                <CardAction>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadSessions}
+                    disabled={sessionsLoading}
+                    className="gap-1.5 text-xs h-8"
+                  >
+                    {sessionsLoading
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <RefreshCw className="h-3.5 w-3.5" />}
+                    Refresh
+                  </Button>
+                </CardAction>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+
+                {/* ── Revoke-All Banner ── */}
+                {!sessionsLoading && otherSessionCount > 0 && (
+                  <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 text-destructive" />
+                      <span className="text-xs font-medium text-destructive">
+                        {otherSessionCount} other active session{otherSessionCount !== 1 ? "s" : ""} detected
+                      </span>
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={revokingAll}
+                          className="h-7 px-3 text-xs gap-1.5"
+                        >
+                          {revokingAll
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <LogOut className="h-3 w-3" />}
+                          Sign out all
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Sign out all other sessions?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            <strong>{otherSessionCount} other device{otherSessionCount !== 1 ? "s" : ""}</strong>{" "}
+                            will be signed out immediately. Your current session will remain active.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={handleRevokeAllSessions}
+                          >
+                            Sign out all
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+
+                {/* ── Skeleton ── */}
+                {sessionsLoading && (
+                  <div className="space-y-2">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 rounded-lg border p-3.5 animate-pulse">
+                        <div className="h-9 w-9 rounded-md bg-muted shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-1/3 rounded bg-muted" />
+                          <div className="h-2.5 w-1/2 rounded bg-muted" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Empty State ── */}
+                {!sessionsLoading && sessions.length === 0 && (
+                  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <Clock className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium">No sessions found</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Login activity will appear here once detected.
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Session Cards ── */}
+                {!sessionsLoading && sessions.length > 0 && (
+                  <div className="space-y-2">
+                    {sessions.map((session) => {
+                      const { browser, os, device } = parseUserAgent(session.user_agent)
+                      const isCurrent = session.id === currentSessionId
+                      const expired = isExpired(session.not_after)
+                      const expiryLabel = formatExpiry(session.not_after)
+                      const isRevoking = revokingId === session.id
+
+                      return (
+                        <div
+                          key={session.id}
+                          className={cn(
+                            "group flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 transition-colors",
+                            isCurrent && "border-primary/30 bg-primary/5",
+                            expired && !isCurrent && "opacity-50"
+                          )}
+                        >
+                          {/* Device Icon */}
+                          <div className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                            isCurrent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                          )}>
+                            <DeviceIcon device={device} />
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-sm font-medium leading-none truncate">
+                                {browser} on {os}
+                              </span>
+                              {isCurrent && (
+                                <Badge className="h-4 px-1.5 text-[10px] rounded-sm bg-primary/15 text-primary border-0 font-medium">
+                                  This device
+                                </Badge>
+                              )}
+                              {expired && (
+                                <Badge className="h-4 px-1.5 text-[10px] rounded-sm bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0 font-medium">
+                                  Expired
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                              {session.ip != null && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-2.5 w-2.5" />
+                                  {String(session.ip)}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" />
+                                Signed in {formatTimeAgo(session.created_at)}
+                              </span>
+                              {session.updated_at && session.updated_at !== session.created_at && (
+                                <span className="flex items-center gap-1">
+                                  <RefreshCw className="h-2.5 w-2.5" />
+                                  Last active {formatTimeAgo(session.updated_at)}
+                                </span>
+                              )}
+                              {expiryLabel && (
+                                <span className="flex items-center gap-1">
+                                  <CalendarClock className="h-2.5 w-2.5" />
+                                  Expires {expiryLabel}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Revoke */}
+                          {!isCurrent && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={isRevoking || revokingAll}
+                                  className="h-8 w-8 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all"
+                                >
+                                  {isRevoking
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <LogOut className="h-3.5 w-3.5" />}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Sign out this device?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    <strong>{browser} on {os}</strong>
+                                    {session.ip != null ? ` (IP: ${String(session.ip)})` : ""} will be signed out immediately.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    onClick={() => handleRevokeSession(session.id)}
+                                  >
+                                    Sign out
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+              </CardContent>
+            </Card>
           </TabsContent>
+
 
 
           {/* ════════════════════════════════════════════════════════════════
@@ -1004,10 +1370,10 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "Public Profile",          desc: "Make college info visible to recruiters" },
-                  { label: "Student Data Sharing",    desc: "Allow sharing student data with verified recruiters" },
-                  { label: "Analytics & Insights",    desc: "Help improve platform with usage data" },
-                  { label: "Placement Statistics",    desc: "Share placement statistics publicly" },
+                  { label: "Public Profile", desc: "Make college info visible to recruiters" },
+                  { label: "Student Data Sharing", desc: "Allow sharing student data with verified recruiters" },
+                  { label: "Analytics & Insights", desc: "Help improve platform with usage data" },
+                  { label: "Placement Statistics", desc: "Share placement statistics publicly" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
                     <div>

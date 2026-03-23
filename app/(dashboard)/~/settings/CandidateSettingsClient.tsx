@@ -1,125 +1,127 @@
-"use client"
+"use client";
+// app/settings/CandidateSettingsClient.tsx
 
-// ─────────────────────────────────────────────────────────────────────────────
-// app/~/settings/CandidateSettingsClient.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { useState, useEffect, useTransition, useCallback, useRef } from "react"
-import { createClient } from "@/lib/supabase/client"
-import { UserProfile } from "@/lib/supabase/profile"
-import { toast } from "sonner"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { UserProfile } from "@/lib/supabase/profile";
+import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Combobox,
-  ComboboxChip,
-  ComboboxChips,
-  ComboboxChipsInput,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxValue,
-  useComboboxAnchor,
-} from "@/components/ui/combobox"
-import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
-import { LoginHistoryTab } from "./LoginHistoryTab"
-import { cn } from "@/lib/utils"
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Combobox, ComboboxChip, ComboboxChips, ComboboxChipsInput,
+  ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem,
+  ComboboxList, ComboboxValue, useComboboxAnchor,
+} from "@/components/ui/combobox";
+import { FloatingSaveBar } from "@/components/ui/floating-save-bar";
+import { cn } from "@/lib/utils";
 import {
   Upload, Plus, Minus, Copy, CalendarIcon, Loader2, Camera,
-  CheckCircle2, XCircle, AtSign, Lock,
-} from "lucide-react"
+  CheckCircle2, XCircle, AtSign, Lock, Clock, Monitor, Smartphone,
+  Tablet, RefreshCw, LogOut, MapPin, ShieldAlert, CalendarClock,
+} from "lucide-react";
 
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const SOFTWARE_SKILLS = [
-  "JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "Go", "Rust",
-  "PHP", "Ruby", "Swift", "Kotlin", "React", "Angular", "Vue.js", "Next.js",
-  "Node.js", "Express.js", "Django", "Flask", "Spring Boot", "ASP.NET",
-  "Laravel", "React Native", "Flutter", "HTML", "CSS", "Sass", "Tailwind CSS",
-  "Bootstrap", "Material UI", "SQL", "MySQL", "PostgreSQL", "MongoDB", "Redis",
-  "Firebase", "Oracle", "SQLite", "Git", "GitHub", "GitLab", "Docker",
-  "Kubernetes", "Jenkins", "CI/CD", "AWS", "Azure", "Google Cloud", "Heroku",
-  "Netlify", "Vercel", "REST API", "GraphQL", "Microservices", "Linux", "Bash",
-  "PowerShell", "Agile", "Scrum", "Jira", "TensorFlow", "PyTorch",
+  "JavaScript", "TypeScript", "Python", "Java", "C", "C++", "Go", "Rust", "PHP", "Ruby",
+  "Swift", "Kotlin", "React", "Angular", "Vue.js", "Next.js", "Node.js", "Express.js",
+  "Django", "Flask", "Spring Boot", "ASP.NET", "Laravel", "React Native", "Flutter",
+  "HTML", "CSS", "Sass", "Tailwind CSS", "Bootstrap", "Material UI", "SQL", "MySQL",
+  "PostgreSQL", "MongoDB", "Redis", "Firebase", "Oracle", "SQLite", "Git", "GitHub",
+  "GitLab", "Docker", "Kubernetes", "Jenkins", "CI/CD", "AWS", "Azure", "Google Cloud",
+  "Heroku", "Netlify", "Vercel", "REST API", "GraphQL", "Microservices", "Linux",
+  "Bash", "PowerShell", "Agile", "Scrum", "Jira", "TensorFlow", "PyTorch",
   "Machine Learning", "Deep Learning", "Data Science", "Pandas", "NumPy",
-  "Scikit-learn", "Selenium", "Jest", "Cypress", "JUnit", "Postman",
-  "Figma", "Adobe XD", "Photoshop", "UI/UX Design",
-]
+  "Scikit-learn", "Selenium", "Jest", "Cypress", "JUnit", "Postman", "Figma",
+  "Adobe XD", "Photoshop", "UI/UX Design",
+];
 
-const GENDER_OPTIONS = ["Male", "Female", "Other"]
-const GENDER_MAP: Record<string, string> = { Male: "M", Female: "F", Other: "O" }
-const GENDER_REVERSE: Record<string, string> = { M: "Male", F: "Female", O: "Other" }
-const YEAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(2025 - i))
-
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
-const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
-
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/
-
+const GENDER_OPTIONS = ["Male", "Female", "Other"];
+const GENDER_MAP: Record<string, string> = { Male: "M", Female: "F", Other: "O" };
+const GENDER_REVERSE: Record<string, string> = { M: "Male", F: "Female", O: "Other" };
+const YEAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(2025 - i));
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-
-type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid" | "unchanged"
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid" | "unchanged";
 
 interface InstituteOption {
-  profile_id: string
-  institute_name: string
-  courses: string[] | null
+  profile_id: string;
+  institute_name: string;
+  courses: string[] | null;
 }
 
 interface Props {
-  userProfile: UserProfile
-  initialData: Record<string, any> | null
+  userProfile: UserProfile;
+  initialData: Record<string, any> | null;
 }
 
+// ✅ FIX 1: ip typed as `unknown` to match Supabase generated type
+interface SessionEntry {
+  id: string;
+  created_at: string | null;
+  updated_at: string | null;
+  not_after: string | null;
+  ip: unknown;
+  user_agent: string | null;
+}
+
+interface ParsedUA {
+  browser: string;
+  os: string;
+  device: "desktop" | "mobile" | "tablet";
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-
 function RequiredMark() {
-  return <span className="text-destructive ml-0.5">*</span>
+  return <span className="text-destructive ml-0.5">*</span>;
 }
 
 function FieldError({ message }: { message?: string }) {
-  if (!message) return null
-  return <p className="text-xs text-destructive mt-1">{message}</p>
+  if (!message) return null;
+  return <p className="text-xs text-destructive mt-1">{message}</p>;
 }
 
 function formatDate(date: Date): string {
-  const d = String(date.getDate()).padStart(2, "0")
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  return `${d}/${m}/${date.getFullYear()}`
+  const d = String(date.getDate()).padStart(2, "0");
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${d}/${m}/${date.getFullYear()}`;
 }
 
 function toLocalDateString(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  const d = String(date.getDate()).padStart(2, "0")
-  return `${y}-${m}-${d}`
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function parseLocalDate(str: string): Date {
-  return new Date(`${str}T00:00:00`)
+  return new Date(`${str}T00:00:00`);
 }
 
 function getInitials(firstName: string, lastName: string, email: string): string {
-  if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  if (firstName) return firstName[0].toUpperCase()
-  return email[0]?.toUpperCase() ?? "?"
+  if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase();
+  if (firstName) return firstName[0].toUpperCase();
+  return email[0]?.toUpperCase() ?? "?";
 }
 
 function getStorageUrl(
@@ -127,557 +129,640 @@ function getStorageUrl(
   bucket: string,
   path: string | null
 ): string | null {
-  if (!path) return null
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
-  return data.publicUrl
+  if (!path) return null;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
 }
 
+function parseUserAgent(ua: string | null): ParsedUA {
+  if (!ua) return { browser: "Unknown Browser", os: "Unknown OS", device: "desktop" };
+
+  let browser = "Unknown Browser";
+  let os = "Unknown OS";
+  let device: "desktop" | "mobile" | "tablet" = "desktop";
+
+  if (ua.includes("Edg/") || ua.includes("EdgA/") || ua.includes("Edge")) browser = "Edge";
+  else if (ua.includes("SamsungBrowser")) browser = "Samsung Browser";
+  else if (ua.includes("OPR") || ua.includes("Opera")) browser = "Opera";
+  else if (ua.includes("Chrome") && !ua.includes("Chromium")) browser = "Chrome";
+  else if (ua.includes("Firefox") || ua.includes("FxiOS")) browser = "Firefox";
+  else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+  else if (ua.includes("MSIE") || ua.includes("Trident")) browser = "Internet Explorer";
+
+  if (ua.includes("iPhone")) { os = "iOS"; device = "mobile"; }
+  else if (ua.includes("iPad")) { os = "iPadOS"; device = "tablet"; }
+  else if (ua.includes("Android")) { os = "Android"; device = ua.includes("Mobile") ? "mobile" : "tablet"; }
+  else if (ua.includes("Windows NT")) os = "Windows";
+  else if (ua.includes("Macintosh") || ua.includes("Mac OS X")) os = "macOS";
+  else if (ua.includes("CrOS")) os = "ChromeOS";
+  else if (ua.includes("Linux")) os = "Linux";
+
+  return { browser, os, device };
+}
+
+function getSessionIdFromJwt(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.session_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function formatTimeAgo(dateStr: string | null): string {
+  if (!dateStr) return "Unknown";
+  const date = new Date(dateStr);
+  const diffMs = Date.now() - date.getTime();
+  const diffSecs = Math.floor(Math.abs(diffMs) / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffSecs < 60) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatExpiry(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  if (date < new Date()) return null;
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function isExpired(not_after: string | null): boolean {
+  return !!not_after && new Date(not_after) < new Date();
+}
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 
-
-type Tab = "account" | "security" | "billing" | "notifications" | "history" | "privacy"
+type Tab = "account" | "security" | "billing" | "notifications" | "history" | "privacy";
 
 const TABS: { value: Tab; label: string }[] = [
-  { value: "account",       label: "Account"       },
-  { value: "security",      label: "Security"      },
-  { value: "billing",       label: "Billing"       },
+  { value: "account", label: "Account" },
+  { value: "security", label: "Security" },
+  { value: "billing", label: "Billing" },
   { value: "notifications", label: "Notifications" },
-  { value: "history",       label: "Login History" },
-  { value: "privacy",       label: "Privacy"       },
-]
+  { value: "history", label: "Login History" },
+  { value: "privacy", label: "Privacy" },
+];
 
-
-// ─── Username status indicator ────────────────────────────────────────────────
-
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
-  if (status === "checking")
-    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-  if (status === "available")
-    return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-  if (status === "taken" || status === "invalid")
-    return <XCircle className="h-4 w-4 text-destructive" />
-  return null
+  if (status === "checking") return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+  if (status === "available") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+  if (status === "taken" || status === "invalid") return <XCircle className="h-4 w-4 text-destructive" />;
+  return null;
 }
 
 function usernameStatusMessage(status: UsernameStatus): { text: string; className: string } | null {
-  if (status === "checking")   return { text: "Checking availability…",         className: "text-muted-foreground" }
-  if (status === "available")  return { text: "Username is available!",          className: "text-emerald-600 dark:text-emerald-400" }
-  if (status === "taken")      return { text: "Username is already taken.",      className: "text-destructive" }
-  if (status === "invalid")    return { text: "3–20 characters: letters, numbers, underscores only.", className: "text-destructive" }
-  if (status === "unchanged")  return { text: "This is your current username.",  className: "text-muted-foreground" }
-  return null
+  if (status === "checking") return { text: "Checking availability…", className: "text-muted-foreground" };
+  if (status === "available") return { text: "Username is available!", className: "text-emerald-600 dark:text-emerald-400" };
+  if (status === "taken") return { text: "Username is already taken.", className: "text-destructive" };
+  if (status === "invalid") return { text: "3–20 characters: letters, numbers, underscores only.", className: "text-destructive" };
+  if (status === "unchanged") return { text: "This is your current username.", className: "text-muted-foreground" };
+  return null;
 }
 
+function DeviceIcon({ device }: { device: "desktop" | "mobile" | "tablet" }) {
+  const cls = "h-4 w-4 text-muted-foreground shrink-0 mt-0.5";
+  if (device === "mobile") return <Smartphone className={cls} />;
+  if (device === "tablet") return <Tablet className={cls} />;
+  return <Monitor className={cls} />;
+}
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function CandidateSettingsClient({ userProfile, initialData }: Props) {
-  const supabase = createClient()
-  const [isPending, startTransition] = useTransition()
-  const [isDirty, setIsDirty] = useState(false)
-  const [activeTab, setActiveTab] = useState<Tab>("account")
+  const supabase = createClient();
+  const [isPending, startTransition] = useTransition();
 
+  // Dirty
+  const [isDirty, setIsDirty] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("account");
 
-  // ── Username ──────────────────────────────────────────────────────────────
+  // Username
+  const [username, setUsername] = useState(userProfile.username ?? "");
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
+  const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialUsername = useRef(userProfile.username ?? "");
 
-  const [username, setUsername]               = useState(userProfile.username ?? "")
-  const [usernameStatus, setUsernameStatus]   = useState<UsernameStatus>("idle")
-  const usernameDebounceRef                   = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initialUsername                       = useRef(userProfile.username ?? "")
-
-
-  // ── Profile Picture ───────────────────────────────────────────────────────
-
-  const storedImagePath = useRef<string | null>(initialData?.profile_image_path ?? null)
-  const [avatarSrc, setAvatarSrc] = useState<string | null>(() =>
+  // Avatar
+  const storedImagePath = useRef<string | null>(initialData?.profile_image_path ?? null);
+  const [avatarSrc, setAvatarSrc] = useState<string | null>(
     getStorageUrl(supabase, "avatars", storedImagePath.current)
-  )
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
-  const avatarInputRef = useRef<HTMLInputElement>(null)
+  );
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
-
-  // ── Personal ──────────────────────────────────────────────────────────────
-
-  const [firstName, setFirstName]               = useState(initialData?.first_name ?? "")
-  const [middleName, setMiddleName]             = useState(initialData?.middle_name ?? "")
-  const [lastName, setLastName]                 = useState(initialData?.last_name ?? "")
-  const [gender, setGender]                     = useState(
-    initialData?.gender ? (GENDER_REVERSE[initialData.gender] ?? "") : ""
-  )
-  const [phoneNumber, setPhoneNumber]           = useState(initialData?.phone_number ?? "")
-  const [dateOfBirth, setDateOfBirth]           = useState<Date | undefined>(
+  // Personal
+  const [firstName, setFirstName] = useState(initialData?.first_name ?? "");
+  const [middleName, setMiddleName] = useState(initialData?.middle_name ?? "");
+  const [lastName, setLastName] = useState(initialData?.last_name ?? "");
+  const [gender, setGender] = useState(
+    initialData?.gender ? GENDER_REVERSE[initialData.gender] ?? "" : ""
+  );
+  const [phoneNumber, setPhoneNumber] = useState(initialData?.phone_number ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(
     initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined
-  )
-  const [dobOpen, setDobOpen]                   = useState(false)
-  const [aadhaarNumber, setAadhaarNumber]       = useState(initialData?.aadhaar_number ?? "")
-  const [currentAddress, setCurrentAddress]     = useState(initialData?.current_address ?? "")
-  const [permanentAddress, setPermanentAddress] = useState(initialData?.permanent_address ?? "")
+  );
+  const [dobOpen, setDobOpen] = useState(false);
+  const [aadhaarNumber, setAadhaarNumber] = useState(initialData?.aadhaar_number ?? "");
+  const [currentAddress, setCurrentAddress] = useState(initialData?.current_address ?? "");
+  const [permanentAddress, setPermanentAddress] = useState(initialData?.permanent_address ?? "");
 
-
-  // ── Education ─────────────────────────────────────────────────────────────
-
-  const [instituteId, setInstituteId]           = useState<string>(initialData?.institute_id ?? "")
-  const [instituteName, setInstituteName]       = useState("")
-  const [courseName, setCourseName]             = useState(initialData?.course_name ?? "")
-  const [passoutYear, setPassoutYear]           = useState(
+  // Education
+  const [instituteId, setInstituteId] = useState<string>(initialData?.institute_id ?? "");
+  const [instituteName, setInstituteName] = useState("");
+  const [courseName, setCourseName] = useState(initialData?.course_name ?? "");
+  const [passoutYear, setPassoutYear] = useState(
     initialData?.passout_year ? String(initialData.passout_year) : ""
-  )
-  const [sscPercentage, setSscPercentage]       = useState(
+  );
+  const [sscPercentage, setSscPercentage] = useState(
     initialData?.ssc_percentage != null ? String(initialData.ssc_percentage) : ""
-  )
-  const [sscPassYear, setSscPassYear]           = useState(
+  );
+  const [sscPassYear, setSscPassYear] = useState(
     initialData?.ssc_pass_year ? String(initialData.ssc_pass_year) : ""
-  )
-  const [isHsc, setIsHsc]                       = useState(initialData?.is_hsc ?? false)
-  const [hscPercentage, setHscPercentage]       = useState(
+  );
+  const [isHsc, setIsHsc] = useState(initialData?.is_hsc ?? false);
+  const [hscPercentage, setHscPercentage] = useState(
     initialData?.hsc_percentage != null ? String(initialData.hsc_percentage) : ""
-  )
-  const [hscPassYear, setHscPassYear]           = useState(
+  );
+  const [hscPassYear, setHscPassYear] = useState(
     initialData?.hsc_pass_year ? String(initialData.hsc_pass_year) : ""
-  )
-  const [isDiploma, setIsDiploma]               = useState(initialData?.is_diploma ?? false)
+  );
+  const [isDiploma, setIsDiploma] = useState(initialData?.is_diploma ?? false);
   const [diplomaPercentage, setDiplomaPercentage] = useState(
     initialData?.diploma_percentage != null ? String(initialData.diploma_percentage) : ""
-  )
-  const [diplomaPassYear, setDiplomaPassYear]   = useState(
+  );
+  const [diplomaPassYear, setDiplomaPassYear] = useState(
     initialData?.diploma_pass_year ? String(initialData.diploma_pass_year) : ""
-  )
-  const [universityPrn, setUniversityPrn]       = useState(initialData?.university_prn ?? "")
-  const [sgpaValues, setSgpaValues]             = useState<string[]>(
+  );
+  const [universityPrn, setUniversityPrn] = useState(initialData?.university_prn ?? "");
+  const [sgpaValues, setSgpaValues] = useState<string[]>(
     Array.from({ length: 8 }, (_, i) => {
-      const val = initialData?.[`sgpa_sem${i + 1}`]
-      return val != null ? String(val) : ""
+      const val = initialData?.[`sgpa_sem${i + 1}`];
+      return val != null ? String(val) : "";
     })
-  )
+  );
 
-
-  // ── Professional ──────────────────────────────────────────────────────────
-
-  const [selectedSkills, setSelectedSkills]     = useState<string[]>(initialData?.skills ?? [])
-  const [linkedinUrl, setLinkedinUrl]           = useState(initialData?.linkedin_url ?? "")
-  const [githubUrl, setGithubUrl]               = useState(initialData?.github_url ?? "")
-  const [portfolioLinks, setPortfolioLinks]     = useState<string[]>(
+  // Professional
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(initialData?.skills ?? []);
+  const [linkedinUrl, setLinkedinUrl] = useState(initialData?.linkedin_url ?? "");
+  const [githubUrl, setGithubUrl] = useState(initialData?.github_url ?? "");
+  const [portfolioLinks, setPortfolioLinks] = useState<string[]>(
     initialData?.portfolio_links?.length ? initialData.portfolio_links : [""]
-  )
+  );
 
+  // Institute lookup
+  const [institutes, setInstitutes] = useState<InstituteOption[]>([]);
+  const [availableCourses, setAvailableCourses] = useState<string[]>([]);
 
-  // ── Institute Lookup ──────────────────────────────────────────────────────
+  // Login History
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [sessionsLoading, setSessLoading] = useState(true);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokingAll, setRevokingAll] = useState(false);
 
-  const [institutes, setInstitutes]             = useState<InstituteOption[]>([])
-  const [availableCourses, setAvailableCourses] = useState<string[]>([])
+  // Misc
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const skillsAnchor = useComboboxAnchor();
+  const defaultDobDate = new Date(2000, 0, 1);
 
-
-  // ── Misc ──────────────────────────────────────────────────────────────────
-
-  const [errors, setErrors]   = useState<Record<string, string>>({})
-  const skillsAnchor          = useComboboxAnchor()
-  const defaultDobDate        = new Date(2000, 0, 1)
-
-
-  // ── Dirty tracking ────────────────────────────────────────────────────────
+  // ─── Dirty tracking ─────────────────────────────────────────────────────────
 
   const markDirty = useCallback(
     <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
-      (value: T | ((prev: T) => T)) => {
-        setter(value as any)
-        setIsDirty(true)
+      (value: T | null | ((prev: T) => T)) => {
+        (setter as any)(value);
+        setIsDirty(true);
       },
     []
-  )
+  );
 
-  const handleFirstName         = markDirty(setFirstName)
-  const handleMiddleName        = markDirty(setMiddleName)
-  const handleLastName          = markDirty(setLastName)
-  const handleGender            = markDirty(setGender)
-  const handlePhoneNumber       = markDirty(setPhoneNumber)
-  const handleDateOfBirth       = markDirty(setDateOfBirth)
-  const handleAadhaarNumber     = markDirty(setAadhaarNumber)
-  const handleCurrentAddress    = markDirty(setCurrentAddress)
-  const handlePermanentAddress  = markDirty(setPermanentAddress)
-  const handleCourseName        = markDirty(setCourseName)
-  const handlePassoutYear       = markDirty(setPassoutYear)
-  const handleSscPercentage     = markDirty(setSscPercentage)
-  const handleSscPassYear       = markDirty(setSscPassYear)
-  const handleIsHsc             = markDirty(setIsHsc)
-  const handleHscPercentage     = markDirty(setHscPercentage)
-  const handleHscPassYear       = markDirty(setHscPassYear)
-  const handleIsDiploma         = markDirty(setIsDiploma)
-  const handleDiplomaPercentage = markDirty(setDiplomaPercentage)
-  const handleDiplomaPassYear   = markDirty(setDiplomaPassYear)
-  const handleUniversityPrn     = markDirty(setUniversityPrn)
-  const handleSgpaValues        = markDirty(setSgpaValues)
-  const handleSelectedSkills    = markDirty(setSelectedSkills)
-  const handleLinkedinUrl       = markDirty(setLinkedinUrl)
-  const handleGithubUrl         = markDirty(setGithubUrl)
-  const handlePortfolioLinks    = markDirty(setPortfolioLinks)
+  const handleFirstName = markDirty(setFirstName);
+  const handleMiddleName = markDirty(setMiddleName);
+  const handleLastName = markDirty(setLastName);
+  const handleGender = markDirty(setGender);
+  const handlePhoneNumber = markDirty(setPhoneNumber);
+  const handleDateOfBirth = markDirty(setDateOfBirth);
+  const handleAadhaarNumber = markDirty(setAadhaarNumber);
+  const handleCurrentAddress = markDirty(setCurrentAddress);
+  const handlePermanentAddress = markDirty(setPermanentAddress);
+  const handleCourseName = markDirty(setCourseName);
+  const handlePassoutYear = markDirty(setPassoutYear);
+  const handleSscPercentage = markDirty(setSscPercentage);
+  const handleSscPassYear = markDirty(setSscPassYear);
+  const handleIsHsc = markDirty(setIsHsc);
+  const handleHscPercentage = markDirty(setHscPercentage);
+  const handleHscPassYear = markDirty(setHscPassYear);
+  const handleIsDiploma = markDirty(setIsDiploma);
+  const handleDiplomaPercentage = markDirty(setDiplomaPercentage);
+  const handleDiplomaPassYear = markDirty(setDiplomaPassYear);
+  const handleUniversityPrn = markDirty(setUniversityPrn);
+  const handleSgpaValues = markDirty(setSgpaValues);
+  const handleSelectedSkills = markDirty(setSelectedSkills);
+  const handleLinkedinUrl = markDirty(setLinkedinUrl);
+  const handleGithubUrl = markDirty(setGithubUrl);
+  const handlePortfolioLinks = markDirty(setPortfolioLinks);
 
-
-  // ── Username change handler with debounced availability check ─────────────
+  // ─── Username debounce ───────────────────────────────────────────────────────
 
   function handleUsernameChange(value: string) {
-    const trimmed = value.trim()
-    setUsername(trimmed)
-    setIsDirty(true)
-
-    if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current)
-
-    if (trimmed === "") {
-      setUsernameStatus("idle")
-      return
-    }
-    if (trimmed === initialUsername.current) {
-      setUsernameStatus("unchanged")
-      return
-    }
-    if (!USERNAME_REGEX.test(trimmed)) {
-      setUsernameStatus("invalid")
-      return
-    }
-
-    setUsernameStatus("checking")
+    const trimmed = value.trim();
+    setUsername(trimmed);
+    setIsDirty(true);
+    if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current);
+    if (!trimmed) { setUsernameStatus("idle"); return; }
+    if (trimmed === initialUsername.current) { setUsernameStatus("unchanged"); return; }
+    if (!USERNAME_REGEX.test(trimmed)) { setUsernameStatus("invalid"); return; }
+    setUsernameStatus("checking");
     usernameDebounceRef.current = setTimeout(async () => {
       const { data, error } = await supabase.rpc("check_username_available", {
         p_username: trimmed,
-        p_user_id:  userProfile.id,
-      })
-      if (error) {
-        setUsernameStatus("idle")
-        return
-      }
-      setUsernameStatus(data === true ? "available" : "taken")
-    }, 500)
+        p_user_id: userProfile.id,
+      });
+      if (error) { setUsernameStatus("idle"); return; }
+      setUsernameStatus(data === true ? "available" : "taken");
+    }, 500);
   }
 
-  // cleanup debounce on unmount
   useEffect(() => {
-    return () => { if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current) }
-  }, [])
+    return () => { if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current); };
+  }, []);
 
-
-  // ── Warn on unsaved changes ───────────────────────────────────────────────
+  // ─── Warn on unsaved changes ─────────────────────────────────────────────────
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) { e.preventDefault(); e.returnValue = "" }
-    }
-    window.addEventListener("beforeunload", handler)
-    return () => window.removeEventListener("beforeunload", handler)
-  }, [isDirty])
+      if (isDirty) { e.preventDefault(); e.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
-
-  // ── Load institutes ───────────────────────────────────────────────────────
+  // ─── Load institutes ─────────────────────────────────────────────────────────
 
   useEffect(() => {
-    ;(async () => {
+    (async () => {
       const { data } = await supabase
         .from("institute_profiles")
         .select("profile_id, institute_name, courses")
-        .order("institute_name")
+        .order("institute_name");
       if (data) {
-        setInstitutes(data)
+        setInstitutes(data);
         if (initialData?.institute_id) {
-          const found = data.find((i) => i.profile_id === initialData.institute_id)
+          const found = data.find((i) => i.profile_id === initialData.institute_id);
           if (found) {
-            setInstituteName(found.institute_name)
-            setAvailableCourses(found.courses ?? [])
+            setInstituteName(found.institute_name);
+            setAvailableCourses(found.courses ?? []);
           }
         }
       }
-    })()
-  }, [])
+    })();
+  }, []);
 
   useEffect(() => {
-    const found = institutes.find((i) => i.profile_id === instituteId)
+    const found = institutes.find((i) => i.profile_id === instituteId);
     if (found) {
-      setAvailableCourses(found.courses ?? [])
-      if (!found.courses?.includes(courseName)) setCourseName("")
+      setAvailableCourses(found.courses ?? []);
+      if (!found.courses?.includes(courseName)) setCourseName("");
     }
-  }, [instituteId])
+  }, [instituteId]);
 
-
-  // ── Avatar upload ─────────────────────────────────────────────────────────
+  // ─── Avatar upload ───────────────────────────────────────────────────────────
 
   async function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+    const file = e.target.files?.[0];
+    if (!file) return;
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      toast.error("Please upload a JPEG, PNG, or WEBP image.")
-      return
+      toast.error("Please upload a JPEG, PNG, or WEBP image.");
+      return;
     }
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      toast.error("Image must be smaller than 2 MB.")
-      return
+      toast.error("Image must be smaller than 2 MB.");
+      return;
     }
-
-    const blobUrl = URL.createObjectURL(file)
-    setAvatarSrc(blobUrl)
-    setIsUploadingAvatar(true)
-
+    const blobUrl = URL.createObjectURL(file);
+    setAvatarSrc(blobUrl);
+    setIsUploadingAvatar(true);
     try {
-      const oldPath = storedImagePath.current
+      const oldPath = storedImagePath.current;
       if (oldPath) {
-        const { error: deleteError } = await supabase.storage.from("avatars").remove([oldPath])
-        if (deleteError) console.warn("Could not delete old avatar:", deleteError.message)
+        const { error: deleteError } = await supabase.storage.from("avatars").remove([oldPath]);
+        if (deleteError) console.warn("Could not delete old avatar:", deleteError.message);
       }
-
-      const ext = file.name.split(".").pop() ?? "jpg"
-      const timestamp = Date.now()
-      const newPath = `candidates/${userProfile.id}/profile/${timestamp}.${ext}`
-
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const timestamp = Date.now();
+      const newPath = `candidates/${userProfile.id}/profile/${timestamp}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(newPath, file, { upsert: false, contentType: file.type })
-      if (uploadError) throw uploadError
-
+        .upload(newPath, file, { upsert: false, contentType: file.type });
+      if (uploadError) throw uploadError;
       const { error: dbError } = await supabase
         .from("candidate_profiles")
-        .upsert(
-          { profile_id: userProfile.id, profile_image_path: newPath },
-          { onConflict: "profile_id" }
-        )
-      if (dbError) throw dbError
-
-      storedImagePath.current = newPath
-      const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)!
-      setAvatarSrc(`${newPublicUrl}?v=${timestamp}`)
-      URL.revokeObjectURL(blobUrl)
-      toast.success("Profile picture updated!")
+        .upsert({ profile_id: userProfile.id, profile_image_path: newPath }, { onConflict: "profile_id" });
+      if (dbError) throw dbError;
+      storedImagePath.current = newPath;
+      const newPublicUrl = getStorageUrl(supabase, "avatars", newPath!);
+      setAvatarSrc(`${newPublicUrl}?v=${timestamp}`);
+      URL.revokeObjectURL(blobUrl);
+      toast.success("Profile picture updated!");
     } catch (err) {
-      console.error(err)
-      toast.error("Failed to upload profile picture. Please try again.")
-      setAvatarSrc(getStorageUrl(supabase, "avatars", storedImagePath.current))
-      URL.revokeObjectURL(blobUrl)
+      console.error(err);
+      toast.error("Failed to upload profile picture. Please try again.");
+      setAvatarSrc(getStorageUrl(supabase, "avatars", storedImagePath.current));
+      URL.revokeObjectURL(blobUrl);
     } finally {
-      setIsUploadingAvatar(false)
-      if (avatarInputRef.current) avatarInputRef.current.value = ""
+      setIsUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
     }
   }
 
-
-  // ── Institute select ──────────────────────────────────────────────────────
+  // ─── Institute select ────────────────────────────────────────────────────────
 
   function handleInstituteSelect(name: string | null) {
     if (!name) {
-      setInstituteId(""); setInstituteName(""); setAvailableCourses([]); setIsDirty(true)
-      return
+      setInstituteId("");
+      setInstituteName("");
+      setAvailableCourses([]);
+      setIsDirty(true);
+      return;
     }
-    const found = institutes.find((i) => i.institute_name === name)
+    const found = institutes.find((i) => i.institute_name === name);
     if (found) {
-      setInstituteId(found.profile_id)
-      setInstituteName(found.institute_name)
-      setAvailableCourses(found.courses ?? [])
-      setIsDirty(true)
+      setInstituteId(found.profile_id);
+      setInstituteName(found.institute_name);
+      setAvailableCourses(found.courses ?? []);
+      setIsDirty(true);
     }
   }
 
-
-  // ── SGPA ──────────────────────────────────────────────────────────────────
+  // ─── SGPA ────────────────────────────────────────────────────────────────────
 
   function handleSgpaChange(index: number, value: string) {
-    handleSgpaValues((prev) => { const u = [...prev]; u[index] = value; return u })
+    handleSgpaValues((prev) => {
+      const u = [...prev];
+      u[index] = value;
+      return u;
+    });
   }
 
+  // ─── Portfolio links ─────────────────────────────────────────────────────────
 
-  // ── Portfolio links ───────────────────────────────────────────────────────
+  function addPortfolioLink() {
+    handlePortfolioLinks((prev) => [...prev, ""]);
+  }
 
-  function addPortfolioLink() { handlePortfolioLinks((prev) => [...prev, ""]) }
   function handlePortfolioLinkChange(index: number, value: string) {
-    handlePortfolioLinks((prev) => { const u = [...prev]; u[index] = value; return u })
+    handlePortfolioLinks((prev) => {
+      const u = [...prev];
+      u[index] = value;
+      return u;
+    });
   }
+
   function removePortfolioLink(index: number) {
-    handlePortfolioLinks((prev) => prev.filter((_, i) => i !== index))
+    handlePortfolioLinks((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // ─── Login History handlers ──────────────────────────────────────────────────
 
-  // ── Validation ────────────────────────────────────────────────────────────
+  const loadSessions = useCallback(async () => {
+    setSessLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) { setSessions([]); return; }
+      if (session.access_token) {
+        setCurrentSessionId(getSessionIdFromJwt(session.access_token));
+      }
+      const { data, error } = await supabase
+        .from("user_sessions")
+        .select("id, created_at, updated_at, not_after, ip, user_agent")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      // ✅ FIX 1: data already matches SessionEntry[] since ip: unknown
+      setSessions(data ?? []);
+    } catch {
+      toast.error("Failed to load login history.");
+    } finally {
+      setSessLoading(false);
+    }
+  }, [supabase]);
+
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  async function handleRevokeSession(sessionId: string) {
+    setRevokingId(sessionId);
+    try {
+      const { error } = await supabase.rpc("revoke_session", { p_session_id: sessionId });
+      if (error) throw error;
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      toast.success("Session revoked.");
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to revoke session.");
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  async function handleRevokeAllSessions() {
+    const others = sessions.filter((s) => s.id !== currentSessionId);
+    if (!others.length) { toast.info("No other active sessions."); return; }
+    setRevokingAll(true);
+    let ok = 0, fail = 0;
+    for (const s of others) {
+      try {
+        const { error } = await supabase.rpc("revoke_session", { p_session_id: s.id });
+        if (error) throw error;
+        ok++;
+        setSessions((prev) => prev.filter((x) => x.id !== s.id));
+      } catch { fail++; }
+    }
+    setRevokingAll(false);
+    fail === 0
+      ? toast.success(`${ok} session${ok !== 1 ? "s" : ""} revoked.`)
+      : toast.warning(`${ok} revoked, ${fail} failed.`);
+  }
+
+  const otherSessionCount = sessions.filter((s) => s.id !== currentSessionId).length;
+
+  // ─── Validation ──────────────────────────────────────────────────────────────
 
   function validate(): Record<string, string> {
-    const e: Record<string, string> = {}
-
-    // Username
+    const e: Record<string, string> = {};
     if (username && !USERNAME_REGEX.test(username))
-      e.username = "3–20 characters: letters, numbers, and underscores only."
-    if (usernameStatus === "taken")
-      e.username = "This username is already taken."
-    if (usernameStatus === "checking")
-      e.username = "Please wait for username availability check to complete."
-
-    if (!firstName.trim())     e.firstName     = "First name is required"
-    if (!lastName.trim())      e.lastName      = "Last name is required"
-    if (!gender)               e.gender        = "Gender is required"
-    if (!phoneNumber.trim())   e.phoneNumber   = "Contact number is required"
-    else if (!/^[0-9]{10}$/.test(phoneNumber)) e.phoneNumber = "Must be exactly 10 digits"
-    if (!dateOfBirth)          e.dateOfBirth   = "Date of birth is required"
-    if (!instituteId)          e.institute     = "Institution is required"
-    if (!courseName)           e.courseName    = "Course / branch is required"
-    if (!passoutYear)          e.passoutYear   = "Passout year is required"
-    if (!sscPercentage)        e.sscPercentage = "SSC percentage is required"
-    if (!sscPassYear)          e.sscPassYear   = "SSC passing year is required"
-    if (!universityPrn.trim()) e.universityPrn = "University PRN is required"
-    if (selectedSkills.length === 0) e.skills  = "Select at least one skill"
+      e.username = "3–20 characters: letters, numbers, and underscores only.";
+    if (usernameStatus === "taken") e.username = "This username is already taken.";
+    if (usernameStatus === "checking") e.username = "Please wait for username availability check.";
+    if (!firstName.trim()) e.firstName = "First name is required";
+    if (!lastName.trim()) e.lastName = "Last name is required";
+    if (!gender) e.gender = "Gender is required";
+    if (!phoneNumber.trim()) e.phoneNumber = "Contact number is required";
+    else if (!/^[0-9]{10}$/.test(phoneNumber)) e.phoneNumber = "Must be exactly 10 digits";
+    if (!dateOfBirth) e.dateOfBirth = "Date of birth is required";
+    if (!instituteId) e.institute = "Institution is required";
+    if (!courseName) e.courseName = "Course/branch is required";
+    if (!passoutYear) e.passoutYear = "Passout year is required";
+    if (!sscPercentage) e.sscPercentage = "SSC percentage is required";
+    if (!sscPassYear) e.sscPassYear = "SSC passing year is required";
+    if (!universityPrn.trim()) e.universityPrn = "University PRN is required";
+    if (selectedSkills.length === 0) e.skills = "Select at least one skill";
     if (aadhaarNumber && !/^[0-9]{12}$/.test(aadhaarNumber))
-      e.aadhaarNumber = "Aadhaar must be exactly 12 digits"
-    return e
+      e.aadhaarNumber = "Aadhaar must be exactly 12 digits";
+    return e;
   }
 
-
-  // ── Discard ───────────────────────────────────────────────────────────────
+  // ─── Discard ─────────────────────────────────────────────────────────────────
 
   function handleDiscard() {
-    setUsername(userProfile.username ?? "")
-    setUsernameStatus("idle")
-    setFirstName(initialData?.first_name ?? "")
-    setMiddleName(initialData?.middle_name ?? "")
-    setLastName(initialData?.last_name ?? "")
-    setGender(initialData?.gender ? (GENDER_REVERSE[initialData.gender] ?? "") : "")
-    setPhoneNumber(initialData?.phone_number ?? "")
-    setDateOfBirth(initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined)
-    setAadhaarNumber(initialData?.aadhaar_number ?? "")
-    setCurrentAddress(initialData?.current_address ?? "")
-    setPermanentAddress(initialData?.permanent_address ?? "")
-    setInstituteId(initialData?.institute_id ?? "")
-    setCourseName(initialData?.course_name ?? "")
-    setPassoutYear(initialData?.passout_year ? String(initialData.passout_year) : "")
-    setSscPercentage(initialData?.ssc_percentage != null ? String(initialData.ssc_percentage) : "")
-    setSscPassYear(initialData?.ssc_pass_year ? String(initialData.ssc_pass_year) : "")
-    setIsHsc(initialData?.is_hsc ?? false)
-    setHscPercentage(initialData?.hsc_percentage != null ? String(initialData.hsc_percentage) : "")
-    setHscPassYear(initialData?.hsc_pass_year ? String(initialData.hsc_pass_year) : "")
-    setIsDiploma(initialData?.is_diploma ?? false)
-    setDiplomaPercentage(initialData?.diploma_percentage != null ? String(initialData.diploma_percentage) : "")
-    setDiplomaPassYear(initialData?.diploma_pass_year ? String(initialData.diploma_pass_year) : "")
-    setUniversityPrn(initialData?.university_prn ?? "")
-    setSgpaValues(Array.from({ length: 8 }, (_, i) => {
-      const val = initialData?.[`sgpa_sem${i + 1}`]
-      return val != null ? String(val) : ""
-    }))
-    setSelectedSkills(initialData?.skills ?? [])
-    setLinkedinUrl(initialData?.linkedin_url ?? "")
-    setGithubUrl(initialData?.github_url ?? "")
-    setPortfolioLinks(initialData?.portfolio_links?.length ? initialData.portfolio_links : [""])
-    setErrors({})
-    setIsDirty(false)
-    toast.info("Changes discarded.")
+    setUsername(userProfile.username ?? "");
+    setUsernameStatus("idle");
+    setFirstName(initialData?.first_name ?? "");
+    setMiddleName(initialData?.middle_name ?? "");
+    setLastName(initialData?.last_name ?? "");
+    setGender(initialData?.gender ? GENDER_REVERSE[initialData.gender] ?? "" : "");
+    setPhoneNumber(initialData?.phone_number ?? "");
+    setDateOfBirth(initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined);
+    setAadhaarNumber(initialData?.aadhaar_number ?? "");
+    setCurrentAddress(initialData?.current_address ?? "");
+    setPermanentAddress(initialData?.permanent_address ?? "");
+    setInstituteId(initialData?.institute_id ?? "");
+    setCourseName(initialData?.course_name ?? "");
+    setPassoutYear(initialData?.passout_year ? String(initialData.passout_year) : "");
+    setSscPercentage(initialData?.ssc_percentage != null ? String(initialData.ssc_percentage) : "");
+    setSscPassYear(initialData?.ssc_pass_year ? String(initialData.ssc_pass_year) : "");
+    setIsHsc(initialData?.is_hsc ?? false);
+    setHscPercentage(initialData?.hsc_percentage != null ? String(initialData.hsc_percentage) : "");
+    setHscPassYear(initialData?.hsc_pass_year ? String(initialData.hsc_pass_year) : "");
+    setIsDiploma(initialData?.is_diploma ?? false);
+    setDiplomaPercentage(initialData?.diploma_percentage != null ? String(initialData.diploma_percentage) : "");
+    setDiplomaPassYear(initialData?.diploma_pass_year ? String(initialData.diploma_pass_year) : "");
+    setUniversityPrn(initialData?.university_prn ?? "");
+    setSgpaValues(
+      Array.from({ length: 8 }, (_, i) => {
+        const val = initialData?.[`sgpa_sem${i + 1}`];
+        return val != null ? String(val) : "";
+      })
+    );
+    setSelectedSkills(initialData?.skills ?? []);
+    setLinkedinUrl(initialData?.linkedin_url ?? "");
+    setGithubUrl(initialData?.github_url ?? "");
+    setPortfolioLinks(initialData?.portfolio_links?.length ? initialData.portfolio_links : [""]);
+    setErrors({});
+    setIsDirty(false);
+    toast.info("Changes discarded.");
   }
 
-
-  // ── Save ──────────────────────────────────────────────────────────────────
+  // ─── Save ─────────────────────────────────────────────────────────────────────
 
   function handleSave() {
-    const newErrors = validate()
-    setErrors(newErrors)
+    const newErrors = validate();
+    setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
-      toast.error("Please fix the validation errors before saving.")
-      return
+      toast.error("Please fix the validation errors before saving.");
+      return;
     }
-
     startTransition(async () => {
-      // ── 1. Update username on profiles table (if changed) ────────────────
-      const trimmedUsername = username.trim() || null
+      const trimmedUsername = username.trim() || null;
       if (trimmedUsername !== (userProfile.username ?? null)) {
         const { error: usernameError } = await supabase
           .from("profiles")
           .update({ username: trimmedUsername })
-          .eq("id", userProfile.id)
-
+          .eq("id", userProfile.id);
         if (usernameError) {
-          console.error(usernameError)
-          // Postgres unique violation
           if (usernameError.code === "23505") {
-            setErrors((prev) => ({ ...prev, username: "This username is already taken." }))
-            setUsernameStatus("taken")
+            setErrors((prev) => ({ ...prev, username: "This username is already taken." }));
+            setUsernameStatus("taken");
           } else {
-            toast.error("Failed to update username. Please try again.")
+            toast.error("Failed to update username. Please try again.");
           }
-          return
+          return;
         }
       }
 
-      // ── 2. Upsert candidate profile ──────────────────────────────────────
-      const isFirstSave = !initialData?.profile_updated
+      const isFirstSave = !initialData?.profile_updated;
       const payload = {
-        profile_id:         userProfile.id,
-        first_name:         firstName.trim() || null,
-        middle_name:        middleName.trim() || null,
-        last_name:          lastName.trim() || null,
-        gender:             GENDER_MAP[gender] ?? null,
-        phone_number:       phoneNumber.trim() || null,
-        date_of_birth:      dateOfBirth ? toLocalDateString(dateOfBirth) : null,
-        aadhaar_number:     aadhaarNumber.trim() || null,
-        current_address:    currentAddress.trim() || null,
-        permanent_address:  permanentAddress.trim() || null,
-        institute_id:       instituteId || null,
-        course_name:        courseName || null,
-        passout_year:       passoutYear ? Number(passoutYear) : null,
-        ssc_percentage:     sscPercentage ? Number(sscPercentage) : null,
-        ssc_pass_year:      sscPassYear ? Number(sscPassYear) : null,
-        is_hsc:             isHsc,
-        hsc_percentage:     isHsc && hscPercentage ? Number(hscPercentage) : null,
-        hsc_pass_year:      isHsc && hscPassYear ? Number(hscPassYear) : null,
-        is_diploma:         isDiploma,
+        profile_id: userProfile.id,
+        first_name: firstName.trim() || null,
+        middle_name: middleName.trim() || null,
+        last_name: lastName.trim() || null,
+        gender: GENDER_MAP[gender] ?? null,
+        phone_number: phoneNumber.trim() || null,
+        date_of_birth: dateOfBirth ? toLocalDateString(dateOfBirth) : null,
+        aadhaar_number: aadhaarNumber.trim() || null,
+        current_address: currentAddress.trim() || null,
+        permanent_address: permanentAddress.trim() || null,
+        institute_id: instituteId || null,
+        course_name: courseName || null,
+        passout_year: passoutYear ? Number(passoutYear) : null,
+        ssc_percentage: sscPercentage ? Number(sscPercentage) : null,
+        ssc_pass_year: sscPassYear ? Number(sscPassYear) : null,
+        is_hsc: isHsc,
+        hsc_percentage: isHsc && hscPercentage ? Number(hscPercentage) : null,
+        hsc_pass_year: isHsc && hscPassYear ? Number(hscPassYear) : null,
+        is_diploma: isDiploma,
         diploma_percentage: isDiploma && diplomaPercentage ? Number(diplomaPercentage) : null,
-        diploma_pass_year:  isDiploma && diplomaPassYear ? Number(diplomaPassYear) : null,
-        university_prn:     universityPrn.trim() || null,
-        sgpa_sem1:          sgpaValues[0] ? Number(sgpaValues[0]) : null,
-        sgpa_sem2:          sgpaValues[1] ? Number(sgpaValues[1]) : null,
-        sgpa_sem3:          sgpaValues[2] ? Number(sgpaValues[2]) : null,
-        sgpa_sem4:          sgpaValues[3] ? Number(sgpaValues[3]) : null,
-        sgpa_sem5:          sgpaValues[4] ? Number(sgpaValues[4]) : null,
-        sgpa_sem6:          sgpaValues[5] ? Number(sgpaValues[5]) : null,
-        sgpa_sem7:          sgpaValues[6] ? Number(sgpaValues[6]) : null,
-        sgpa_sem8:          sgpaValues[7] ? Number(sgpaValues[7]) : null,
-        skills:             selectedSkills.length > 0 ? selectedSkills : null,
-        linkedin_url:       linkedinUrl.trim() || null,
-        github_url:         githubUrl.trim() || null,
-        portfolio_links:    portfolioLinks.filter((l) => l.trim()),
+        diploma_pass_year: isDiploma && diplomaPassYear ? Number(diplomaPassYear) : null,
+        university_prn: universityPrn.trim() || null,
+        sgpa_sem1: sgpaValues[0] ? Number(sgpaValues[0]) : null,
+        sgpa_sem2: sgpaValues[1] ? Number(sgpaValues[1]) : null,
+        sgpa_sem3: sgpaValues[2] ? Number(sgpaValues[2]) : null,
+        sgpa_sem4: sgpaValues[3] ? Number(sgpaValues[3]) : null,
+        sgpa_sem5: sgpaValues[4] ? Number(sgpaValues[4]) : null,
+        sgpa_sem6: sgpaValues[5] ? Number(sgpaValues[5]) : null,
+        sgpa_sem7: sgpaValues[6] ? Number(sgpaValues[6]) : null,
+        sgpa_sem8: sgpaValues[7] ? Number(sgpaValues[7]) : null,
+        skills: selectedSkills.length > 0 ? selectedSkills : null,
+        linkedin_url: linkedinUrl.trim() || null,
+        github_url: githubUrl.trim() || null,
+        portfolio_links: portfolioLinks.filter((l) => l.trim()),
         ...(isFirstSave ? { profile_updated: true } : {}),
-      }
+      };
 
       const { error } = await supabase
         .from("candidate_profiles")
-        .upsert(payload, { onConflict: "profile_id" })
+        .upsert(payload, { onConflict: "profile_id" });
 
       if (error) {
-        console.error(error)
-        toast.error("Failed to save profile. Please try again.")
+        console.error(error);
+        toast.error("Failed to save profile. Please try again.");
       } else {
-        toast.success("Profile saved successfully!")
-        setIsDirty(false)
-        // Keep username status as unchanged after a successful save
+        toast.success("Profile saved successfully!");
+        setIsDirty(false);
         if (trimmedUsername) {
-          initialUsername.current = trimmedUsername
-          setUsernameStatus("unchanged")
+          initialUsername.current = trimmedUsername;
+          setUsernameStatus("unchanged");
         }
       }
-    })
+    });
   }
 
+  // ─── Render ───────────────────────────────────────────────────────────────────
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
-  const instituteNames = institutes.map((i) => i.institute_name)
-  const usernameMsg    = usernameStatusMessage(usernameStatus)
+  const instituteNames = institutes.map((i) => i.institute_name);
+  const usernameMsg = usernameStatusMessage(usernameStatus);
 
   return (
     <div className="min-h-screen w-full">
-
-      {/* ── Page Header ──────────────────────────────────────────────────── */}
+      {/* Page Header */}
       <div className="px-4 pt-8 pb-0 md:px-8">
         <div className="space-y-0.5">
           <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your profile and account preferences
-          </p>
+          <p className="text-sm text-muted-foreground">Manage your profile and account preferences</p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
-
-        {/* ── Tab Bar ──────────────────────────────────────────────────────── */}
+        {/* Tab Bar */}
         <div className="overflow-x-auto px-4 pt-5 md:px-8">
           <TabsList className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
             {TABS.map(({ value, label }) => (
@@ -694,18 +779,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
         <div className="px-4 py-6 md:px-8 md:py-8">
 
-          {/* ════════════════════════════════════════════════════════════════
-              ACCOUNT TAB
-          ════════════════════════════════════════════════════════════════ */}
+          {/* ── ACCOUNT TAB ── */}
           <TabsContent value="account" className="space-y-6 mt-0">
 
-            {/* ── Account Settings (Username) ── */}
+            {/* Username */}
             <Card>
               <CardHeader>
                 <CardTitle>Account Settings</CardTitle>
-                <CardDescription>
-                  Your unique username is used to identify you on the platform
-                </CardDescription>
+                <CardDescription>Your unique username is used to identify you on the platform</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="max-w-sm space-y-2">
@@ -714,7 +795,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <AtSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="username"
-                      placeholder="your_username"
+                      placeholder="yourusername"
                       className={cn(
                         "pl-9 pr-9",
                         !!initialUsername.current && "cursor-not-allowed opacity-60",
@@ -728,30 +809,25 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       autoComplete="username"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                      {initialUsername.current
-                        ? null
-                        : <UsernameStatusIcon status={usernameStatus} />
-                      }
+                      {initialUsername.current ? null : <UsernameStatusIcon status={usernameStatus} />}
                     </span>
                   </div>
-                  {initialUsername.current
-                    ? <p className="text-xs text-muted-foreground">Username cannot be changed once set.</p>
-                    : errors.username
-                      ? <FieldError message={errors.username} />
-                      : usernameMsg && (
-                          <p className={cn("text-xs", usernameMsg.className)}>{usernameMsg.text}</p>
-                        )
-                  }
-                  {!initialUsername.current && (
+                  {initialUsername.current ? (
+                    <p className="text-xs text-muted-foreground">Username cannot be changed once set.</p>
+                  ) : errors.username ? (
+                    <FieldError message={errors.username} />
+                  ) : usernameMsg ? (
+                    <p className={cn("text-xs", usernameMsg.className)}>{usernameMsg.text}</p>
+                  ) : (
                     <p className="text-xs text-muted-foreground">
-                      3–20 characters · letters, numbers, and underscores only · cannot be changed after saving
+                      3–20 characters: letters, numbers, and underscores only — cannot be changed after saving
                     </p>
                   )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* ── Profile Photo ── */}
+            {/* Profile Photo */}
             <Card>
               <CardHeader>
                 <CardTitle>Profile Photo</CardTitle>
@@ -788,7 +864,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     />
                     <Button variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()} disabled={isUploadingAvatar}>
                       {isUploadingAvatar
-                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading…</>
                         : <><Upload className="h-4 w-4 mr-2" />Upload Photo</>}
                     </Button>
                     <p className="text-xs text-muted-foreground">Square image recommended · max 2 MB</p>
@@ -797,14 +873,13 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
-            {/* ── Personal Details ── */}
+            {/* Personal Details */}
             <Card>
               <CardHeader>
                 <CardTitle>Personal Details</CardTitle>
                 <CardDescription>Your basic personal information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>First Name<RequiredMark /></Label>
@@ -825,12 +900,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>Gender<RequiredMark /></Label>
-                    <Combobox items={GENDER_OPTIONS} value={gender} onValueChange={(v) => handleGender(v || "")}>
+                    <Combobox items={GENDER_OPTIONS} value={gender} onValueChange={(v) => handleGender(v)}>
                       <ComboboxInput placeholder="Select gender" />
                       <ComboboxContent>
                         <ComboboxEmpty>No gender found.</ComboboxEmpty>
                         <ComboboxList>
-                          {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                          {GENDER_OPTIONS.map((item) => (
+                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+                          ))}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -867,7 +944,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                           captionLayout="dropdown"
                           fromYear={1950}
                           toYear={2010}
-                          onSelect={(date) => { handleDateOfBirth(date); setDobOpen(false) }}
+                          onSelect={(date) => { handleDateOfBirth(date); setDobOpen(false); }}
                         />
                       </PopoverContent>
                     </Popover>
@@ -888,53 +965,38 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
                 <div className="space-y-2">
                   <Label>Current Address</Label>
-                  <Textarea
-                    placeholder="Current address"
-                    rows={3}
-                    value={currentAddress}
-                    onChange={(e) => handleCurrentAddress(e.target.value)}
-                  />
+                  <Textarea placeholder="Current address" rows={3} value={currentAddress} onChange={(e) => handleCurrentAddress(e.target.value)} />
                 </div>
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Permanent Address</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      type="button"
-                      onClick={() => handlePermanentAddress(currentAddress)}
-                    >
-                      <Copy className="h-3 w-3 mr-1" />
-                      Same as current
+                    <Button variant="ghost" size="sm" type="button" onClick={() => handlePermanentAddress(currentAddress)}>
+                      <Copy className="h-3 w-3 mr-1" />Same as current
                     </Button>
                   </div>
-                  <Textarea
-                    placeholder="Permanent address"
-                    rows={3}
-                    value={permanentAddress}
-                    onChange={(e) => handlePermanentAddress(e.target.value)}
-                  />
+                  <Textarea placeholder="Permanent address" rows={3} value={permanentAddress} onChange={(e) => handlePermanentAddress(e.target.value)} />
                 </div>
-
               </CardContent>
             </Card>
 
-            {/* ── Education Details ── */}
+            {/* Education Details */}
             <Card>
               <CardHeader>
                 <CardTitle>Education Details</CardTitle>
                 <CardDescription>Your academic background and qualifications</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-
                 <div className="space-y-2">
                   <Label>Institution<RequiredMark /></Label>
                   <Combobox items={instituteNames} value={instituteName} onValueChange={handleInstituteSelect}>
-                    <ComboboxInput placeholder="Search institution..." />
+                    <ComboboxInput placeholder="Search institution…" />
                     <ComboboxContent>
                       <ComboboxEmpty>No institution found.</ComboboxEmpty>
                       <ComboboxList>
-                        {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                        {instituteNames.map((item) => (
+                          <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+                        ))}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -944,23 +1006,16 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Branch / Course<RequiredMark /></Label>
-                    <Combobox
-                      items={availableCourses}
-                      value={courseName}
-                      onValueChange={(v) => handleCourseName(v || "")}
-                    >
+                    <Combobox items={availableCourses} value={courseName} onValueChange={(v) => handleCourseName(v)} disabled={!instituteId}>
                       <ComboboxInput
-                        placeholder={
-                          !instituteId ? "Select institution first"
-                          : availableCourses.length ? "Select course"
-                          : "No courses available"
-                        }
-                        disabled={!instituteId}
+                        placeholder={!instituteId ? "Select institution first" : availableCourses.length ? "Select course" : "No courses available"}
                       />
                       <ComboboxContent>
                         <ComboboxEmpty>No course found.</ComboboxEmpty>
                         <ComboboxList>
-                          {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                          {availableCourses.map((item) => (
+                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+                          ))}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -971,8 +1026,8 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <Input
                       placeholder="e.g. 2026"
                       type="number"
-                      min="2020"
-                      max="2035"
+                      min={2020}
+                      max={2035}
                       value={passoutYear}
                       onChange={(e) => handlePassoutYear(e.target.value)}
                     />
@@ -985,25 +1040,17 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>SSC Percentage<RequiredMark /></Label>
-                    <Input
-                      placeholder="e.g. 85.60"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={sscPercentage}
-                      onChange={(e) => handleSscPercentage(e.target.value)}
-                    />
+                    <Input placeholder="e.g. 85.60" type="number" step={0.01} min={0} max={100} value={sscPercentage} onChange={(e) => handleSscPercentage(e.target.value)} />
                     <FieldError message={errors.sscPercentage} />
                   </div>
                   <div className="space-y-2">
                     <Label>SSC Passing Year<RequiredMark /></Label>
-                    <Combobox items={YEAR_OPTIONS} value={sscPassYear} onValueChange={(v) => handleSscPassYear(v || "")}>
+                    <Combobox items={YEAR_OPTIONS} value={sscPassYear} onValueChange={(v) => handleSscPassYear(v)}>
                       <ComboboxInput placeholder="Select year" />
                       <ComboboxContent>
                         <ComboboxEmpty>No year found.</ComboboxEmpty>
                         <ComboboxList>
-                          {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                          {YEAR_OPTIONS.map((item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>)}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -1015,21 +1062,11 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   <Label>Education After SSC</Label>
                   <div className="flex gap-6">
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isHsc}
-                        onChange={(e) => handleIsHsc(e.target.checked)}
-                        className="h-4 w-4 accent-primary"
-                      />
+                      <input type="checkbox" checked={isHsc} onChange={(e) => handleIsHsc(e.target.checked)} className="h-4 w-4 accent-primary" />
                       <span className="text-sm">HSC</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isDiploma}
-                        onChange={(e) => handleIsDiploma(e.target.checked)}
-                        className="h-4 w-4 accent-primary"
-                      />
+                      <input type="checkbox" checked={isDiploma} onChange={(e) => handleIsDiploma(e.target.checked)} className="h-4 w-4 accent-primary" />
                       <span className="text-sm">Diploma</span>
                     </label>
                   </div>
@@ -1038,16 +1075,16 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                       <div className="space-y-2">
                         <Label>HSC Percentage</Label>
-                        <Input placeholder="e.g. 78.40" type="number" step="0.01" max="100" value={hscPercentage} onChange={(e) => handleHscPercentage(e.target.value)} />
+                        <Input placeholder="e.g. 78.40" type="number" step={0.01} max={100} value={hscPercentage} onChange={(e) => handleHscPercentage(e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <Label>HSC Passing Year</Label>
-                        <Combobox items={YEAR_OPTIONS} value={hscPassYear} onValueChange={(v) => handleHscPassYear(v || "")}>
+                        <Combobox items={YEAR_OPTIONS} value={hscPassYear} onValueChange={(v) => handleHscPassYear(v)}>
                           <ComboboxInput placeholder="Select year" />
                           <ComboboxContent>
                             <ComboboxEmpty>No year found.</ComboboxEmpty>
                             <ComboboxList>
-                              {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                              {YEAR_OPTIONS.map((item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>)}
                             </ComboboxList>
                           </ComboboxContent>
                         </Combobox>
@@ -1059,16 +1096,16 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                       <div className="space-y-2">
                         <Label>Diploma Percentage</Label>
-                        <Input placeholder="e.g. 72.00" type="number" step="0.01" max="100" value={diplomaPercentage} onChange={(e) => handleDiplomaPercentage(e.target.value)} />
+                        <Input placeholder="e.g. 72.00" type="number" step={0.01} max={100} value={diplomaPercentage} onChange={(e) => handleDiplomaPercentage(e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <Label>Diploma Passing Year</Label>
-                        <Combobox items={YEAR_OPTIONS} value={diplomaPassYear} onValueChange={(v) => handleDiplomaPassYear(v || "")}>
+                        <Combobox items={YEAR_OPTIONS} value={diplomaPassYear} onValueChange={(v) => handleDiplomaPassYear(v)}>
                           <ComboboxInput placeholder="Select year" />
                           <ComboboxContent>
                             <ComboboxEmpty>No year found.</ComboboxEmpty>
                             <ComboboxList>
-                              {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                              {YEAR_OPTIONS.map((item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>)}
                             </ComboboxList>
                           </ComboboxContent>
                         </Combobox>
@@ -1081,137 +1118,107 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
                 <div className="space-y-2">
                   <Label>University PRN<RequiredMark /></Label>
-                  <Input
-                    placeholder="Enter university PRN"
-                    value={universityPrn}
-                    onChange={(e) => handleUniversityPrn(e.target.value)}
-                  />
+                  <Input placeholder="University PRN / Enrollment number" value={universityPrn} onChange={(e) => handleUniversityPrn(e.target.value)} />
                   <FieldError message={errors.universityPrn} />
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Engineering SGPA (Semester-wise)</Label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {Array.from({ length: 8 }, (_, i) => (
-                      <div key={i} className="space-y-2">
+                  <Label>Semester SGPA</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {sgpaValues.map((val, i) => (
+                      <div key={i} className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Sem {i + 1}</Label>
                         <Input
                           placeholder="0.00"
                           type="number"
-                          step="0.01"
-                          min="0"
-                          max="10"
-                          value={sgpaValues[i]}
+                          step={0.01}
+                          min={0}
+                          max={10}
+                          value={val}
                           onChange={(e) => handleSgpaChange(i, e.target.value)}
                         />
                       </div>
                     ))}
                   </div>
                 </div>
-
               </CardContent>
             </Card>
 
-            {/* ── Professional Information ── */}
+            {/* Professional Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Professional Information</CardTitle>
-                <CardDescription>Your skills and professional links</CardDescription>
+                <CardTitle>Professional Details</CardTitle>
+                <CardDescription>Skills and online profiles</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-
-                <div className="space-y-2">
-                  <Label>Resume</Label>
-                  <Input type="file" accept=".pdf,.doc,.docx" disabled />
-                  <p className="text-xs text-muted-foreground">Resume upload coming soon · PDF, DOC, DOCX · max 5 MB</p>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
+                <div className="space-y-2" ref={skillsAnchor}>
                   <Label>Skills<RequiredMark /></Label>
+                  {/* ✅ FIX 2: removed `value` prop from ComboboxChip, use closure in onRemove */}
                   <Combobox
-                    multiple
-                    autoHighlight
                     items={SOFTWARE_SKILLS}
                     value={selectedSkills}
-                    onValueChange={(values) => handleSelectedSkills(values as string[])}
+                    onValueChange={(v) => handleSelectedSkills(v as string[])}
+                    multiple
                   >
-                    <ComboboxChips ref={skillsAnchor} className="w-full">
-                      <ComboboxValue>
-                        {(values) => (
-                          <>
-                            {values.map((value: string) => (
-                              <ComboboxChip key={value}>{value}</ComboboxChip>
-                            ))}
-                            <ComboboxChipsInput placeholder="Search and select skills..." />
-                          </>
-                        )}
-                      </ComboboxValue>
+                    <ComboboxChips>
+                      {selectedSkills.map((skill) => (
+                        <ComboboxChip key={skill} showRemove>
+                          {skill}
+                        </ComboboxChip>
+                      ))}
+                      <ComboboxChipsInput placeholder={selectedSkills.length ? "Add more…" : "Search skills…"} />
                     </ComboboxChips>
-                    <ComboboxContent anchor={skillsAnchor}>
+                    <ComboboxContent>
                       <ComboboxEmpty>No skill found.</ComboboxEmpty>
                       <ComboboxList>
-                        {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                        {SOFTWARE_SKILLS.map((item) => (
+                          <ComboboxItem key={item} value={item}>
+                            <ComboboxValue>{item}</ComboboxValue>
+                          </ComboboxItem>
+                        ))}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
                   <FieldError message={errors.skills} />
                 </div>
 
-                <Separator />
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>LinkedIn URL</Label>
-                    <Input
-                      placeholder="https://linkedin.com/in/yourprofile"
-                      type="url"
-                      value={linkedinUrl}
-                      onChange={(e) => handleLinkedinUrl(e.target.value)}
-                    />
+                    <Input placeholder="https://linkedin.com/in/yourprofile" type="url" value={linkedinUrl} onChange={(e) => handleLinkedinUrl(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>GitHub URL</Label>
-                    <Input
-                      placeholder="https://github.com/yourusername"
-                      type="url"
-                      value={githubUrl}
-                      onChange={(e) => handleGithubUrl(e.target.value)}
-                    />
+                    <Input placeholder="https://github.com/yourusername" type="url" value={githubUrl} onChange={(e) => handleGithubUrl(e.target.value)} />
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Portfolio / Other Links</Label>
+                  <Label>Portfolio / Project Links</Label>
                   {portfolioLinks.map((link, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <Input
                         value={link}
                         onChange={(e) => handlePortfolioLinkChange(index, e.target.value)}
-                        placeholder="https://yourportfolio.com"
+                        placeholder="https://yourproject.com"
                         type="url"
                       />
-                      <Button variant="ghost" size="icon" type="button" onClick={() => removePortfolioLink(index)}>
-                        <Minus className="h-4 w-4" />
-                      </Button>
+                      {portfolioLinks.length > 1 && (
+                        <Button variant="ghost" size="icon" type="button" onClick={() => removePortfolioLink(index)}>
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                   <Button variant="outline" size="sm" onClick={addPortfolioLink} type="button">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add link
+                    <Plus className="h-4 w-4 mr-2" />Add link
                   </Button>
                 </div>
-
               </CardContent>
             </Card>
-
           </TabsContent>
 
-
-          {/* ════════════════════════════════════════════════════════════════
-              SECURITY TAB
-          ════════════════════════════════════════════════════════════════ */}
+          {/* ── SECURITY TAB ── */}
           <TabsContent value="security" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
@@ -1219,18 +1226,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <CardDescription>Keep your account secure</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Current Password</Label>
-                  <Input type="password" placeholder="Enter current password" />
-                </div>
-                <div className="space-y-2">
-                  <Label>New Password</Label>
-                  <Input type="password" placeholder="Enter new password" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Confirm New Password</Label>
-                  <Input type="password" placeholder="Confirm new password" />
-                </div>
+                <div className="space-y-2"><Label>Current Password</Label><Input type="password" placeholder="Enter current password" /></div>
+                <div className="space-y-2"><Label>New Password</Label><Input type="password" placeholder="Enter new password" /></div>
+                <div className="space-y-2"><Label>Confirm New Password</Label><Input type="password" placeholder="Confirm new password" /></div>
                 <Button disabled>Update Password (coming soon)</Button>
               </CardContent>
             </Card>
@@ -1251,97 +1249,272 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
-
-          {/* ════════════════════════════════════════════════════════════════
-              BILLING TAB
-          ════════════════════════════════════════════════════════════════ */}
+          {/* ── BILLING TAB ── */}
           <TabsContent value="billing" className="mt-0">
             <Card>
-              <CardHeader>
-                <CardTitle>Billing</CardTitle>
-                <CardDescription>Subscription and payments</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">Current Plan: <strong>Free</strong></p>
-              </CardContent>
+              <CardHeader><CardTitle>Billing</CardTitle><CardDescription>Subscription and payments</CardDescription></CardHeader>
+              <CardContent><p className="text-sm">Current Plan: <strong>Free</strong></p></CardContent>
             </Card>
           </TabsContent>
 
-
-          {/* ════════════════════════════════════════════════════════════════
-              NOTIFICATIONS TAB
-          ════════════════════════════════════════════════════════════════ */}
+          {/* ── NOTIFICATIONS TAB ── */}
           <TabsContent value="notifications" className="mt-0">
             <Card>
-              <CardHeader>
-                <CardTitle>Notification Preferences</CardTitle>
-                <CardDescription>Manage how you receive updates</CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle>Notification Preferences</CardTitle><CardDescription>Manage how you receive updates</CardDescription></CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "Email Alerts",          desc: "Receive important notifications via email" },
-                  { label: "Job Updates",            desc: "Get notified about new job opportunities" },
-                  { label: "Group Notifications",    desc: "Updates from groups and communities you joined" },
+                  { label: "Email Alerts", desc: "Receive important notifications via email" },
+                  { label: "Job Updates", desc: "Get notified about new job opportunities" },
+                  { label: "Group Notifications", desc: "Updates from groups and communities you joined" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
-                    <div>
-                      <Label>{label}</Label>
-                      <p className="text-sm text-muted-foreground">{desc}</p>
-                    </div>
+                    <div><Label>{label}</Label><p className="text-sm text-muted-foreground">{desc}</p></div>
                     <Switch />
                   </div>
                 ))}
               </CardContent>
             </Card>
           </TabsContent>
-
-
-          {/* ════════════════════════════════════════════════════════════════
-              LOGIN HISTORY TAB
-          ════════════════════════════════════════════════════════════════ */}
+          {/* ── LOGIN HISTORY TAB ── */}
+          {/* ── LOGIN HISTORY TAB ── */}
           <TabsContent value="history" className="mt-0">
-            <LoginHistoryTab
-              supabase={supabase}
-              cardDescription="Recent access to your account"
-            />
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Login History
+                </CardTitle>
+                <CardDescription>Devices currently signed in to your account</CardDescription>
+                <CardAction>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadSessions}
+                    disabled={sessionsLoading}
+                    className="gap-1.5 text-xs h-8"
+                  >
+                    {sessionsLoading
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <RefreshCw className="h-3.5 w-3.5" />}
+                    Refresh
+                  </Button>
+                </CardAction>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+
+                {/* ── Revoke-All Banner ── */}
+                {!sessionsLoading && otherSessionCount > 0 && (
+                  <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 text-destructive" />
+                      <span className="text-xs font-medium text-destructive">
+                        {otherSessionCount} other active session{otherSessionCount !== 1 ? "s" : ""} detected
+                      </span>
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={revokingAll}
+                          className="h-7 px-3 text-xs gap-1.5"
+                        >
+                          {revokingAll
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <LogOut className="h-3 w-3" />}
+                          Sign out all
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Sign out all other sessions?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            <strong>{otherSessionCount} other device{otherSessionCount !== 1 ? "s" : ""}</strong>{" "}
+                            will be signed out immediately. Your current session will remain active.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={handleRevokeAllSessions}
+                          >
+                            Sign out all
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+
+                {/* ── Skeleton ── */}
+                {sessionsLoading && (
+                  <div className="space-y-2">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 rounded-lg border p-3.5 animate-pulse">
+                        <div className="h-9 w-9 rounded-md bg-muted shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-1/3 rounded bg-muted" />
+                          <div className="h-2.5 w-1/2 rounded bg-muted" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Empty State ── */}
+                {!sessionsLoading && sessions.length === 0 && (
+                  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <Clock className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium">No sessions found</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Login activity will appear here once detected.
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Session Cards ── */}
+                {!sessionsLoading && sessions.length > 0 && (
+                  <div className="space-y-2">
+                    {sessions.map((session) => {
+                      const { browser, os, device } = parseUserAgent(session.user_agent)
+                      const isCurrent = session.id === currentSessionId
+                      const expired = isExpired(session.not_after)
+                      const expiryLabel = formatExpiry(session.not_after)
+                      const isRevoking = revokingId === session.id
+
+                      return (
+                        <div
+                          key={session.id}
+                          className={cn(
+                            "group flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 transition-colors",
+                            isCurrent && "border-primary/30 bg-primary/5",
+                            expired && !isCurrent && "opacity-50"
+                          )}
+                        >
+                          {/* Device Icon */}
+                          <div className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                            isCurrent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                          )}>
+                            <DeviceIcon device={device} />
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-sm font-medium leading-none truncate">
+                                {browser} on {os}
+                              </span>
+                              {isCurrent && (
+                                <Badge className="h-4 px-1.5 text-[10px] rounded-sm bg-primary/15 text-primary border-0 font-medium">
+                                  This device
+                                </Badge>
+                              )}
+                              {expired && (
+                                <Badge className="h-4 px-1.5 text-[10px] rounded-sm bg-orange-500/10 text-orange-600 dark:text-orange-400 border-0 font-medium">
+                                  Expired
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                              {session.ip != null && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-2.5 w-2.5" />
+                                  {String(session.ip)}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" />
+                                Signed in {formatTimeAgo(session.created_at)}
+                              </span>
+                              {session.updated_at && session.updated_at !== session.created_at && (
+                                <span className="flex items-center gap-1">
+                                  <RefreshCw className="h-2.5 w-2.5" />
+                                  Last active {formatTimeAgo(session.updated_at)}
+                                </span>
+                              )}
+                              {expiryLabel && (
+                                <span className="flex items-center gap-1">
+                                  <CalendarClock className="h-2.5 w-2.5" />
+                                  Expires {expiryLabel}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Revoke */}
+                          {!isCurrent && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={isRevoking || revokingAll}
+                                  className="h-8 w-8 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all"
+                                >
+                                  {isRevoking
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <LogOut className="h-3.5 w-3.5" />}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Sign out this device?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    <strong>{browser} on {os}</strong>
+                                    {session.ip != null ? ` (IP: ${String(session.ip)})` : ""} will be signed out immediately.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    onClick={() => handleRevokeSession(session.id)}
+                                  >
+                                    Sign out
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+              </CardContent>
+            </Card>
           </TabsContent>
 
 
-          {/* ════════════════════════════════════════════════════════════════
-              PRIVACY TAB
-          ════════════════════════════════════════════════════════════════ */}
+
+
+          {/* ── PRIVACY TAB ── */}
           <TabsContent value="privacy" className="space-y-6 mt-0">
             <Card>
-              <CardHeader>
-                <CardTitle>Privacy Controls</CardTitle>
-                <CardDescription>Manage your data privacy</CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle>Privacy Controls</CardTitle><CardDescription>Manage your data privacy</CardDescription></CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "Public Profile",                   desc: "Make your profile visible to recruiters" },
-                  { label: "Resume Visible to Recruiters",     desc: "Allow recruiters to view and download your resume" },
-                  { label: "Allow Data Usage",                 desc: "Help improve platform with usage data" },
+                  { label: "Public Profile", desc: "Make your profile visible to recruiters" },
+                  { label: "Allow Data Usage", desc: "Help improve platform with usage data" },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-center justify-between">
-                    <div>
-                      <Label>{label}</Label>
-                      <p className="text-sm text-muted-foreground">{desc}</p>
-                    </div>
+                    <div><Label>{label}</Label><p className="text-sm text-muted-foreground">{desc}</p></div>
                     <Switch />
                   </div>
                 ))}
               </CardContent>
             </Card>
             <Card>
-              <CardHeader>
-                <CardTitle>Data Management</CardTitle>
-                <CardDescription>Export or delete your account data</CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle>Data Management</CardTitle><CardDescription>Export or delete your account data</CardDescription></CardHeader>
               <CardContent className="flex flex-wrap gap-3">
                 <Button variant="outline">Export All Data</Button>
-                <Button variant="outline" className="text-destructive hover:text-destructive">
-                  Request Account Deletion
-                </Button>
+                <Button variant="outline" className="text-destructive hover:text-destructive">Request Account Deletion</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1357,5 +1530,5 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         message="You have unsaved changes"
       />
     </div>
-  )
+  );
 }
