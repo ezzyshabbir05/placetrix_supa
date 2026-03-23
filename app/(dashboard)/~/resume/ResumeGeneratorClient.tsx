@@ -865,14 +865,18 @@ export function ResumeGeneratorClient() {
 
   const makeDragEnd = <T extends { id: string }>(key: keyof ResumeData) =>
     (e: DragEndEvent) => {
-      const { active, over } = e
-      if (!over || active.id === over.id) return
-      setData((d) => {
-        const arr = d[key] as T[]
-        const ids = arr.map((x) => x.id)
-        return { ...d, [key]: arrayMove(arr, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))) }
-      })
-    }
+      const { active, over } = e;
+      if (!over || active.id === over.id) return;
+      setData(d => {
+        const arr = d[key] as unknown as T[]; // ✅ cast via unknown
+        const ids = arr.map(x => x.id);
+        return {
+          ...d,
+          [key]: arrayMove(arr, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))),
+        };
+      });
+    };
+
 
   const handleExpDragEnd = makeDragEnd<ExperienceItem>("experience")
   const handleEduDragEnd = makeDragEnd<EducationItem>("education")

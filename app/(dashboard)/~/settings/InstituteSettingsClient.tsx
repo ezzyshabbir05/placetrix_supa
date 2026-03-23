@@ -366,7 +366,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
 
-    // Username
     if (username && !USERNAME_REGEX.test(username))
       e.username = "3–20 characters: letters, numbers, and underscores only."
     if (usernameStatus === "taken")
@@ -439,7 +438,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
         if (usernameError) {
           console.error(usernameError)
-          // Postgres unique violation
           if (usernameError.code === "23505") {
             setErrors((prev) => ({ ...prev, username: "This username is already taken." }))
             setUsernameStatus("taken")
@@ -451,7 +449,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
       }
 
       // ── 2. Upsert institute profile ──────────────────────────────────────
-      const payload: Record<string, any> = {
+      // ✅ FIX: Removed `Record<string, any>` type annotation so TypeScript
+      //         infers the type and matches it against the generated DB schema.
+      const payload = {
         profile_id:       userProfile.id,
         institute_name:   instituteName.trim(),
         institute_code:   instituteCode.trim() || null,
@@ -472,6 +472,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         social_links:     socialLinks.filter((l) => l.trim()),
       }
 
+      // ✅ FIX: Destructure `{ error }` instead of assigning `error` directly
       const { error } = await supabase
         .from("institute_profiles")
         .upsert(payload, { onConflict: "profile_id" })
@@ -908,7 +909,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
             </Card>
 
           </TabsContent>
-
 
           {/* ════════════════════════════════════════════════════════════════
               SECURITY TAB

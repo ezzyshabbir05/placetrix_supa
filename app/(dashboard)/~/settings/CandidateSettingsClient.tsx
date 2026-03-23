@@ -599,7 +599,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
       // ── 2. Upsert candidate profile ──────────────────────────────────────
       const isFirstSave = !initialData?.profile_updated
-      const payload: Record<string, any> = {
+      const payload = {
         profile_id:         userProfile.id,
         first_name:         firstName.trim() || null,
         middle_name:        middleName.trim() || null,
