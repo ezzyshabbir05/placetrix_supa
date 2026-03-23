@@ -1,75 +1,90 @@
+// lib/supabase/middleware.ts
+//
+// Session refresh + route-protection logic called by /middleware.ts.
+//
+// Separated here so it can be unit-tested independently of the Next.js
+// middleware edge runtime.
+
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { Database } from "@/types/supabase";
 
-// ─── Route configuration ───────────────────────────────────────────────────────
+// ─── Route rules ──────────────────────────────────────────────────────────────
 
+/** Routes that require an authenticated session. */
 const PROTECTED_PREFIXES = ["/~/"] as const;
-const PUBLIC_PREFIXES    = ["/auth/", "/_next/", "/favicon.ico"] as const;
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+/** Routes that should NOT be visited while authenticated. */
+const AUTH_PREFIXES = ["/auth/"] as const;
 
-function isProtectedRoute(pathname: string): boolean {
-  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return false;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
-function buildLoginRedirect(request: NextRequest): NextResponse {
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/auth/login";
-  loginUrl.searchParams.set("next", request.nextUrl.pathname);
-  return NextResponse.redirect(loginUrl);
+function isAuthPage(pathname: string): boolean {
+  return AUTH_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
 // ─── updateSession ─────────────────────────────────────────────────────────────
 
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
-  const requestHeaders = new Headers(request.headers);
-  // Forward pathname for server layouts (e.g. auth recovery-flow exceptions).
-  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+  // Start with a plain pass-through response.
+  // We mutate this reference inside setAll() so cookies are always written.
+  let supabaseResponse = NextResponse.next({ request });
 
-  let supabaseResponse = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-
-  const supabase = createServerClient<Database>(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
-        getAll: () => request.cookies.getAll(),
+        getAll() {
+          return request.cookies.getAll();
+        },
         setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          // Re-create response to preserve x-pathname header after cookie refresh.
-          supabaseResponse = NextResponse.next({
-            request: { headers: requestHeaders },
-          });
-          for (const { name, value, options } of cookiesToSet) {
-            supabaseResponse.cookies.set(name, value, options);
-          }
+          // Write updated cookies back onto the request object …
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          // … and onto the response so the browser receives them.
+          supabaseResponse = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          );
         },
       },
-    },
+    }
   );
 
-  /**
-   * ── getClaims() only — never getUser() in middleware ─────────────────────
-   *
-   * getClaims() verifies the JWT locally against the cached JWKS public key
-   * (asymmetric signing). Zero network round-trips after the initial key fetch.
-   * getUser() hits the Auth server on EVERY middleware invocation — thousands
-   * of requests/sec on a busy app. [web:6][web:12]
-   *
-   * Revoked sessions are caught on the next protected page render inside
-   * getUserProfile() where getUser() IS called and errors are handled safely.
-   */
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const isAuthenticated = !!claimsData?.claims;
+  // ✅  getUser() validates the JWT with the Auth server — not spoofable.
+  //    getClaims() / getSession() only trust the local cookie and must NOT
+  //    be used for access-control decisions.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (isProtectedRoute(request.nextUrl.pathname) && !isAuthenticated) {
-    return buildLoginRedirect(request);
+  const { pathname } = request.nextUrl;
+
+  // Unauthenticated user trying to reach a protected page → login.
+  if (isProtected(pathname) && !user) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/auth/login";
+    loginUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Authenticated user visiting an auth page → app home.
+  // Exception: /auth/callback and /auth/confirm handle OAuth / token flows
+  // and must be reachable even with a valid session.
+  const isFlowRoute =
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/auth/confirm");
+
+  if (isAuthPage(pathname) && !isFlowRoute && user) {
+    const homeUrl = request.nextUrl.clone();
+    homeUrl.pathname = "/~";
+    homeUrl.search = "";
+    return NextResponse.redirect(homeUrl);
   }
 
   return supabaseResponse;

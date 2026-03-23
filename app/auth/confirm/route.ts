@@ -1,36 +1,28 @@
 // app/auth/confirm/route.ts
 //
-// Fallback handler for LINK-based email verification flows (token_hash / OTP method).
+// Fallback handler for LINK-based email flows (token_hash method).
+// Device-independent — no PKCE verifier required, so links work on any device.
 //
-// This route is NOT part of the primary OTP flow — users entering a 6-digit
-// code in the UI are verified client-side via supabase.auth.verifyOtp().
+// Triggered when a user clicks a link in:
+//   - Signup confirmation email  (type=signup)
+//   - Password reset email       (type=recovery)
+//   - Email change email         (type=email_change)
+//   - Magic link email           (type=magiclink)
 //
-// This route handles cases where:
-//   - A user clicks a link in an older-style email template
-//   - Your email template contains both a code and a link ({{ .ConfirmationURL }})
-//   - You need cross-device link support as a fallback
+// The primary OTP flow (user types a code) is handled entirely client-side
+// via supabase.auth.verifyOtp(). This route only handles clicked links.
 //
-// This is DEVICE-INDEPENDENT — unlike PKCE code flow used for OAuth,
-// token_hash requires no stored verifier, so links work from any device.
+// ── Email template variables ──────────────────────────────────────────────────
 //
-// Handles:
-//   - Email address confirmation after sign-up  (type=signup)
-//   - Password reset recovery links             (type=recovery)
-//   - Email change confirmation                 (type=email_change)
-//   - Magic link sign-in                        (type=magiclink)
+//  To support BOTH a code and a clickable link in the same email:
 //
-// ── Supabase Email Template Configuration (link-based fallback) ───────────────
+//  Confirm signup:
+//    Code: {{ .Token }}
+//    Link: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/~
 //
-// If you want to support BOTH OTP codes and clickable links in the same email,
-// include both {{ .Token }} and {{ .ConfirmationURL }} in your template:
-//
-// Confirm signup:
-//   Your code: {{ .Token }}
-//   Or click: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/~
-//
-// Reset password:
-//   Your code: {{ .Token }}
-//   Or click: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery
+//  Reset password:
+//    Code: {{ .Token }}
+//    Link: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -44,10 +36,13 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = searchParams.get("next") ?? "/~";
 
+  // Validate redirect target.
+  const safeNext = next.startsWith("/") ? next : "/~";
+
   if (!token_hash || !type) {
     return NextResponse.redirect(
       `${origin}/auth/error?error=${encodeURIComponent(
-        "Invalid verification link — missing token or type"
+        "Invalid verification link — missing token or type."
       )}`
     );
   }
@@ -56,21 +51,19 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.auth.verifyOtp({ type, token_hash });
 
   if (error) {
+    console.error("[auth/confirm] verifyOtp error:", error.message);
     return NextResponse.redirect(
       `${origin}/auth/error?error=${encodeURIComponent(error.message)}`
     );
   }
 
-  // Recovery tokens always go to the password reset page so the user
-  // can immediately set a new password within the established session.
-  //
-  // ?mode=recovery tells change-password that this visit came via a
-  // legitimate reset link (not a logged-in user who navigated here directly).
+  // Recovery tokens → change-password with mode flag so the page knows
+  // the session was established via a legitimate reset link.
   if (type === "recovery") {
     return NextResponse.redirect(
       `${origin}/auth/change-password?mode=recovery`
     );
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return NextResponse.redirect(`${origin}${safeNext}`);
 }

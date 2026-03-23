@@ -1,23 +1,26 @@
 // app/auth/login/page.tsx
 //
-// Login flow with mandatory email confirmation gate:
+// Login flow:
 //
 //   login-form   → signInWithPassword()
 //                  ✓ confirmed   → redirect /~
 //                  ✗ unconfirmed → resend OTP → otp-entry
 //
 //   otp-entry    → verifyOtp({ email, token, type: 'signup' })
-//                  ✓ verified → session active → redirect /~
+//                  ✓ verified    → session active → redirect /~
 //
-// Industry practice: never let an unconfirmed account access the app.
-// We resend a fresh OTP immediately so the user doesn't have to go back
-// to sign-up — they finish confirmation inline right from the login screen.
+//   OR: Continue with Google → signInWithOAuth() → /auth/callback → /~
+//
+//   OR: Google One Tap (floating prompt) → signInWithIdToken() → /~
+//
+// Industry note: never grant access to an unconfirmed account.
 "use client";
 
 import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -25,8 +28,16 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { OTPInput } from "@/components/ui/otp-input";
-import { AtSignIcon, EyeIcon, EyeOffIcon, LockIcon, MailIcon } from "lucide-react";
+import {
+  AtSignIcon,
+  EyeIcon,
+  EyeOffIcon,
+  Loader2Icon,
+  LockIcon,
+  MailIcon,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { GoogleOneTap } from "@/components/auth/google-one-tap";
 
 type PageState = "login-form" | "otp-entry";
 
@@ -39,61 +50,74 @@ const GoogleIcon = (props: React.ComponentProps<"svg">) => (
 );
 
 export default function LoginPage() {
-  const router = useRouter();
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex sm:w-sm items-center justify-center py-12">
+          <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
+  );
+}
 
-  // ── Form state ─────────────────────────────────────────────────────────────
+function LoginContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/~";
+
   const [pageState, setPageState] = useState<PageState>("login-form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  // ── OTP state ──────────────────────────────────────────────────────────────
   const [otp, setOtp] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // ── Loading / error ────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Cooldown timer ─────────────────────────────────────────────────────────
   const startCooldown = () => {
     setResendCooldown(RESEND_COOLDOWN);
     cooldownRef.current = setInterval(() => {
       setResendCooldown((s) => {
-        if (s <= 1) { clearInterval(cooldownRef.current!); return 0; }
+        if (s <= 1) {
+          clearInterval(cooldownRef.current!);
+          return 0;
+        }
         return s - 1;
       });
     }, 1000);
   };
 
   useEffect(
-    () => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); },
+    () => () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    },
     []
   );
 
-  // ── Login ──────────────────────────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    const supabase = createClient();
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
       if (error) {
-        // Supabase returns this exact message for unconfirmed accounts.
         if (error.message === "Email not confirmed") {
-          // Send a fresh OTP so the user can confirm right here.
           const { error: resendError } = await supabase.auth.resend({
             type: "signup",
             email,
           });
           if (resendError) throw resendError;
-
           setPageState("otp-entry");
           startCooldown();
           return;
@@ -101,7 +125,7 @@ export default function LoginPage() {
         throw error;
       }
 
-      router.push("/~");
+      router.push(next);
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -110,7 +134,6 @@ export default function LoginPage() {
     }
   };
 
-  // ── Verify OTP (confirm email then sign in) ────────────────────────────────
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otp.length < 8) {
@@ -118,12 +141,10 @@ export default function LoginPage() {
       return;
     }
     setError(null);
-
-    const supabase = createClient();
     setIsLoading(true);
 
     try {
-      // verifyOtp with type 'signup' confirms the email AND establishes a session.
+      const supabase = createClient();
       const { error } = await supabase.auth.verifyOtp({
         email,
         token: otp,
@@ -131,7 +152,7 @@ export default function LoginPage() {
       });
       if (error) throw error;
 
-      router.push("/~");
+      router.push(next);
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid or expired code");
@@ -141,13 +162,12 @@ export default function LoginPage() {
     }
   };
 
-  // ── Resend OTP ─────────────────────────────────────────────────────────────
   const handleResend = async () => {
     if (resendCooldown > 0) return;
     setError(null);
 
-    const supabase = createClient();
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.resend({ type: "signup", email });
       if (error) throw error;
       startCooldown();
@@ -157,23 +177,27 @@ export default function LoginPage() {
     }
   };
 
-  // ── Google OAuth ───────────────────────────────────────────────────────────
   const handleGoogleLogin = async () => {
-    const supabase = createClient();
     setIsGoogleLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/~` },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (error) throw error;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
       setIsGoogleLoading(false);
     }
   };
 
-  // ── OTP screen (email confirmation gate) ──────────────────────────────────
+  // ── OTP screen ─────────────────────────────────────────────────────────────
   if (pageState === "otp-entry") {
     return (
       <div className="mx-auto space-y-6 sm:w-sm">
@@ -182,7 +206,9 @@ export default function LoginPage() {
             <MailIcon className="h-7 w-7 text-primary" />
           </div>
           <div className="space-y-1">
-            <h1 className="font-bold text-2xl tracking-wide">Confirm Your Email</h1>
+            <h1 className="font-bold text-2xl tracking-wide">
+              Confirm Your Email
+            </h1>
             <p className="text-base text-muted-foreground">
               Your email isn&apos;t confirmed yet. We sent an 8-digit code to{" "}
               <span className="font-medium text-foreground">{email}</span>.
@@ -191,11 +217,7 @@ export default function LoginPage() {
         </div>
 
         <form className="space-y-4" onSubmit={handleVerifyOtp}>
-          <OTPInput
-            value={otp}
-            onChange={setOtp}
-            disabled={isLoading}
-          />
+          <OTPInput value={otp} onChange={setOtp} disabled={isLoading} />
 
           {error && (
             <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2 text-center">
@@ -208,7 +230,14 @@ export default function LoginPage() {
             type="submit"
             disabled={isLoading || otp.length < 8}
           >
-            {isLoading ? "Verifying..." : "Confirm & Sign In"}
+            {isLoading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Verifying…
+              </>
+            ) : (
+              "Confirm & Sign In"
+            )}
           </Button>
         </form>
 
@@ -235,7 +264,11 @@ export default function LoginPage() {
 
         <button
           type="button"
-          onClick={() => { setPageState("login-form"); setOtp(""); setError(null); }}
+          onClick={() => {
+            setPageState("login-form");
+            setOtp("");
+            setError(null);
+          }}
           className="w-full text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
           Back to sign in
@@ -246,110 +279,137 @@ export default function LoginPage() {
 
   // ── Login form ─────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto space-y-4 sm:w-sm">
-      <div className="flex flex-col space-y-1">
-        <h1 className="font-bold text-2xl tracking-wide">Welcome Back!</h1>
-        <p className="text-base text-muted-foreground">
-          Sign in to your account to continue.
-        </p>
-      </div>
+    <>
+      {/* One Tap only shown on the login form, not the OTP screen */}
+      <GoogleOneTap next={next} />
 
-      <Button
-        className="w-full"
-        variant="outline"
-        type="button"
-        onClick={handleGoogleLogin}
-        disabled={isGoogleLoading || isLoading}
-      >
-        <GoogleIcon className="mr-2 h-4 w-4" />
-        {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
-      </Button>
-
-      <div className="flex w-full items-center justify-center">
-        <div className="h-px w-full bg-border" />
-        <span className="px-2 text-muted-foreground text-xs">OR</span>
-        <div className="h-px w-full bg-border" />
-      </div>
-
-      <form className="space-y-2" onSubmit={handleLogin}>
-        <p className="text-start text-muted-foreground text-xs">
-          Enter your credentials to sign in
-        </p>
-        <InputGroup>
-          <InputGroupInput
-            placeholder="your.email@example.com"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <InputGroupAddon align="inline-start">
-            <AtSignIcon />
-          </InputGroupAddon>
-        </InputGroup>
-
-        <InputGroup>
-          <InputGroupInput
-            placeholder="Password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <InputGroupAddon align="inline-start">
-            <LockIcon />
-          </InputGroupAddon>
-          <InputGroupAddon
-            align="inline-end"
-            className="cursor-pointer"
-            onClick={() => setShowPassword((p) => !p)}
-          >
-            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-          </InputGroupAddon>
-        </InputGroup>
-
-        {error && (
-          <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2">
-            {error}
+      <div className="mx-auto space-y-4 sm:w-sm">
+        <div className="flex flex-col space-y-1">
+          <h1 className="font-bold text-2xl tracking-wide">Welcome Back!</h1>
+          <p className="text-base text-muted-foreground">
+            Sign in to your account to continue.
           </p>
-        )}
+        </div>
 
-        <Button className="w-full" type="submit" disabled={isLoading || isGoogleLoading}>
-          {isLoading ? "Signing in..." : "Sign In"}
+        <Button
+          className="w-full"
+          variant="outline"
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={isGoogleLoading || isLoading}
+        >
+          {isGoogleLoading ? (
+            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <GoogleIcon className="mr-2 h-4 w-4" />
+          )}
+          {isGoogleLoading ? "Redirecting…" : "Continue with Google"}
         </Button>
 
-        <div className="flex justify-end">
-          <Link
-            href="/auth/reset-password"
-            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-primary"
-          >
-            Forgot password?
-          </Link>
+        <div className="flex w-full items-center justify-center">
+          <div className="h-px w-full bg-border" />
+          <span className="px-2 text-muted-foreground text-xs">OR</span>
+          <div className="h-px w-full bg-border" />
         </div>
-      </form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <Link
-          href="/auth/sign-up"
-          className="underline underline-offset-4 hover:text-primary"
-        >
-          Create one
-        </Link>
-      </p>
-      <p className="text-muted-foreground text-xs text-center">
-        By signing in, you agree to our{" "}
-        <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
-          Terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
-          Privacy Policy
-        </Link>
-        .
-      </p>
-    </div>
+        <form className="space-y-2" onSubmit={handleLogin}>
+          <p className="text-start text-muted-foreground text-xs">
+            Enter your credentials to sign in
+          </p>
+
+          <InputGroup>
+            <InputGroupInput
+              placeholder="your.email@example.com"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <InputGroupAddon align="inline-start">
+              <AtSignIcon />
+            </InputGroupAddon>
+          </InputGroup>
+
+          <InputGroup>
+            <InputGroupInput
+              placeholder="Password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <InputGroupAddon align="inline-start">
+              <LockIcon />
+            </InputGroupAddon>
+            <InputGroupAddon
+              align="inline-end"
+              className="cursor-pointer"
+              onClick={() => setShowPassword((p) => !p)}
+            >
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+            </InputGroupAddon>
+          </InputGroup>
+
+          {error && (
+            <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <Button
+            className="w-full"
+            type="submit"
+            disabled={isLoading || isGoogleLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Signing in…
+              </>
+            ) : (
+              "Sign In"
+            )}
+          </Button>
+
+          <div className="flex justify-end">
+            <Link
+              href="/auth/reset-password"
+              className="text-xs text-muted-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        </form>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/auth/sign-up"
+            className="underline underline-offset-4 hover:text-primary"
+          >
+            Create one
+          </Link>
+        </p>
+        <p className="text-muted-foreground text-xs text-center">
+          By signing in, you agree to our{" "}
+          <Link
+            href="/terms"
+            className="underline underline-offset-4 hover:text-primary"
+          >
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="/privacy"
+            className="underline underline-offset-4 hover:text-primary"
+          >
+            Privacy Policy
+          </Link>
+          .
+        </p>
+      </div>
+    </>
   );
 }

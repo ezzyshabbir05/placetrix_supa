@@ -1,25 +1,22 @@
 // app/auth/reset-password/page.tsx
 //
-// Full OTP-based password reset flow — all steps on one page:
+// Full OTP-based password reset — all steps on a single page:
 //
-//   email-form    → user enters email → resetPasswordForEmail()
-//   otp-entry     → user enters 8-digit code
-//                   → verifyOtp({ email, token, type: 'recovery' })
-//                   → session established
-//   password-form → user sets new password → updateUser({ password })
-//                   → signOut() to invalidate recovery session
+//   email-form    → resetPasswordForEmail(email)  → OTP sent
+//   otp-entry     → verifyOtp({ email, token, type: 'recovery' })
+//                   → recovery session established
+//   password-form → updateUser({ password })
+//                   → signOut() to invalidate the one-time recovery session
 //   success       → prompt to sign in
 //
-// ── Required Supabase Email Template Configuration ────────────────────────────
+// ── Required Supabase email template ─────────────────────────────────────────
 //
-// Dashboard → Authentication → Email Templates → Reset Password
+//  Dashboard → Authentication → Email Templates → Reset Password
+//  Subject: Reset your password
+//  Body:
+//    Your password reset code is: {{ .Token }}
+//    This code expires in 1 hour.
 //
-// Subject: Reset your password
-// Body (example):
-//   Your password reset code is: {{ .Token }}
-//   This code expires in 1 hour.
-//
-// The {{ .Token }} variable injects the 8-digit OTP.
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 
@@ -38,6 +35,7 @@ import {
   CheckCircleIcon,
   EyeIcon,
   EyeOffIcon,
+  Loader2Icon,
   LockIcon,
   MailIcon,
 } from "lucide-react";
@@ -48,22 +46,16 @@ type PageState = "email-form" | "otp-entry" | "password-form" | "success";
 const RESEND_COOLDOWN = 60;
 
 export default function ResetPasswordPage() {
-  // ── Shared state ───────────────────────────────────────────────────────────
+  // ── State ──────────────────────────────────────────────────────────────────
   const [pageState, setPageState] = useState<PageState>("email-form");
   const [email, setEmail] = useState("");
-
-  // ── OTP state ──────────────────────────────────────────────────────────────
   const [otp, setOtp] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // ── Password state ─────────────────────────────────────────────────────────
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
-  // ── Loading / error ────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,20 +73,23 @@ export default function ResetPasswordPage() {
     }, 1000);
   };
 
-  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    },
+    []
+  );
 
   // ── Step 1: Send reset email ───────────────────────────────────────────────
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    const supabase = createClient();
     setIsLoading(true);
 
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
-
       setPageState("otp-entry");
       startCooldown();
     } catch (err: unknown) {
@@ -112,19 +107,16 @@ export default function ResetPasswordPage() {
       return;
     }
     setError(null);
-
-    const supabase = createClient();
     setIsLoading(true);
 
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.verifyOtp({
         email,
         token: otp,
         type: "recovery",
       });
       if (error) throw error;
-
-      // Session is now active — move to password form.
       setPageState("password-form");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Invalid or expired code");
@@ -139,8 +131,8 @@ export default function ResetPasswordPage() {
     if (resendCooldown > 0) return;
     setError(null);
 
-    const supabase = createClient();
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
       startCooldown();
@@ -164,14 +156,14 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    const supabase = createClient();
     setIsLoading(true);
 
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
-      // Invalidate the recovery session so it cannot be reused.
+      // Invalidate the one-time recovery session so it cannot be reused.
       await supabase.auth.signOut();
       setPageState("success");
     } catch (err: unknown) {
@@ -189,7 +181,9 @@ export default function ResetPasswordPage() {
           <CheckCircleIcon className="h-7 w-7 text-green-500" />
         </div>
         <div className="space-y-1">
-          <h1 className="font-bold text-2xl tracking-wide">Password Updated!</h1>
+          <h1 className="font-bold text-2xl tracking-wide">
+            Password Updated!
+          </h1>
           <p className="text-base text-muted-foreground">
             Your password has been reset successfully. Sign in with your new
             password to continue.
@@ -267,7 +261,14 @@ export default function ResetPasswordPage() {
           )}
 
           <Button className="w-full" type="submit" disabled={isLoading}>
-            {isLoading ? "Updating..." : "Update Password"}
+            {isLoading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Updating…
+              </>
+            ) : (
+              "Update Password"
+            )}
           </Button>
         </form>
       </div>
@@ -283,7 +284,9 @@ export default function ResetPasswordPage() {
             <MailIcon className="h-7 w-7 text-primary" />
           </div>
           <div className="space-y-1">
-            <h1 className="font-bold text-2xl tracking-wide">Enter Reset Code</h1>
+            <h1 className="font-bold text-2xl tracking-wide">
+              Enter Reset Code
+            </h1>
             <p className="text-base text-muted-foreground">
               We sent an 8-digit code to{" "}
               <span className="font-medium text-foreground">{email}</span>
@@ -292,11 +295,7 @@ export default function ResetPasswordPage() {
         </div>
 
         <form className="space-y-4" onSubmit={handleVerifyOtp}>
-          <OTPInput
-            value={otp}
-            onChange={setOtp}
-            disabled={isLoading}
-          />
+          <OTPInput value={otp} onChange={setOtp} disabled={isLoading} />
 
           {error && (
             <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2 text-center">
@@ -304,8 +303,19 @@ export default function ResetPasswordPage() {
             </p>
           )}
 
-          <Button className="w-full" type="submit" disabled={isLoading || otp.length < 8}>
-            {isLoading ? "Verifying..." : "Verify Code"}
+          <Button
+            className="w-full"
+            type="submit"
+            disabled={isLoading || otp.length < 8}
+          >
+            {isLoading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Verifying…
+              </>
+            ) : (
+              "Verify Code"
+            )}
           </Button>
         </form>
 
@@ -332,7 +342,11 @@ export default function ResetPasswordPage() {
 
         <button
           type="button"
-          onClick={() => { setPageState("email-form"); setOtp(""); setError(null); }}
+          onClick={() => {
+            setPageState("email-form");
+            setOtp("");
+            setError(null);
+          }}
           className="w-full text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
           Use a different email
@@ -373,7 +387,14 @@ export default function ResetPasswordPage() {
         )}
 
         <Button className="w-full" type="submit" disabled={isLoading}>
-          {isLoading ? "Sending..." : "Send Reset Code"}
+          {isLoading ? (
+            <>
+              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              Sending…
+            </>
+          ) : (
+            "Send Reset Code"
+          )}
         </Button>
       </form>
 

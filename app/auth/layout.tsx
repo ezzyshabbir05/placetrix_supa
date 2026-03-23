@@ -1,32 +1,27 @@
 // app/auth/layout.tsx
 //
-// Auth layout — redirects already-authenticated users to /~.
+// Auth shell layout.
 //
-// stay consistent with middleware. This means offline users with a valid JWT
-// are also correctly redirected away from auth pages.
+// Middleware (middleware.ts) already redirects authenticated users away from
+// /auth/… routes, so this layout does NOT need to repeat that check.
+// A second getUser() call here would be redundant and waste a round-trip.
 //
-// No recovery-route exception is needed here because the password reset flow
-// is now fully OTP-based — verifyOtp() is called client-side and never
-// produces a server-side session that would trigger this redirect.
-import { Suspense } from "react";
-import { headers } from "next/headers";
-import { FloatingPaths } from "@/components/ui/auth_page/floating-paths";
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import { getUserProfile } from "@/lib/supabase/profile";
+// Exception routes that bypass the middleware redirect:
+//   /auth/callback  — OAuth code exchange (must run even when authenticated)
+//   /auth/confirm   — Link-based token verification (same reason)
 
-export default async function AuthLayout({
+import { Suspense } from "react";
+import { FloatingPaths } from "@/components/ui/auth_page/floating-paths";
+import Link from "next/link";
+
+export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const profile = await getUserProfile()
-  if (profile) return redirect("/~")
-
-
   return (
     <main className="relative md:h-screen md:overflow-hidden lg:grid lg:grid-cols-2">
-      {/* ── Left Panel (desktop only) ── */}
+      {/* ── Left decorative panel (desktop only) ── */}
       <div className="relative hidden h-full flex-col border-r bg-secondary p-10 lg:flex dark:bg-secondary/20">
         <div className="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-background pointer-events-none" />
         <Link href="/" className="font-bold text-xl">
@@ -51,8 +46,9 @@ export default async function AuthLayout({
         </div>
       </div>
 
-      {/* ── Right Panel wrapper — children slot ── */}
+      {/* ── Right content panel ── */}
       <div className="relative flex min-h-screen flex-col justify-center px-8">
+        {/* Subtle radial glow */}
         <div
           aria-hidden
           className="absolute inset-0 isolate -z-10 opacity-60 contain-strict"

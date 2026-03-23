@@ -1,11 +1,8 @@
 // app/auth/sign-up-success/page.tsx
 //
-// Shown when a user signs up but email confirmation is handled via a link
-// rather than an OTP code (e.g. if auto-confirm is disabled and the user
-// somehow bypasses the inline OTP step).
-//
-// The primary sign-up flow now verifies inline via OTP on /auth/sign-up.
-// This page serves as a fallback / manual navigation target.
+// Fallback shown when a user signs up but OTP confirmation was somehow
+// bypassed (e.g. the user navigated away before entering the code).
+// The primary flow verifies inline via OTP on /auth/sign-up.
 import { MailIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";

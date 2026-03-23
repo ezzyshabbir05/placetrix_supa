@@ -1,22 +1,5 @@
 // app/auth/sign-up/page.tsx
-//
-// OTP-based sign-up flow:
-//   1. sign-up-form  — collect email + password → supabase.auth.signUp()
-//   2. otp-entry     — user enters 8-digit code from email
-//                      → supabase.auth.verifyOtp({ email, token, type: 'signup' })
-//                      → session established → redirect to /~
-//
-// ── Required Supabase Email Template Configuration ────────────────────────────
-//
-// Dashboard → Authentication → Email Templates → Confirm signup
-//
-// Subject: Confirm your signup
-// Body (example):
-//   Your confirmation code is: {{ .Token }}
-//   This code expires in 1 hour.
-//
-// The {{ .Token }} variable injects the 8-digit OTP.
-// ─────────────────────────────────────────────────────────────────────────────
+// OTP-based sign-up flow + Google One Tap
 "use client";
 
 import type React from "react";
@@ -30,10 +13,20 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { OTPInput } from "@/components/ui/otp-input";
-import { AtSignIcon, EyeIcon, EyeOffIcon, LockIcon, MailIcon } from "lucide-react";
+import {
+  AtSignIcon,
+  EyeIcon,
+  EyeOffIcon,
+  Loader2Icon,
+  LockIcon,
+  MailIcon,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { GoogleOneTap } from "@/components/auth/google-one-tap";
 
 type PageState = "sign-up-form" | "otp-entry";
+
+const RESEND_COOLDOWN = 60;
 
 const GoogleIcon = (props: React.ComponentProps<"svg">) => (
   <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
@@ -41,30 +34,22 @@ const GoogleIcon = (props: React.ComponentProps<"svg">) => (
   </svg>
 );
 
-const RESEND_COOLDOWN = 60;
-
 export default function SignUpPage() {
   const router = useRouter();
 
-  // ── Form state ─────────────────────────────────────────────────────────────
   const [pageState, setPageState] = useState<PageState>("sign-up-form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
-  // ── OTP state ──────────────────────────────────────────────────────────────
   const [otp, setOtp] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // ── Loading / error ────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Cooldown timer ─────────────────────────────────────────────────────────
   const startCooldown = () => {
     setResendCooldown(RESEND_COOLDOWN);
     cooldownRef.current = setInterval(() => {
@@ -78,9 +63,13 @@ export default function SignUpPage() {
     }, 1000);
   };
 
-  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    },
+    []
+  );
 
-  // ── Sign up ────────────────────────────────────────────────────────────────
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -94,17 +83,17 @@ export default function SignUpPage() {
       return;
     }
 
-    const supabase = createClient();
     setIsLoading(true);
 
     try {
+      const supabase = createClient();
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
-      // Supabase silently "succeeds" for existing emails.
-      // An existing account always returns an empty identities array.
       if (data.user?.identities?.length === 0) {
-        setError("An account with this email already exists. Sign in instead.");
+        setError(
+          "An account with this email already exists. Try signing in instead."
+        );
         return;
       }
 
@@ -117,7 +106,6 @@ export default function SignUpPage() {
     }
   };
 
-  // ── Verify OTP ─────────────────────────────────────────────────────────────
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otp.length < 8) {
@@ -125,11 +113,10 @@ export default function SignUpPage() {
       return;
     }
     setError(null);
-
-    const supabase = createClient();
     setIsLoading(true);
 
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.verifyOtp({
         email,
         token: otp,
@@ -147,13 +134,12 @@ export default function SignUpPage() {
     }
   };
 
-  // ── Resend OTP ─────────────────────────────────────────────────────────────
   const handleResend = async () => {
     if (resendCooldown > 0) return;
     setError(null);
 
-    const supabase = createClient();
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.resend({ type: "signup", email });
       if (error) throw error;
       startCooldown();
@@ -163,24 +149,29 @@ export default function SignUpPage() {
     }
   };
 
-  // ── Google OAuth ───────────────────────────────────────────────────────────
   const handleGoogleSignUp = async () => {
-    const supabase = createClient();
     setIsGoogleLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/~` },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=/~`,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (error) throw error;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Google sign-up failed");
       setIsGoogleLoading(false);
     }
   };
 
   // ── OTP entry screen ───────────────────────────────────────────────────────
   if (pageState === "otp-entry") {
+    // One Tap intentionally hidden during OTP step — user already chose email flow
     return (
       <div className="mx-auto space-y-6 sm:w-sm">
         <div className="flex flex-col items-center space-y-3 text-center">
@@ -188,7 +179,9 @@ export default function SignUpPage() {
             <MailIcon className="h-7 w-7 text-primary" />
           </div>
           <div className="space-y-1">
-            <h1 className="font-bold text-2xl tracking-wide">Check Your Email</h1>
+            <h1 className="font-bold text-2xl tracking-wide">
+              Check Your Email
+            </h1>
             <p className="text-base text-muted-foreground">
               We sent an 8-digit code to{" "}
               <span className="font-medium text-foreground">{email}</span>
@@ -197,11 +190,7 @@ export default function SignUpPage() {
         </div>
 
         <form className="space-y-4" onSubmit={handleVerifyOtp}>
-          <OTPInput
-            value={otp}
-            onChange={setOtp}
-            disabled={isLoading}
-          />
+          <OTPInput value={otp} onChange={setOtp} disabled={isLoading} />
 
           {error && (
             <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2 text-center">
@@ -209,8 +198,19 @@ export default function SignUpPage() {
             </p>
           )}
 
-          <Button className="w-full" type="submit" disabled={isLoading || otp.length < 8}>
-            {isLoading ? "Verifying..." : "Verify Email"}
+          <Button
+            className="w-full"
+            type="submit"
+            disabled={isLoading || otp.length < 8}
+          >
+            {isLoading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Verifying…
+              </>
+            ) : (
+              "Verify Email"
+            )}
           </Button>
         </form>
 
@@ -220,9 +220,7 @@ export default function SignUpPage() {
             <span>
               Didn&apos;t receive it?{" "}
               {resendCooldown > 0 ? (
-                <span className="text-muted-foreground">
-                  Resend in {resendCooldown}s
-                </span>
+                <span>Resend in {resendCooldown}s</span>
               ) : (
                 <button
                   type="button"
@@ -239,7 +237,11 @@ export default function SignUpPage() {
 
         <button
           type="button"
-          onClick={() => { setPageState("sign-up-form"); setOtp(""); setError(null); }}
+          onClick={() => {
+            setPageState("sign-up-form");
+            setOtp("");
+            setError(null);
+          }}
           className="w-full text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
           Use a different email
@@ -250,126 +252,151 @@ export default function SignUpPage() {
 
   // ── Sign-up form ───────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto space-y-4 sm:w-sm">
-      <div className="flex flex-col space-y-1">
-        <h1 className="font-bold text-2xl tracking-wide">Create an Account</h1>
-        <p className="text-base text-muted-foreground">
-          Join now and get started in seconds.
-        </p>
-      </div>
+    <>
+      {/* One Tap shown only on the sign-up form step */}
+      <GoogleOneTap next="/~" />
 
-      <Button
-        className="w-full"
-        variant="outline"
-        type="button"
-        onClick={handleGoogleSignUp}
-        disabled={isGoogleLoading || isLoading}
-      >
-        <GoogleIcon className="mr-2 h-4 w-4" />
-        {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
-      </Button>
-
-      <div className="flex w-full items-center justify-center">
-        <div className="h-px w-full bg-border" />
-        <span className="px-2 text-muted-foreground text-xs">OR</span>
-        <div className="h-px w-full bg-border" />
-      </div>
-
-      <form className="space-y-2" onSubmit={handleSignUp}>
-        <p className="text-start text-muted-foreground text-xs">
-          Fill in your details to create a new account
-        </p>
-        <InputGroup>
-          <InputGroupInput
-            placeholder="your.email@example.com"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <InputGroupAddon align="inline-start">
-            <AtSignIcon />
-          </InputGroupAddon>
-        </InputGroup>
-
-        <InputGroup>
-          <InputGroupInput
-            placeholder="Password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <InputGroupAddon align="inline-start">
-            <LockIcon />
-          </InputGroupAddon>
-          <InputGroupAddon
-            align="inline-end"
-            className="cursor-pointer"
-            onClick={() => setShowPassword((p) => !p)}
-          >
-            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-          </InputGroupAddon>
-        </InputGroup>
-
-        <InputGroup>
-          <InputGroupInput
-            placeholder="Confirm password"
-            type={showConfirm ? "text" : "password"}
-            autoComplete="new-password"
-            required
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-          <InputGroupAddon align="inline-start">
-            <LockIcon />
-          </InputGroupAddon>
-          <InputGroupAddon
-            align="inline-end"
-            className="cursor-pointer"
-            onClick={() => setShowConfirm((p) => !p)}
-          >
-            {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
-          </InputGroupAddon>
-        </InputGroup>
-
-        {error && (
-          <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2">
-            {error}
+      <div className="mx-auto space-y-4 sm:w-sm">
+        <div className="flex flex-col space-y-1">
+          <h1 className="font-bold text-2xl tracking-wide">
+            Create an Account
+          </h1>
+          <p className="text-base text-muted-foreground">
+            Join now and get started in seconds.
           </p>
-        )}
+        </div>
 
         <Button
           className="w-full"
-          type="submit"
-          disabled={isLoading || isGoogleLoading}
+          variant="outline"
+          type="button"
+          onClick={handleGoogleSignUp}
+          disabled={isGoogleLoading || isLoading}
         >
-          {isLoading ? "Creating account..." : "Create Account"}
+          {isGoogleLoading ? (
+            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <GoogleIcon className="mr-2 h-4 w-4" />
+          )}
+          {isGoogleLoading ? "Redirecting…" : "Continue with Google"}
         </Button>
-      </form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link
-          href="/auth/login"
-          className="underline underline-offset-4 hover:text-primary"
-        >
-          Sign in
-        </Link>
-      </p>
-      <p className="text-muted-foreground text-xs text-center">
-        By signing up, you agree to our{" "}
-        <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
-          Terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
-          Privacy Policy
-        </Link>
-        .
-      </p>
-    </div>
+        <div className="flex w-full items-center justify-center">
+          <div className="h-px w-full bg-border" />
+          <span className="px-2 text-muted-foreground text-xs">OR</span>
+          <div className="h-px w-full bg-border" />
+        </div>
+
+        <form className="space-y-2" onSubmit={handleSignUp}>
+          <p className="text-start text-muted-foreground text-xs">
+            Fill in your details to create a new account
+          </p>
+
+          <InputGroup>
+            <InputGroupInput
+              placeholder="your.email@example.com"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <InputGroupAddon align="inline-start">
+              <AtSignIcon />
+            </InputGroupAddon>
+          </InputGroup>
+
+          <InputGroup>
+            <InputGroupInput
+              placeholder="Password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <InputGroupAddon align="inline-start">
+              <LockIcon />
+            </InputGroupAddon>
+            <InputGroupAddon
+              align="inline-end"
+              className="cursor-pointer"
+              onClick={() => setShowPassword((p) => !p)}
+            >
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+            </InputGroupAddon>
+          </InputGroup>
+
+          <InputGroup>
+            <InputGroupInput
+              placeholder="Confirm password"
+              type={showConfirm ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+            <InputGroupAddon align="inline-start">
+              <LockIcon />
+            </InputGroupAddon>
+            <InputGroupAddon
+              align="inline-end"
+              className="cursor-pointer"
+              onClick={() => setShowConfirm((p) => !p)}
+            >
+              {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+            </InputGroupAddon>
+          </InputGroup>
+
+          {error && (
+            <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <Button
+            className="w-full"
+            type="submit"
+            disabled={isLoading || isGoogleLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Creating account…
+              </>
+            ) : (
+              "Create Account"
+            )}
+          </Button>
+        </form>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Already have an account?{" "}
+          <Link
+            href="/auth/login"
+            className="underline underline-offset-4 hover:text-primary"
+          >
+            Sign in
+          </Link>
+        </p>
+        <p className="text-muted-foreground text-xs text-center">
+          By signing up, you agree to our{" "}
+          <Link
+            href="/terms"
+            className="underline underline-offset-4 hover:text-primary"
+          >
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="/privacy"
+            className="underline underline-offset-4 hover:text-primary"
+          >
+            Privacy Policy
+          </Link>
+          .
+        </p>
+      </div>
+    </>
   );
 }

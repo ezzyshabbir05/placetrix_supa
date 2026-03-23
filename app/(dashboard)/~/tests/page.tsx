@@ -12,7 +12,10 @@ import {
   type InstituteTest,
 } from "./_types"
 
-
+export const metadata = {
+  title: "Tests",
+  description: "Mock Tests",
+}
 // ─── Candidate data ───────────────────────────────────────────────────────────
 
 async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
