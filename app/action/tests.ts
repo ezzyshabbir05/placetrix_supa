@@ -62,7 +62,6 @@ async function resolveTagIds(
 
   const normalised = [...new Set(tagNames.map((n) => n.trim()).filter(Boolean))]
 
-  // Upsert tags — existing rows are untouched, new ones created
   await supabase
     .from("tags")
     .upsert(
@@ -110,7 +109,7 @@ export async function saveTestSettingsAction(
       .from("tests")
       .update(payload)
       .eq("id", testId)
-      .eq("created_by", user.id)
+      .eq("institute_id", user.id)          // ✅ fixed: was created_by
     if (error) throw new Error(error.message)
     revalidatePath(`/~/tests/${testId}/edit`)
     return { testId }
@@ -118,7 +117,7 @@ export async function saveTestSettingsAction(
 
   const { data, error } = await supabase
     .from("tests")
-    .insert({ ...payload, created_by: user.id, status: "draft" })
+    .insert({ ...payload, institute_id: user.id, status: "draft" })  // ✅ fixed: was created_by
     .select("id")
     .single()
   if (error) throw new Error(error.message)
@@ -163,14 +162,16 @@ export async function addQuestionAction(
   if (qErr) throw new Error(qErr.message)
 
   // Insert options
-  const { error: optErr } = await supabase.from("question_options").insert(
-    form.options.map((o, i) => ({
-      question_id: q.id,
-      option_text: o.option_text.trim(),
-      is_correct: o.is_correct,
-      order_index: i,
-    }))
-  )
+  const { error: optErr } = await supabase
+    .from("options")                          // ✅ fixed: was "question_options"
+    .insert(
+      form.options.map((o, i) => ({
+        question_id: q.id,
+        option_text: o.option_text.trim(),
+        is_correct: o.is_correct,
+        order_index: i,
+      }))
+    )
   if (optErr) throw new Error(optErr.message)
 
   // Resolve & attach tags
@@ -222,19 +223,29 @@ export async function updateQuestionAction(
   if (qErr) throw new Error(qErr.message)
 
   // Replace options
-  await supabase.from("question_options").delete().eq("question_id", questionId)
-  const { error: optErr } = await supabase.from("question_options").insert(
-    form.options.map((o, i) => ({
-      question_id: questionId,
-      option_text: o.option_text.trim(),
-      is_correct: o.is_correct,
-      order_index: i,
-    }))
-  )
+  await supabase
+    .from("options")                          // ✅ fixed: was "question_options"
+    .delete()
+    .eq("question_id", questionId)
+
+  const { error: optErr } = await supabase
+    .from("options")                          // ✅ fixed: was "question_options"
+    .insert(
+      form.options.map((o, i) => ({
+        question_id: questionId,
+        option_text: o.option_text.trim(),
+        is_correct: o.is_correct,
+        order_index: i,
+      }))
+    )
   if (optErr) throw new Error(optErr.message)
 
   // Replace tags
-  await supabase.from("question_tags").delete().eq("question_id", questionId)
+  await supabase
+    .from("question_tags")
+    .delete()
+    .eq("question_id", questionId)
+
   const tagIds = await resolveTagIds(supabase, form.tag_names, user.id)
   if (tagIds.length) {
     const { error: tagErr } = await supabase
@@ -287,7 +298,7 @@ export async function publishTestAction(testId: string): Promise<void> {
     .from("tests")
     .update({ status: "published", updated_at: new Date().toISOString() })
     .eq("id", testId)
-    .eq("created_by", user.id)
+    .eq("institute_id", user.id)             // ✅ fixed: was created_by
   if (error) throw new Error(error.message)
 
   revalidatePath("/~/tests")
@@ -305,7 +316,7 @@ export async function saveTestDraftAction(testId: string): Promise<void> {
     .from("tests")
     .update({ status: "draft", updated_at: new Date().toISOString() })
     .eq("id", testId)
-    .eq("created_by", user.id)
+    .eq("institute_id", user.id)             // ✅ fixed: was created_by
   if (error) throw new Error(error.message)
 
   revalidatePath(`/~/tests/${testId}/edit`)

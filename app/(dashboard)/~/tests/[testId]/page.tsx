@@ -229,21 +229,26 @@ async function fetchInstituteView(
 
   const fullTotalMarks = questions.reduce((s, q) => s + q.marks, 0)
 
-  const attempts: InstituteAttemptRow[] = (rawAttempts ?? []).map((a) => ({
-    id: a.id,
-    student_name: a.student_name ?? null,
-    student_email: a.student_email ?? null,
-    status: a.status as InstituteAttemptRow["status"],
-    score: a.score ?? null,
-    total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
-    percentage:
-      a.score != null && fullTotalMarks > 0
-        ? Math.round((a.score / fullTotalMarks) * 100)
-        : (a.percentage ?? null),
-    time_spent_seconds: a.time_spent_seconds ?? null,
-    started_at: a.started_at,
-    submitted_at: a.submitted_at ?? null,
-  }))
+  const attempts: InstituteAttemptRow[] = (rawAttempts ?? [])
+    .filter((a): a is typeof a & { id: string; started_at: string } =>
+      a.id != null && a.started_at != null
+    )
+    .map((a) => ({
+      id: a.id,
+      student_name: a.student_name ?? null,
+      student_email: a.student_email ?? null,
+      status: a.status as InstituteAttemptRow["status"],
+      score: a.score ?? null,
+      total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
+      percentage:
+        a.score != null && fullTotalMarks > 0
+          ? Math.round((a.score / fullTotalMarks) * 100)
+          : (a.percentage ?? null),
+      time_spent_seconds: a.time_spent_seconds ?? null,
+      started_at: a.started_at,
+      submitted_at: a.submitted_at ?? null,
+    }))
+
 
   return {
     id: raw.id,
