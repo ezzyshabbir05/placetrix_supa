@@ -1,8 +1,6 @@
 "use client"
 
-// ─────────────────────────────────────────────────────────────────────────────
 // app/~/settings/InstituteSettingsClient.tsx
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useTransition, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
@@ -18,37 +16,25 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
+  Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput,
+  ComboboxItem, ComboboxList,
 } from "@/components/ui/combobox"
 import { FloatingSaveBar } from "@/components/ui/floating-save-bar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Upload, Plus, Minus, Mail, Globe, Phone, Loader2, Camera,
-  CheckCircle2, XCircle, AtSign,
-  Monitor, Smartphone, Tablet, RefreshCw, LogOut, MapPin, Clock,
-  ShieldAlert, CalendarClock,
+  CheckCircle2, XCircle, AtSign, Monitor, Smartphone, Tablet,
+  RefreshCw, LogOut, MapPin, Clock, ShieldAlert, CalendarClock,
+  Eye, EyeOff, KeyRound,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-
 // ─── Constants ────────────────────────────────────────────────────────────────
-
 
 const AFFILIATION_OPTIONS = [
   "SPPU - Savitribai Phule Pune University",
@@ -68,15 +54,11 @@ const STATE_OPTIONS = [
 ]
 
 const COUNTRY_OPTIONS = ["India", "Other"]
-
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
-const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
-
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/
 
-
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid" | "unchanged"
 
@@ -86,12 +68,12 @@ interface Props {
 }
 
 interface SessionEntry {
-  id: string;
-  created_at: string | null;
-  updated_at: string | null;
-  not_after: string | null;
-  ip: unknown;              // ← matches Supabase generated type
-  user_agent: string | null;
+  id: string
+  created_at: string | null
+  updated_at: string | null
+  not_after: string | null
+  ip: unknown
+  user_agent: string | null
 }
 
 interface ParsedUA {
@@ -100,9 +82,7 @@ interface ParsedUA {
   device: "desktop" | "mobile" | "tablet"
 }
 
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 
 function RequiredMark() {
   return <span className="text-destructive ml-0.5">*</span>
@@ -125,9 +105,7 @@ function getStorageUrl(
 
 function parseUserAgent(ua: string | null): ParsedUA {
   if (!ua) return { browser: "Unknown Browser", os: "Unknown OS", device: "desktop" }
-
-  let browser = "Unknown Browser"
-  let os = "Unknown OS"
+  let browser = "Unknown Browser", os = "Unknown OS"
   let device: "desktop" | "mobile" | "tablet" = "desktop"
 
   if (ua.includes("Edg/") || ua.includes("EdgA/") || ua.includes("Edge/")) browser = "Edge"
@@ -166,7 +144,6 @@ function formatTimeAgo(dateStr: string | null): string {
   const diffMins = Math.floor(diffSecs / 60)
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
-
   if (diffSecs < 60) return "Just now"
   if (diffMins < 60) return `${diffMins}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
@@ -188,9 +165,49 @@ function isExpired(not_after: string | null): boolean {
   return !!not_after && new Date(not_after) < new Date()
 }
 
+// ─── Password Strength ────────────────────────────────────────────────────────
+
+interface StrengthResult {
+  score: 0 | 1 | 2 | 3 | 4
+  label: string
+  color: string
+}
+
+function getPasswordStrength(password: string): StrengthResult {
+  if (!password) return { score: 0, label: "", color: "" }
+  let score = 0
+  if (password.length >= 8) score++
+  if (password.length >= 12) score++
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++
+  if (/[0-9]/.test(password)) score++
+  if (/[^A-Za-z0-9]/.test(password)) score++
+  const clamped = Math.min(score, 4) as 0 | 1 | 2 | 3 | 4
+  const labels = ["", "Weak", "Fair", "Good", "Strong"]
+  const colors = ["", "text-destructive", "text-amber-500", "text-yellow-500 dark:text-yellow-400", "text-emerald-600 dark:text-emerald-400"]
+  return { score: clamped, label: labels[clamped], color: colors[clamped] }
+}
+
+function PasswordStrengthBar({ score }: { score: 0 | 1 | 2 | 3 | 4 }) {
+  if (score === 0) return null
+  const segColors: Record<number, string> = {
+    1: "bg-destructive", 2: "bg-amber-500", 3: "bg-yellow-500", 4: "bg-emerald-500",
+  }
+  return (
+    <div className="flex gap-1 mt-1.5">
+      {[1, 2, 3, 4].map((s) => (
+        <div
+          key={s}
+          className={cn(
+            "h-1 flex-1 rounded-full transition-colors duration-200",
+            s <= score ? segColors[score] : "bg-muted"
+          )}
+        />
+      ))}
+    </div>
+  )
+}
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
-
 
 type Tab = "institution" | "security" | "notifications" | "history" | "privacy"
 
@@ -202,17 +219,12 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "privacy", label: "Privacy" },
 ]
 
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-
 function UsernameStatusIcon({ status }: { status: UsernameStatus }) {
-  if (status === "checking")
-    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-  if (status === "available")
-    return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-  if (status === "taken" || status === "invalid")
-    return <XCircle className="h-4 w-4 text-destructive" />
+  if (status === "checking") return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+  if (status === "available") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+  if (status === "taken" || status === "invalid") return <XCircle className="h-4 w-4 text-destructive" />
   return null
 }
 
@@ -232,28 +244,22 @@ function DeviceIcon({ device }: { device: "desktop" | "mobile" | "tablet" }) {
   return <Monitor className={cls} />
 }
 
-
-
 // ─── Component ────────────────────────────────────────────────────────────────
-
 
 export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   const supabase = createClient()
   const [isPending, startTransition] = useTransition()
+  const [isPwPending, startPwTransition] = useTransition()
   const [isDirty, setIsDirty] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>("institution")
 
-
   // ── Username ──────────────────────────────────────────────────────────────
-
   const [username, setUsername] = useState(userProfile.username ?? "")
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle")
   const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialUsername = useRef(userProfile.username ?? "")
 
-
   // ── Logo ──────────────────────────────────────────────────────────────────
-
   const storedLogoPath = useRef<string | null>(initialData?.logo_path ?? null)
   const [logoSrc, setLogoSrc] = useState<string | null>(() =>
     getStorageUrl(supabase, "avatars", storedLogoPath.current)
@@ -261,9 +267,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
-
   // ── Institute fields ──────────────────────────────────────────────────────
-
   const [instituteName, setInstituteName] = useState(initialData?.institute_name ?? "")
   const [instituteCode, setInstituteCode] = useState(initialData?.institute_code ?? "")
   const [establishedYear, setEstablishedYear] = useState(
@@ -289,15 +293,26 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-
   // ── Login History ─────────────────────────────────────────────────────────
-
   const [sessions, setSessions] = useState<SessionEntry[]>([])
   const [sessionsLoading, setSessLoading] = useState(true)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [revokingAll, setRevokingAll] = useState(false)
 
+  // ── Password state ────────────────────────────────────────────────────────
+  const [pwCurrent, setPwCurrent] = useState("")
+  const [pwNew, setPwNew] = useState("")
+  const [pwConfirm, setPwConfirm] = useState("")
+  const [pwShowCurrent, setPwShowCurrent] = useState(false)
+  const [pwShowNew, setPwShowNew] = useState(false)
+  const [pwShowConfirm, setPwShowConfirm] = useState(false)
+  const [pwErrors, setPwErrors] = useState<Record<string, string>>({})
+  const [pwSuccess, setPwSuccess] = useState(false)
+
+  const pwStrength = getPasswordStrength(pwNew)
+  const pwConfirmMatch = pwConfirm.length > 0 && pwConfirm === pwNew
+  const pwConfirmMismatch = pwConfirm.length > 0 && pwConfirm !== pwNew
 
   // ── Dirty tracking ────────────────────────────────────────────────────────
 
@@ -328,20 +343,16 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   const handleCourses = markDirty(setCourses)
   const handleSocialLinks = markDirty(setSocialLinks)
 
-
-  // ── Username change handler ───────────────────────────────────────────────
+  // ── Username debounce ─────────────────────────────────────────────────────
 
   function handleUsernameChange(value: string) {
     const trimmed = value.trim()
     setUsername(trimmed)
     setIsDirty(true)
-
     if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current)
-
-    if (trimmed === "") { setUsernameStatus("idle"); return }
+    if (!trimmed) { setUsernameStatus("idle"); return }
     if (trimmed === initialUsername.current) { setUsernameStatus("unchanged"); return }
     if (!USERNAME_REGEX.test(trimmed)) { setUsernameStatus("invalid"); return }
-
     setUsernameStatus("checking")
     usernameDebounceRef.current = setTimeout(async () => {
       const { data, error } = await supabase.rpc("check_username_available", {
@@ -357,7 +368,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     return () => { if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current) }
   }, [])
 
-
   // ── Warn on unsaved changes ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -368,13 +378,11 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     return () => window.removeEventListener("beforeunload", handler)
   }, [isDirty])
 
-
   // ── Logo upload ───────────────────────────────────────────────────────────
 
   async function handleLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       toast.error("Please upload a JPEG, PNG, or WEBP image.")
       return
@@ -383,47 +391,31 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
       toast.error("Image must be smaller than 2 MB.")
       return
     }
-
     const blobUrl = URL.createObjectURL(file)
     setLogoSrc(blobUrl)
     setIsUploadingLogo(true)
-
     try {
       const oldPath = storedLogoPath.current
       if (oldPath) {
-        const { error: deleteError } = await supabase.storage.from("avatars").remove([oldPath])
-        if (deleteError) console.warn("Could not delete old logo:", deleteError.message)
+        await supabase.storage.from("avatars").remove([oldPath])
       }
-
-      const ext = file.name.split(".").pop() ?? "png"
+      const ext = file.name.split(".").pop() ?? "jpg"
       const timestamp = Date.now()
       const newPath = `institutes/${userProfile.id}/logo/${timestamp}.${ext}`
-
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(newPath, file, { upsert: false, contentType: file.type })
       if (uploadError) throw uploadError
-
-      const { data: updatedRows, error: dbError } = await supabase
+      const { error: dbError } = await supabase
         .from("institute_profiles")
         .update({ logo_path: newPath })
-        .eq("profile_id", userProfile.id)
-        .select("profile_id")
-
+        .eq("profile_id", userProfile.id);
       if (dbError) throw dbError
-
-      if (!updatedRows || updatedRows.length === 0) {
-        toast.warning("Please save your institution details first, then re-upload the logo.")
-        setLogoSrc(getStorageUrl(supabase, "avatars", storedLogoPath.current))
-        URL.revokeObjectURL(blobUrl)
-        return
-      }
-
       storedLogoPath.current = newPath
-      const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)!
+      const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)
       setLogoSrc(`${newPublicUrl}?v=${timestamp}`)
       URL.revokeObjectURL(blobUrl)
-      toast.success("Logo updated successfully!")
+      toast.success("Logo updated!")
     } catch (err) {
       console.error(err)
       toast.error("Failed to upload logo. Please try again.")
@@ -435,46 +427,44 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     }
   }
 
-
-  // ── Course handlers ───────────────────────────────────────────────────────
+  // ── Course management ─────────────────────────────────────────────────────
 
   function addCourse() { handleCourses((prev) => [...prev, ""]) }
+
   function handleCourseChange(index: number, value: string) {
     handleCourses((prev) => { const u = [...prev]; u[index] = value; return u })
   }
+
   function removeCourse(index: number) {
     handleCourses((prev) => prev.filter((_, i) => i !== index))
   }
 
-
-  // ── Social link handlers ──────────────────────────────────────────────────
+  // ── Social links ──────────────────────────────────────────────────────────
 
   function addSocialLink() { handleSocialLinks((prev) => [...prev, ""]) }
+
   function handleSocialLinkChange(index: number, value: string) {
     handleSocialLinks((prev) => { const u = [...prev]; u[index] = value; return u })
   }
+
   function removeSocialLink(index: number) {
     handleSocialLinks((prev) => prev.filter((_, i) => i !== index))
   }
 
-
-  // ── Login History handlers ────────────────────────────────────────────────
+  // ── Login History ─────────────────────────────────────────────────────────
 
   const loadSessions = useCallback(async () => {
     setSessLoading(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user?.id) { setSessions([]); return }
-
       if (session.access_token) setCurrentSessionId(getSessionIdFromJwt(session.access_token))
-
       const { data, error } = await supabase
         .from("user_sessions")
         .select("id, created_at, updated_at, not_after, ip, user_agent")
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false })
         .limit(20)
-
       if (error) throw error
       setSessions(data ?? [])
     } catch {
@@ -503,7 +493,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   async function handleRevokeAllSessions() {
     const others = sessions.filter((s) => s.id !== currentSessionId)
     if (!others.length) { toast.info("No other active sessions."); return }
-
     setRevokingAll(true)
     let ok = 0, fail = 0
     for (const s of others) {
@@ -522,34 +511,89 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
   const otherSessionCount = sessions.filter((s) => s.id !== currentSessionId).length
 
+  // ── Password handlers ─────────────────────────────────────────────────────
+
+  function clearPwError(key: string) {
+    setPwErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  function validatePassword(): Record<string, string> {
+    const e: Record<string, string> = {}
+    if (!pwCurrent) e.current = "Current password is required."
+    if (!pwNew) e.new = "New password is required."
+    else if (pwNew.length < 8) e.new = "Password must be at least 8 characters."
+    else if (pwStrength.score < 2) e.new = "Password is too weak — add uppercase letters, numbers, or symbols."
+    else if (pwCurrent && pwNew === pwCurrent) e.new = "New password must be different from your current password."
+    if (!pwConfirm) e.confirm = "Please confirm your new password."
+    else if (pwConfirm !== pwNew) e.confirm = "Passwords do not match."
+    return e
+  }
+
+  function handlePasswordSubmit() {
+    const errs = validatePassword()
+    setPwErrors(errs)
+    if (Object.keys(errs).length > 0) return
+
+    startPwTransition(async () => {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: userProfile.email,
+        password: pwCurrent,
+      })
+      if (signInError) {
+        setPwErrors({ current: "Current password is incorrect." })
+        return
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: pwNew })
+      if (updateError) {
+        const msg = updateError.message ?? ""
+        if (msg.toLowerCase().includes("same") || msg.toLowerCase().includes("different")) {
+          setPwErrors({ new: "New password must be different from your current password." })
+        } else if (msg.toLowerCase().includes("weak")) {
+          setPwErrors({ new: "Password does not meet security requirements." })
+        } else {
+          toast.error("Failed to update password. Please try again.")
+        }
+        return
+      }
+
+      toast.success("Password updated successfully!")
+      setPwSuccess(true)
+      setPwCurrent(""); setPwNew(""); setPwConfirm("")
+      setPwErrors({})
+    })
+  }
 
   // ── Validation ────────────────────────────────────────────────────────────
 
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
-
     if (username && !USERNAME_REGEX.test(username))
       e.username = "3–20 characters: letters, numbers, and underscores only."
-    if (usernameStatus === "taken")
-      e.username = "This username is already taken."
-    if (usernameStatus === "checking")
-      e.username = "Please wait for username availability check to complete."
-
-    if (!instituteName.trim()) e.instituteName = "College name is required"
-    if (!affiliation) e.affiliation = "Affiliation is required"
-    if (!address.trim()) e.address = "Address is required"
-    if (!city.trim()) e.city = "City is required"
-    if (!stateVal) e.state = "State is required"
-    if (!pincode.trim()) e.pincode = "Pincode is required"
-    if (!country) e.country = "Country is required"
-    if (!instPhone.trim()) e.instPhone = "Contact number is required"
-    if (!instEmail.trim()) e.instEmail = "Email is required"
-    if (!principalName.trim()) e.principalName = "Principal name is required"
-    if (!principalEmail.trim()) e.principalEmail = "Principal email is required"
-    if (!principalPhone.trim()) e.principalPhone = "Principal contact is required"
+    if (usernameStatus === "taken") e.username = "This username is already taken."
+    if (usernameStatus === "checking") e.username = "Please wait for username availability check."
+    if (!instituteName.trim()) e.instituteName = "College name is required."
+    if (!affiliation) e.affiliation = "Affiliation is required."
+    if (!address.trim()) e.address = "Address is required."
+    if (!city.trim()) e.city = "City is required."
+    if (!stateVal) e.state = "State is required."
+    if (!pincode.trim()) e.pincode = "Pincode is required."
+    else if (!/^[0-9]{6}$/.test(pincode)) e.pincode = "Must be exactly 6 digits."
+    if (!country) e.country = "Country is required."
+    if (!instPhone.trim()) e.instPhone = "Contact number is required."
+    if (!instEmail.trim()) e.instEmail = "Email address is required."
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(instEmail)) e.instEmail = "Enter a valid email address."
+    if (!principalName.trim()) e.principalName = "Principal name is required."
+    if (!principalEmail.trim()) e.principalEmail = "Principal email is required."
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(principalEmail)) e.principalEmail = "Enter a valid email address."
+    if (!principalPhone.trim()) e.principalPhone = "Principal phone is required."
     return e
   }
-
 
   // ── Discard ───────────────────────────────────────────────────────────────
 
@@ -578,7 +622,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     toast.info("Changes discarded.")
   }
 
-
   // ── Save ──────────────────────────────────────────────────────────────────
 
   function handleSave() {
@@ -588,18 +631,14 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
       toast.error("Please fix the validation errors before saving.")
       return
     }
-
     startTransition(async () => {
-      // ── 1. Update username (if changed) ──────────────────────────────────
       const trimmedUsername = username.trim() || null
       if (trimmedUsername !== (userProfile.username ?? null)) {
         const { error: usernameError } = await supabase
           .from("profiles")
           .update({ username: trimmedUsername })
           .eq("id", userProfile.id)
-
         if (usernameError) {
-          console.error(usernameError)
           if (usernameError.code === "23505") {
             setErrors((prev) => ({ ...prev, username: "This username is already taken." }))
             setUsernameStatus("taken")
@@ -610,10 +649,10 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         }
       }
 
-      // ── 2. Upsert institute profile ───────────────────────────────────────
+      const isFirstSave = !initialData?.profile_updated
       const payload = {
         profile_id: userProfile.id,
-        institute_name: instituteName.trim(),
+        institute_name: instituteName.trim() || null,
         institute_code: instituteCode.trim() || null,
         established_year: establishedYear ? Number(establishedYear) : null,
         affiliation: affiliation || null,
@@ -621,7 +660,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         city: city.trim() || null,
         state: stateVal || null,
         pincode: pincode.trim() || null,
-        country: country || "India",
+        country: country || null,
         phone_number: instPhone.trim() || null,
         email: instEmail.trim() || null,
         website_url: websiteUrl.trim() || null,
@@ -630,6 +669,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         principal_phone: principalPhone.trim() || null,
         courses: courses.filter((c) => c.trim()),
         social_links: socialLinks.filter((l) => l.trim()),
+        ...(isFirstSave ? { profile_updated: true } : {}),
       }
 
       const { error } = await supabase
@@ -638,9 +678,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
       if (error) {
         console.error(error)
-        toast.error("Failed to save institution details. Please try again.")
+        toast.error("Failed to save profile. Please try again.")
       } else {
-        toast.success("Institution details saved successfully!")
+        toast.success("Profile saved successfully!")
         setIsDirty(false)
         if (trimmedUsername) {
           initialUsername.current = trimmedUsername
@@ -650,7 +690,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     })
   }
 
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   const usernameMsg = usernameStatusMessage(usernameStatus)
@@ -658,19 +697,17 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   return (
     <div className="min-h-screen w-full">
 
-      {/* ── Page Header ──────────────────────────────────────────────────── */}
+      {/* Page Header */}
       <div className="px-4 pt-8 pb-0 md:px-8">
         <div className="space-y-0.5">
           <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your institution profile and preferences
-          </p>
+          <p className="text-sm text-muted-foreground">Manage your institution profile and preferences</p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
 
-        {/* ── Tab Bar ────────────────────────────────────────────────────── */}
+        {/* Tab Bar */}
         <div className="overflow-x-auto px-4 pt-5 md:px-8">
           <TabsList className="inline-flex h-9 gap-0.5 rounded-lg bg-muted p-1">
             {TABS.map(({ value, label }) => (
@@ -687,18 +724,16 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
 
         <div className="px-4 py-6 md:px-8 md:py-8">
 
-          {/* ════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════
               INSTITUTION TAB
-          ════════════════════════════════════════════════════════════════ */}
+          ══════════════════════════════════════════════════════════ */}
           <TabsContent value="institution" className="space-y-6 mt-0">
 
-            {/* ── Account Settings (Username) ── */}
+            {/* Account Settings (Username) */}
             <Card>
               <CardHeader>
                 <CardTitle>Account Settings</CardTitle>
-                <CardDescription>
-                  Your unique username is used to identify your institution on the platform
-                </CardDescription>
+                <CardDescription>Your unique username identifies your institution on the platform</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="max-w-sm space-y-2">
@@ -721,21 +756,16 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                       autoComplete="username"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                      {initialUsername.current
-                        ? null
-                        : <UsernameStatusIcon status={usernameStatus} />
-                      }
+                      {initialUsername.current ? null : <UsernameStatusIcon status={usernameStatus} />}
                     </span>
                   </div>
-                  {initialUsername.current
-                    ? <p className="text-xs text-muted-foreground">Username cannot be changed once set.</p>
-                    : errors.username
-                      ? <FieldError message={errors.username} />
-                      : usernameMsg && (
-                        <p className={cn("text-xs", usernameMsg.className)}>{usernameMsg.text}</p>
-                      )
-                  }
-                  {!initialUsername.current && (
+                  {initialUsername.current ? (
+                    <p className="text-xs text-muted-foreground">Username cannot be changed once set.</p>
+                  ) : errors.username ? (
+                    <FieldError message={errors.username} />
+                  ) : usernameMsg ? (
+                    <p className={cn("text-xs", usernameMsg.className)}>{usernameMsg.text}</p>
+                  ) : (
                     <p className="text-xs text-muted-foreground">
                       3–20 characters · letters, numbers, and underscores only · cannot be changed after saving
                     </p>
@@ -744,7 +774,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
-            {/* ── Logo ── */}
+            {/* Logo */}
             <Card>
               <CardHeader>
                 <CardTitle>College Logo</CardTitle>
@@ -781,7 +811,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     />
                     <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()} disabled={isUploadingLogo}>
                       {isUploadingLogo
-                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading…</>
                         : <><Upload className="h-4 w-4 mr-2" />Upload Logo</>}
                     </Button>
                     <p className="text-xs text-muted-foreground">Square image recommended · max 2 MB</p>
@@ -795,7 +825,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
-            {/* ── Basic Information ── */}
+            {/* Basic Information */}
             <Card>
               <CardHeader>
                 <CardTitle>Basic Information</CardTitle>
@@ -829,8 +859,8 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     <Input
                       placeholder="e.g. 1990"
                       type="number"
-                      min="1800"
-                      max="2026"
+                      min={1800}
+                      max={2026}
                       value={establishedYear}
                       onChange={(e) => handleEstablishedYear(e.target.value)}
                     />
@@ -842,7 +872,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                       <ComboboxContent>
                         <ComboboxEmpty>No affiliation found.</ComboboxEmpty>
                         <ComboboxList>
-                          {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                          {AFFILIATION_OPTIONS.map((item) => (
+                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+                          ))}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -866,11 +898,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label>City<RequiredMark /></Label>
-                    <Input
-                      placeholder="City"
-                      value={city}
-                      onChange={(e) => handleCity(e.target.value)}
-                    />
+                    <Input placeholder="City" value={city} onChange={(e) => handleCity(e.target.value)} />
                     <FieldError message={errors.city} />
                   </div>
                   <div className="space-y-2">
@@ -880,7 +908,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                       <ComboboxContent>
                         <ComboboxEmpty>No state found.</ComboboxEmpty>
                         <ComboboxList>
-                          {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                          {STATE_OPTIONS.map((item) => (
+                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+                          ))}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -905,7 +935,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     <ComboboxContent>
                       <ComboboxEmpty>No country found.</ComboboxEmpty>
                       <ComboboxList>
-                        {(item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                        {COUNTRY_OPTIONS.map((item) => (
+                          <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+                        ))}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -915,7 +947,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
-            {/* ── Contact Information ── */}
+            {/* Contact Information */}
             <Card>
               <CardHeader>
                 <CardTitle>Contact Information</CardTitle>
@@ -968,7 +1000,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
-            {/* ── Administrative Contacts ── */}
+            {/* Administrative Contacts */}
             <Card>
               <CardHeader>
                 <CardTitle>Administrative Contacts</CardTitle>
@@ -1010,7 +1042,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
               </CardContent>
             </Card>
 
-            {/* ── Courses Offered ── */}
+            {/* Courses Offered */}
             <Card>
               <CardHeader>
                 <CardTitle>Courses Offered</CardTitle>
@@ -1032,13 +1064,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 ))}
                 <Button variant="outline" size="sm" onClick={addCourse} type="button">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add course
+                  <Plus className="h-4 w-4 mr-2" />Add course
                 </Button>
               </CardContent>
             </Card>
 
-            {/* ── Social Links ── */}
+            {/* Social Links */}
             <Card>
               <CardHeader>
                 <CardTitle>Social Media &amp; Links</CardTitle>
@@ -1059,44 +1090,155 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 ))}
                 <Button variant="outline" size="sm" onClick={addSocialLink} type="button">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add link
+                  <Plus className="h-4 w-4 mr-2" />Add link
                 </Button>
               </CardContent>
             </Card>
 
           </TabsContent>
 
-
-          {/* ════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════
               SECURITY TAB
-          ════════════════════════════════════════════════════════════════ */}
+          ══════════════════════════════════════════════════════════ */}
           <TabsContent value="security" className="space-y-6 mt-0">
+
+            {/* Change Password */}
             <Card>
               <CardHeader>
                 <CardTitle>Change Password</CardTitle>
-                <CardDescription>Keep your college account secure</CardDescription>
+                <CardDescription>Keep your college account secure with a strong password</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Current Password</Label>
-                  <Input type="password" placeholder="Enter current password" />
-                </div>
-                <div className="space-y-2">
-                  <Label>New Password</Label>
-                  <Input type="password" placeholder="Enter new password" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Confirm New Password</Label>
-                  <Input type="password" placeholder="Confirm new password" />
-                </div>
-                <Button disabled>Update Password (coming soon)</Button>
+              <CardContent>
+                {pwSuccess ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
+                      <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Password updated successfully</p>
+                      <p className="text-xs text-muted-foreground">Your new password is active on all devices.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setPwSuccess(false)}>
+                      Change Again
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-w-sm">
+
+                    {/* Current Password */}
+                    <div className="space-y-2">
+                      <Label htmlFor="inst-pw-current">Current Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="inst-pw-current"
+                          type={pwShowCurrent ? "text" : "password"}
+                          placeholder="Enter your current password"
+                          value={pwCurrent}
+                          autoComplete="current-password"
+                          disabled={isPwPending}
+                          className={cn("pr-10", pwErrors.current && "border-destructive focus-visible:ring-destructive")}
+                          onChange={(e) => { setPwCurrent(e.target.value); clearPwError("current") }}
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => setPwShowCurrent((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {pwShowCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {pwErrors.current && <p className="text-xs text-destructive">{pwErrors.current}</p>}
+                    </div>
+
+                    {/* New Password */}
+                    <div className="space-y-2">
+                      <Label htmlFor="inst-pw-new">New Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="inst-pw-new"
+                          type={pwShowNew ? "text" : "password"}
+                          placeholder="Enter a strong new password"
+                          value={pwNew}
+                          autoComplete="new-password"
+                          disabled={isPwPending}
+                          className={cn("pr-10", pwErrors.new && "border-destructive focus-visible:ring-destructive")}
+                          onChange={(e) => { setPwNew(e.target.value); clearPwError("new") }}
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => setPwShowNew((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {pwShowNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {pwNew ? (
+                        <>
+                          <PasswordStrengthBar score={pwStrength.score} />
+                          <p className={cn("text-xs", pwStrength.color)}>{pwStrength.label}</p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Min. 8 characters · Uppercase, lowercase, numbers &amp; symbols recommended
+                        </p>
+                      )}
+                      {pwErrors.new && <p className="text-xs text-destructive">{pwErrors.new}</p>}
+                    </div>
+
+                    {/* Confirm Password */}
+                    <div className="space-y-2">
+                      <Label htmlFor="inst-pw-confirm">Confirm New Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="inst-pw-confirm"
+                          type={pwShowConfirm ? "text" : "password"}
+                          placeholder="Re-enter your new password"
+                          value={pwConfirm}
+                          autoComplete="new-password"
+                          disabled={isPwPending}
+                          className={cn(
+                            "pr-10",
+                            pwConfirmMatch && "border-emerald-500 focus-visible:ring-emerald-500",
+                            (pwConfirmMismatch && !pwErrors.confirm) && "border-destructive focus-visible:ring-destructive",
+                            pwErrors.confirm && "border-destructive focus-visible:ring-destructive"
+                          )}
+                          onChange={(e) => { setPwConfirm(e.target.value); clearPwError("confirm") }}
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => setPwShowConfirm((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {pwShowConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {pwConfirmMatch && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">Passwords match ✓</p>
+                      )}
+                      {pwConfirmMismatch && !pwErrors.confirm && (
+                        <p className="text-xs text-destructive">Passwords do not match.</p>
+                      )}
+                      {pwErrors.confirm && <p className="text-xs text-destructive">{pwErrors.confirm}</p>}
+                    </div>
+
+                    <Button onClick={handlePasswordSubmit} disabled={isPwPending} className="gap-2">
+                      {isPwPending
+                        ? <><Loader2 className="h-4 w-4 animate-spin" />Updating Password…</>
+                        : <><KeyRound className="h-4 w-4" />Update Password</>}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Two-Factor Authentication */}
             <Card>
               <CardHeader>
                 <CardTitle>Two-Factor Authentication</CardTitle>
-                <CardDescription>Add an extra layer of security</CardDescription>
+                <CardDescription>Add an extra layer of security to your account</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
@@ -1108,12 +1250,12 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                 </div>
               </CardContent>
             </Card>
+
           </TabsContent>
 
-
-          {/* ════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════
               NOTIFICATIONS TAB
-          ════════════════════════════════════════════════════════════════ */}
+          ══════════════════════════════════════════════════════════ */}
           <TabsContent value="notifications" className="mt-0">
             <Card>
               <CardHeader>
@@ -1139,16 +1281,13 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
-
-          {/* ════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════
               LOGIN HISTORY TAB
-          ════════════════════════════════════════════════════════════════ */}
-                    <TabsContent value="history" className="mt-0">
+          ══════════════════════════════════════════════════════════ */}
+          <TabsContent value="history" className="mt-0">
             <Card>
               <CardHeader>
-                <CardTitle>
-                  Login History
-                </CardTitle>
+                <CardTitle>Login History</CardTitle>
                 <CardDescription>Devices currently signed in to your account</CardDescription>
                 <CardAction>
                   <Button
@@ -1165,10 +1304,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </Button>
                 </CardAction>
               </CardHeader>
-
               <CardContent className="space-y-4">
 
-                {/* ── Revoke-All Banner ── */}
+                {/* Revoke-All Banner */}
                 {!sessionsLoading && otherSessionCount > 0 && (
                   <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5">
                     <div className="flex items-center gap-2">
@@ -1179,15 +1317,8 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={revokingAll}
-                          className="h-7 px-3 text-xs gap-1.5"
-                        >
-                          {revokingAll
-                            ? <Loader2 className="h-3 w-3 animate-spin" />
-                            : <LogOut className="h-3 w-3" />}
+                        <Button variant="destructive" size="sm" disabled={revokingAll} className="h-7 px-3 text-xs gap-1.5">
+                          {revokingAll ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogOut className="h-3 w-3" />}
                           Sign out all
                         </Button>
                       </AlertDialogTrigger>
@@ -1213,7 +1344,7 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 )}
 
-                {/* ── Skeleton ── */}
+                {/* Skeleton */}
                 {sessionsLoading && (
                   <div className="space-y-2">
                     {[...Array(3)].map((_, i) => (
@@ -1228,20 +1359,18 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                 )}
 
-                {/* ── Empty State ── */}
+                {/* Empty State */}
                 {!sessionsLoading && sessions.length === 0 && (
                   <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
                     <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                       <Clock className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <p className="text-sm font-medium">No sessions found</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Login activity will appear here once detected.
-                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Login activity will appear here once detected.</p>
                   </div>
                 )}
 
-                {/* ── Session Cards ── */}
+                {/* Session Cards */}
                 {!sessionsLoading && sessions.length > 0 && (
                   <div className="space-y-2">
                     {sessions.map((session) => {
@@ -1260,7 +1389,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                             expired && !isCurrent && "opacity-50"
                           )}
                         >
-                          {/* Device Icon */}
                           <div className={cn(
                             "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
                             isCurrent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
@@ -1268,12 +1396,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                             <DeviceIcon device={device} />
                           </div>
 
-                          {/* Info */}
                           <div className="flex-1 min-w-0 space-y-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-sm font-medium leading-none truncate">
-                                {browser} on {os}
-                              </span>
+                              <span className="text-sm font-medium leading-none truncate">{browser} on {os}</span>
                               {isCurrent && (
                                 <Badge className="h-4 px-1.5 text-[10px] rounded-sm bg-primary/15 text-primary border-0 font-medium">
                                   This device
@@ -1285,34 +1410,28 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
                                 </Badge>
                               )}
                             </div>
-
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                               {session.ip != null && (
                                 <span className="flex items-center gap-1">
-                                  <MapPin className="h-2.5 w-2.5" />
-                                  {String(session.ip)}
+                                  <MapPin className="h-2.5 w-2.5" />{String(session.ip)}
                                 </span>
                               )}
                               <span className="flex items-center gap-1">
-                                <Clock className="h-2.5 w-2.5" />
-                                Signed in {formatTimeAgo(session.created_at)}
+                                <Clock className="h-2.5 w-2.5" />Signed in {formatTimeAgo(session.created_at)}
                               </span>
                               {session.updated_at && session.updated_at !== session.created_at && (
                                 <span className="flex items-center gap-1">
-                                  <RefreshCw className="h-2.5 w-2.5" />
-                                  Last active {formatTimeAgo(session.updated_at)}
+                                  <RefreshCw className="h-2.5 w-2.5" />Last active {formatTimeAgo(session.updated_at)}
                                 </span>
                               )}
                               {expiryLabel && (
                                 <span className="flex items-center gap-1">
-                                  <CalendarClock className="h-2.5 w-2.5" />
-                                  Expires {expiryLabel}
+                                  <CalendarClock className="h-2.5 w-2.5" />Expires {expiryLabel}
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Revoke */}
                           {!isCurrent && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -1357,11 +1476,9 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
             </Card>
           </TabsContent>
 
-
-
-          {/* ════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════
               PRIVACY TAB
-          ════════════════════════════════════════════════════════════════ */}
+          ══════════════════════════════════════════════════════════ */}
           <TabsContent value="privacy" className="space-y-6 mt-0">
             <Card>
               <CardHeader>
