@@ -30,8 +30,7 @@ import Link from "next/link"
 import { useSidebarHoverContext } from "@/components/dashboard-shell"
 import { useTheme } from "next-themes"
 import { buildStorageUrl } from "@/lib/storage"
-
-
+import { version } from "@/package.json"
 
 
 type NavItem = {
@@ -41,8 +40,8 @@ type NavItem = {
 }
 
 
-
 const VALID_ACCOUNT_TYPES: AccountType[] = ["candidate", "institute", "admin", "recruiter"]
+
 
 const NAV_MAIN: Record<AccountType, NavItem[]> = {
   candidate: [
@@ -81,11 +80,13 @@ const NAV_MAIN: Record<AccountType, NavItem[]> = {
   ],
 }
 
+
 const NAV_SECONDARY: NavItem[] = [
   { title: "Notifications", url: "/~/notifications", icon: IconBell },
   { title: "Settings", url: "/~/settings", icon: IconSettings },
   { title: "Get Help", url: "/~/help", icon: IconHelp },
 ]
+
 
 const ROLE_LABELS: Record<AccountType, string> = {
   candidate: "Candidate",
@@ -93,6 +94,7 @@ const ROLE_LABELS: Record<AccountType, string> = {
   admin: "Admin",
   recruiter: "Recruiter",
 }
+
 
 const ROLE_COLORS: Record<AccountType, string> = {
   candidate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -102,12 +104,11 @@ const ROLE_COLORS: Record<AccountType, string> = {
 }
 
 
-
 // ─── Theme options ────────────────────────────────────────────────────────────
 
 
-
 type ThemeOption = { value: string; label: string; icon: Icon }
+
 
 const THEME_OPTIONS: ThemeOption[] = [
   { value: "light", label: "Light", icon: IconSun },
@@ -116,12 +117,11 @@ const THEME_OPTIONS: ThemeOption[] = [
 ]
 
 
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-
 const VALID_ACCOUNT_TYPE_SET = new Set<string>(VALID_ACCOUNT_TYPES)
+
 
 function safeAccountType(type: string | null | undefined): AccountType {
   return VALID_ACCOUNT_TYPE_SET.has(type ?? "")
@@ -129,14 +129,13 @@ function safeAccountType(type: string | null | undefined): AccountType {
     : "candidate"
 }
 
+
 const MAX_PRIMARY_NAV_COUNT = Math.max(
   ...VALID_ACCOUNT_TYPES.map((t) => NAV_MAIN[t].length)
 )
 
 
-
 // ─── NavUser ──────────────────────────────────────────────────────────────────
-
 
 
 export function NavUser({ user }: { user: UserProfile | null }) {
@@ -158,8 +157,6 @@ export function NavUser({ user }: { user: UserProfile | null }) {
     ? displayName.split(" ").filter(Boolean).map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : (user?.email?.trim()[0]?.toUpperCase() ?? "?")
 
-  // Derive full URL from stored path once — works for both Supabase storage
-  // paths AND external OAuth avatar URLs (Google, GitHub, etc.)
   const avatarUrl = buildStorageUrl("avatars", user?.avatar_path ?? null)
 
   const handleLogout = async () => {
@@ -295,9 +292,7 @@ export function NavUser({ user }: { user: UserProfile | null }) {
 }
 
 
-
 // ─── NavMain ──────────────────────────────────────────────────────────────────
-
 
 
 export function NavMain({ items }: { items: NavItem[] }) {
@@ -332,9 +327,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 }
 
 
-
 // ─── NavSecondary ─────────────────────────────────────────────────────────────
-
 
 
 export function NavSecondary({
@@ -373,14 +366,13 @@ export function NavSecondary({
 }
 
 
-
 // ─── AppSidebar ───────────────────────────────────────────────────────────────
-
 
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: UserProfile | null
 }
+
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const accountType = safeAccountType(user?.account_type)
@@ -399,21 +391,35 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             {user ? (
-              <SidebarMenuButton className="data-[slot=sidebar-menu-button]:p-1.5! group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent">
-                <Image
-                  src={PlaceTrixLogo}
-                  alt="PlaceTrix"
-                  width={25}
-                  height={25}
-                  className="size-5.5! dark:invert ..."
-                />
-                <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider">
-                  PlaceTrix
-                </span>
+              <SidebarMenuButton
+                className="group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent group-data-[collapsible=icon]/sidebar-wrapper:p-1.5!"
+              >
+                {/* ✅ size-5 (20px) wrapper isolated from button flex/overflow.
+                    collapsed: 32px button − (2 × 6px p-1.5) = 20px → exact fit.
+                    expanded:  unconstrained width, logo renders at full 20px.     */}
+                <div className="shrink-0 size-5 flex items-center justify-center">
+                  <Image
+                    src={PlaceTrixLogo}
+                    alt="PlaceTrix"
+                    width={20}
+                    height={20}
+                    className="size-full dark:invert"
+                  />
+                </div>
+
+                {/* ── Logo text + version badge (hidden when collapsed) ── */}
+                <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
+                  <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider truncate">
+                    PlaceTrix
+                  </span>
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
+                    v{version}
+                  </span>
+                </div>
               </SidebarMenuButton>
             ) : (
               <div className="flex items-center gap-2 p-1.5">
-                <Skeleton className="size-5.5 rounded-md shrink-0" />
+                <Skeleton className="size-5 rounded-md shrink-0" />
                 <Skeleton className="h-5 w-24" />
               </div>
             )}
