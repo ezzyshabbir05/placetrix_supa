@@ -8,15 +8,21 @@ import { PlusCircle, Sparkles, Upload, Trash2, Pencil } from "lucide-react"
 import { QuestionSheet } from "./QuestionSheet"
 import { AiGenerateSheet } from "./AiGenerateSheet"
 import { ImportSheet } from "./ImportSheet"
-import type { LocalQuestion, QuestionForm, AiGenerateForm } from "../actions"
+import type {
+  LocalQuestion,
+  QuestionForm,
+  AiGenerateForm,
+  GenerateQuestionsResult, // ← add this
+} from "../actions"
 
 interface Props {
   questions: LocalQuestion[]
   setQuestions: React.Dispatch<React.SetStateAction<LocalQuestion[]>>
   availableTags: { id: string; name: string }[]
-  generateQuestionsAction: (input: AiGenerateForm) => Promise<QuestionForm[]>
-  disabled: boolean
+  generateQuestionsAction: (input: AiGenerateForm) => Promise<GenerateQuestionsResult> // ← updated
+  disabled?: boolean
 }
+
 
 export function QuestionsPanel({
   questions,

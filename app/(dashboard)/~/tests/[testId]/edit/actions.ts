@@ -491,7 +491,7 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
+import OpenAI from "openai"
 
 // --- Shared types ---
 export type SettingsForm = {
@@ -542,6 +542,11 @@ export type InitialTestData = {
   status: "draft" | "published"
 }
 
+export type GenerateQuestionsResult = {
+  questions: QuestionForm[]
+  generatedWith: string
+}
+
 // --- Database Helpers ---
 async function saveTestToDb(
   testId: string,
@@ -578,7 +583,10 @@ async function saveTestToDb(
     },
     { onConflict: "id" }
   )
-  if (testError) throw new Error("Failed to save test: " + testError.message)
+
+  if (testError) {
+    throw new Error("Failed to save test: " + testError.message)
+  }
 
   const { data: existingRows } = await supabase
     .from("questions")
@@ -589,12 +597,16 @@ async function saveTestToDb(
   const incomingIds = new Set(questions.map((q) => q.id))
 
   const removedIds = [...existingIds].filter((id) => !incomingIds.has(id))
+
   if (removedIds.length > 0) {
     const { error: delError } = await supabase
       .from("questions")
       .delete()
       .in("id", removedIds)
-    if (delError) throw new Error("Failed to delete removed questions: " + delError.message)
+
+    if (delError) {
+      throw new Error("Failed to delete removed questions: " + delError.message)
+    }
   }
 
   if (questions.length === 0) return
@@ -615,8 +627,9 @@ async function saveTestToDb(
     )
     .select("id, order_index")
 
-  if (qError || !upsertedQuestions)
+  if (qError || !upsertedQuestions) {
     throw new Error("Failed to upsert questions: " + (qError?.message ?? "unknown"))
+  }
 
   const questionIds = upsertedQuestions.map((q) => q.id)
 
@@ -624,13 +637,17 @@ async function saveTestToDb(
     .from("options")
     .delete()
     .in("question_id", questionIds)
-  if (delOptError) throw new Error("Failed to clear options: " + delOptError.message)
+
+  if (delOptError) {
+    throw new Error("Failed to clear options: " + delOptError.message)
+  }
 
   const optionsPayload: any[] = []
 
   for (const dbQ of upsertedQuestions) {
     const localQ = questions[dbQ.order_index - 1]
     if (!localQ) continue
+
     localQ.options.forEach((opt, oi) => {
       optionsPayload.push({
         question_id: dbQ.id,
@@ -643,14 +660,19 @@ async function saveTestToDb(
 
   if (optionsPayload.length > 0) {
     const { error: optError } = await supabase.from("options").insert(optionsPayload)
-    if (optError) throw new Error("Failed to insert options: " + optError.message)
+    if (optError) {
+      throw new Error("Failed to insert options: " + optError.message)
+    }
   }
 
   const { error: delQtError } = await supabase
     .from("question_tags")
     .delete()
     .in("question_id", questionIds)
-  if (delQtError) throw new Error("Failed to clear question tags: " + delQtError.message)
+
+  if (delQtError) {
+    throw new Error("Failed to clear question tags: " + delQtError.message)
+  }
 
   const allTagNames = [
     ...new Set(
@@ -677,9 +699,15 @@ async function saveTestToDb(
     for (const dbQ of upsertedQuestions) {
       const localQ = questions[dbQ.order_index - 1]
       if (!localQ) continue
+
       for (const tagName of localQ.tag_names) {
         const tagId = tagMap[tagName.trim()]
-        if (tagId) questionTagsPayload.push({ question_id: dbQ.id, tag_id: tagId })
+        if (tagId) {
+          questionTagsPayload.push({
+            question_id: dbQ.id,
+            tag_id: tagId,
+          })
+        }
       }
     }
 
@@ -687,7 +715,10 @@ async function saveTestToDb(
       const { error: qtError } = await supabase
         .from("question_tags")
         .insert(questionTagsPayload)
-      if (qtError) throw new Error("Failed to link tags: " + qtError.message)
+
+      if (qtError) {
+        throw new Error("Failed to link tags: " + qtError.message)
+      }
     }
   }
 }
@@ -756,7 +787,10 @@ export async function saveDraftAction(
   questions: LocalQuestion[]
 ): Promise<void> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   if (!user) throw new Error("Not authenticated")
 
   await saveTestToDb(testId, user.id, settings, questions, "draft")
@@ -772,7 +806,10 @@ export async function publishTestAction(
   if (questions.length === 0) throw new Error("Add at least one question.")
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   if (!user) throw new Error("Not authenticated")
 
   await saveTestToDb(testId, user.id, settings, questions, "published")
@@ -782,19 +819,38 @@ export async function publishTestAction(
 
 // ─── AI Question Generation ───────────────────────────────────────────────────
 
-// ✅ CHANGED: All difficulty levels now use 1 mark
 const DIFFICULTY_MARKS: Record<AiGenerateForm["difficulty"], number> = {
   easy: 1,
   medium: 1,
   hard: 1,
 }
 
-/**
- * Cleans raw AI output and enforces correctness rules before returning to UI:
- * - single_correct  → exactly 1 correct option (pins first encountered correct, resets rest)
- * - multiple_correct → at least 2 correct options (forces first 2 if model under-counted)
- * - Drops questions with missing text or fewer than 2 options
- */
+const MODEL_FALLBACK_CHAIN: string[] = [
+  "llama-3.3-70b-versatile",
+  "moonshotai/kimi-k2-instruct-0905",
+  "qwen/qwen3-32b",
+  "openai/gpt-oss-120b",
+  "meta-llama/llama-4-scout-17b-16e-instruct",
+  "openai/gpt-oss-20b",
+  "llama-3.1-8b-instant",
+]
+
+function isRetryableOnNextModel(err: unknown): boolean {
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase()
+    return /429|rate.?limit|too many|quota|503|502|overloaded/.test(msg)
+  }
+  return false
+}
+
+function stripCodeFences(text: string): string {
+  return text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim()
+}
+
 function sanitizeQuestions(raw: any[], marksDefault: number): QuestionForm[] {
   return raw
     .filter(
@@ -805,7 +861,9 @@ function sanitizeQuestions(raw: any[], marksDefault: number): QuestionForm[] {
     )
     .map((q): QuestionForm => {
       const qType: "single_correct" | "multiple_correct" =
-        q.question_type === "multiple_correct" ? "multiple_correct" : "single_correct"
+        q.question_type === "multiple_correct"
+          ? "multiple_correct"
+          : "single_correct"
 
       let options: OptionForm[] = (q.options as any[]).map((o) => ({
         _key: crypto.randomUUID(),
@@ -854,12 +912,12 @@ function sanitizeQuestions(raw: any[], marksDefault: number): QuestionForm[] {
 
 export async function generateQuestionsAction(
   input: AiGenerateForm
-): Promise<QuestionForm[]> {
-  const apiKey = process.env.GEMINI_API_KEY
+): Promise<GenerateQuestionsResult> {
+  const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) throw new Error("AI generation is not configured.")
 
   const count = Math.min(20, Math.max(1, parseInt(input.count, 10) || 5))
-  const marksDefault = DIFFICULTY_MARKS[input.difficulty] // always 1
+  const marksDefault = DIFFICULTY_MARKS[input.difficulty]
 
   const typeInstruction =
     input.question_type === "mixed"
@@ -868,49 +926,12 @@ export async function generateQuestionsAction(
       ? `All questions must be "multiple_correct" with exactly 2–3 correct options out of 4.`
       : `All questions must be "single_correct" with exactly 1 correct option out of 4.`
 
-  const schema = {
-    type: SchemaType.ARRAY,
-    items: {
-      type: SchemaType.OBJECT,
-      properties: {
-        question_text: { type: SchemaType.STRING },
-        question_type: {
-          type: SchemaType.STRING,
-          enum: ["single_correct", "multiple_correct"],
-        },
-        marks: { type: SchemaType.NUMBER },
-        explanation: { type: SchemaType.STRING },
-        tag_names: {
-          type: SchemaType.ARRAY,
-          items: { type: SchemaType.STRING },
-        },
-        options: {
-          type: SchemaType.ARRAY,
-          items: {
-            type: SchemaType.OBJECT,
-            properties: {
-              option_text: { type: SchemaType.STRING },
-              is_correct: { type: SchemaType.BOOLEAN },
-            },
-            required: ["option_text", "is_correct"],
-          },
-        },
-      },
-      required: [
-        "question_text",
-        "question_type",
-        "marks",
-        "explanation",
-        "tag_names",
-        "options",
-      ],
-    },
-  } as const
+  const groq = new OpenAI({
+    baseURL: "https://api.groq.com/openai/v1",
+    apiKey,
+  })
 
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction: `You are an expert exam question author for educational assessments.
+  const systemPrompt = `You are an expert exam question author for educational assessments.
 
 STRICT RULES you must follow for every question:
 1. Every question has EXACTLY 4 options — no more, no less.
@@ -921,47 +942,98 @@ STRICT RULES you must follow for every question:
 6. "tag_names": provide 1–3 short topic tags (e.g. "photosynthesis", "linear algebra", "Ohm's law").
 7. Every question must have marks = 1, regardless of difficulty.
 8. Vary cognitive levels across the batch: include recall, application, and analysis questions.
-9. Never repeat similar or near-identical questions within the same batch.`,
-  })
+9. Never repeat similar or near-identical questions within the same batch.
+10. Your response must be a raw JSON object — no markdown, no code fences, no extra text.
+It must follow this exact shape:
+{
+  "questions": [
+    {
+      "question_text": "string",
+      "question_type": "single_correct" | "multiple_correct",
+      "marks": 1,
+      "explanation": "string",
+      "tag_names": ["string"],
+      "options": [
+        { "option_text": "string", "is_correct": true | false }
+      ]
+    }
+  ]
+}`
 
-  const prompt = `Generate exactly ${count} questions on the topic: "${input.topic}".
+  const nonce = crypto.randomUUID()
+
+  const userPrompt = `[Request ID: ${nonce}]
+Generate exactly ${count} questions on the topic: "${input.topic}".
 Difficulty: ${input.difficulty}. Each question carries 1 mark.
-${typeInstruction}`
+${typeInstruction}
+Ensure all questions are entirely distinct and not reused from any prior generation.`
 
-  const attempt = async (): Promise<QuestionForm[]> => {
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: schema as any,
-        temperature: 0.65,
-        topP: 0.95,
-      },
+  const attemptWithModel = async (
+    model: string
+  ): Promise<GenerateQuestionsResult> => {
+    const response = await groq.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.8,
+      top_p: 0.95,
+      frequency_penalty: 0.4,
     })
 
-    const text = result.response.text()
-    const parsed: any[] = JSON.parse(text)
-    const questions = sanitizeQuestions(parsed, marksDefault)
+    const raw = response.choices[0]?.message?.content
+    if (!raw) throw new Error("Empty response from AI.")
+
+    const text = stripCodeFences(raw)
+    const parsed = JSON.parse(text)
+
+    const rawList: any[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.questions)
+      ? parsed.questions
+      : []
+
+    const questions = sanitizeQuestions(rawList, marksDefault)
 
     if (questions.length === 0) {
       throw new Error("No valid questions returned by the AI. Please try again.")
     }
 
-    return questions
-  }
-
-  try {
-    return await attempt()
-  } catch (firstError) {
-    try {
-      return await attempt()
-    } catch (retryError) {
-      console.error("[generateQuestionsAction] Failed after retry:", retryError)
-      throw new Error(
-        retryError instanceof Error
-          ? `AI generation failed: ${retryError.message}`
-          : "Failed to generate questions. Please try again."
-      )
+    return {
+      questions,
+      generatedWith: model,
     }
   }
+
+  let lastError: unknown
+
+  for (const model of MODEL_FALLBACK_CHAIN) {
+    try {
+      return await attemptWithModel(model)
+    } catch (err) {
+      lastError = err
+
+      if (isRetryableOnNextModel(err)) {
+        console.warn(`[generateQuestionsAction] ${model} rate-limited, trying fallback…`)
+        continue
+      }
+
+      try {
+        return await attemptWithModel(model)
+      } catch (retryErr) {
+        lastError = retryErr
+        console.warn(`[generateQuestionsAction] ${model} retry failed, trying fallback…`)
+      }
+    }
+  }
+
+  console.error("[generateQuestionsAction] All models exhausted.", lastError)
+
+  throw new Error(
+    lastError instanceof Error
+      ? `AI generation failed: ${lastError.message}`
+      : "Failed to generate questions. Please try again."
+  )
 }

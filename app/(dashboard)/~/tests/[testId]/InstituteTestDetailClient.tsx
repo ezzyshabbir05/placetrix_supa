@@ -1,10 +1,8 @@
 "use client"
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // app/~/tests/[id]/InstituteTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-
 
 import { useState, useTransition, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
@@ -63,15 +61,16 @@ import {
   Trash2,
   ListChecks,
   Pencil,
+  Download,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
 
 
-
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
-
 
 function StatsBar({ test }: { test: InstituteTestDetail }) {
   const submitted = test.attempts.filter((a) => a.status === "submitted")
@@ -81,11 +80,11 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
   const avgPct =
     submitted.length > 0
       ? Math.round(
-        submitted.reduce(
-          (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
-          0
-        ) / submitted.length
-      )
+          submitted.reduce(
+            (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
+            0
+          ) / submitted.length
+        )
       : null
 
   const completionPct =
@@ -95,7 +94,6 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-
       <Card className="rounded-xl">
         <CardContent className="p-4">
           <div className="flex items-center gap-1.5 text-muted-foreground mb-2">
@@ -145,15 +143,12 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
           </p>
         </CardContent>
       </Card>
-
     </div>
   )
 }
 
 
-
 // ─── Meta Item ────────────────────────────────────────────────────────────────
-
 
 function MetaItem({
   icon,
@@ -178,9 +173,7 @@ function MetaItem({
 }
 
 
-
 // ─── Question Card (Answer Key) ───────────────────────────────────────────────
-
 
 function QuestionCard({
   question,
@@ -281,9 +274,7 @@ function QuestionCard({
 }
 
 
-
 // ─── Questions Tab (Answer Key) ───────────────────────────────────────────────
-
 
 function QuestionsTab({ questions }: { questions: InstituteQuestion[] }) {
   const totalMarks = questions.reduce((s, q) => s + q.marks, 0)
@@ -331,21 +322,19 @@ function QuestionsTab({ questions }: { questions: InstituteQuestion[] }) {
 }
 
 
-
 // ─── Attempt Score ────────────────────────────────────────────────────────────
-
 
 function AttemptScore({
   attempt,
-  resultsAvailable,
+  scoresVisible,
 }: {
   attempt: InstituteAttemptRow
-  resultsAvailable: boolean
+  scoresVisible: boolean
 }) {
   if (attempt.status !== "submitted") {
     return <span className="text-sm text-muted-foreground">—</span>
   }
-  if (!resultsAvailable) {
+  if (!scoresVisible) {
     return <span className="text-sm italic text-muted-foreground">Hidden</span>
   }
 
@@ -364,34 +353,173 @@ function AttemptScore({
 }
 
 
-
 // ─── Attempts Tab ─────────────────────────────────────────────────────────────
 
+function AttemptsTab({ test }: { test: InstituteTestDetail }) {
+  const attempts = test.attempts
 
-function AttemptsTab({
-  attempts,
-  resultsAvailable,
-}: {
-  attempts: InstituteAttemptRow[]
-  resultsAvailable: boolean
-}) {
+  // Scores are visible by default for the institute.
+  // Toggle locally to hide before screen-sharing with students.
+  const [scoresVisible, setScoresVisible] = useState(true)
+
   const submitted = attempts.filter((a) => a.status === "submitted")
   const inProgress = attempts.filter((a) => a.status === "in_progress")
+  const totalMarks = test.questions.reduce((s, q) => s + q.marks, 0)
 
   const avgPct =
     submitted.length > 0
       ? Math.round(
-        submitted.reduce(
-          (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
-          0
-        ) / submitted.length
-      )
+          submitted.reduce(
+            (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
+            0
+          ) / submitted.length
+        )
       : null
 
   const sorted = [
     ...submitted.sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? "")),
     ...inProgress.sort((a, b) => b.started_at.localeCompare(a.started_at)),
   ]
+
+  const handleExportCSV = () => {
+    const headers = [
+      "Student Name",
+      "Email",
+      "Status",
+      "Score",
+      "Total Marks",
+      "Percentage (%)",
+      "Time Spent",
+      "Started At",
+      "Submitted At",
+    ]
+
+    const rows = sorted.map((a) => [
+      a.student_name || "Unknown",
+      a.student_email || "—",
+      a.status === "submitted" ? "Submitted" : "In Progress",
+      a.score ?? "—",
+      a.total_marks ?? "—",
+      a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks) : "—",
+      formatSeconds(a.time_spent_seconds),
+      formatDateTime(a.started_at),
+      a.submitted_at ? formatDateTime(a.submitted_at) : "—",
+    ])
+
+    const escapeCsv = (str: any) => `"${String(str).replace(/"/g, '""')}"`
+    const csvContent = [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n")
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", `${test.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_results.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleExportPDF = async () => {
+    const { default: jsPDF } = await import("jspdf")
+    const { default: autoTable } = await import("jspdf-autotable")
+
+    const doc = new jsPDF("landscape", "mm", "a4")
+    const pageWidth = doc.internal.pageSize.width
+
+    let currentY = 14
+
+    if (test.institute_name) {
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(8)
+      doc.setTextColor(120, 120, 120)
+      doc.text(test.institute_name.toUpperCase(), 14, currentY)
+      currentY += 6
+    }
+
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(14)
+    doc.setTextColor(20, 20, 20)
+    doc.text(test.title, 14, currentY)
+    currentY += 5
+
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(8)
+    doc.setTextColor(100, 100, 100)
+
+    const testInfo = `Test ID: ${test.id}   |   Duration: ${formatDuration(test.time_limit_seconds)}   |   Questions: ${test.questions.length}   |   Total Marks: ${totalMarks}`
+    doc.text(testInfo, 14, currentY)
+    currentY += 4.5
+
+    const dateStr = new Date().toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })
+
+    const attemptInfo = `Total Attempts: ${attempts.length}   |   ${
+      avgPct != null ? `Average Score: ${avgPct}%   |   ` : ""
+    }Exported On: ${dateStr}`
+    doc.text(attemptInfo, 14, currentY)
+    currentY += 8
+
+    const tableColumn = ["Student", "Email", "Status", "Score", "Pct", "Time", "Submitted"]
+    const tableRows = sorted.map((a) => [
+      a.student_name || "Unknown",
+      a.student_email || "—",
+      a.status === "submitted" ? "Submitted" : "In Progress",
+      a.status === "submitted" ? `${a.score ?? "—"}/${a.total_marks ?? "—"}` : "—",
+      a.status === "submitted" ? `${resolvePct(a.percentage, a.score, a.total_marks)}%` : "—",
+      formatSeconds(a.time_spent_seconds),
+      a.submitted_at ? formatDateTime(a.submitted_at) : "—",
+    ])
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [tableColumn],
+      body: tableRows,
+      theme: "plain",
+      styles: {
+        font: "helvetica",
+        fontSize: 8,
+        cellPadding: 2,
+        textColor: [40, 40, 40],
+      },
+      headStyles: {
+        fontSize: 8.5,
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        fillColor: [249, 250, 251],
+        lineWidth: { bottom: 0.5 },
+        lineColor: [200, 200, 200],
+      },
+      bodyStyles: {
+        lineWidth: { bottom: 0.1 },
+        lineColor: [230, 230, 230],
+      },
+      columnStyles: {
+        0: { cellWidth: 45 },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 22 },
+        3: { halign: "right", cellWidth: 16 },
+        4: { halign: "right", cellWidth: 12 },
+        5: { halign: "right", cellWidth: 26 },
+        6: { halign: "right" },
+      },
+      didDrawPage: (data) => {
+        const currentPage = data.pageNumber
+        doc.setFontSize(7)
+        doc.setTextColor(150, 150, 150)
+        doc.text(
+          `Page ${currentPage}`,
+          pageWidth - 14,
+          doc.internal.pageSize.height - 8,
+          { align: "right" }
+        )
+      },
+    })
+
+    const filename = `${test.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_results.pdf`
+    doc.save(filename)
+  }
 
   if (attempts.length === 0) {
     return (
@@ -413,27 +541,78 @@ function AttemptsTab({
 
   return (
     <div className="space-y-5">
+      {/* Summary strip & export */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-sm">
+          <span>
+            <span className="font-semibold tabular-nums">{submitted.length}</span>
+            <span className="ml-1 text-muted-foreground">Submitted</span>
+          </span>
+          <Separator orientation="vertical" className="h-3.5" />
+          <span>
+            <span className="font-semibold tabular-nums">{inProgress.length}</span>
+            <span className="ml-1 text-muted-foreground">In Progress</span>
+          </span>
+          {scoresVisible && avgPct != null && (
+            <>
+              <Separator orientation="vertical" className="h-3.5" />
+              <span>
+                <span className="font-semibold tabular-nums">{avgPct}%</span>
+                <span className="ml-1 text-muted-foreground">Avg Score</span>
+              </span>
+            </>
+          )}
+        </div>
 
-      {/* Summary strip */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-sm">
-        <span>
-          <span className="font-semibold tabular-nums">{submitted.length}</span>
-          <span className="ml-1 text-muted-foreground">Submitted</span>
-        </span>
-        <Separator orientation="vertical" className="h-3.5" />
-        <span>
-          <span className="font-semibold tabular-nums">{inProgress.length}</span>
-          <span className="ml-1 text-muted-foreground">In Progress</span>
-        </span>
-        {resultsAvailable && avgPct != null && (
-          <>
-            <Separator orientation="vertical" className="h-3.5" />
-            <span>
-              <span className="font-semibold tabular-nums">{avgPct}%</span>
-              <span className="ml-1 text-muted-foreground">Avg Score</span>
-            </span>
-          </>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Download className="h-4 w-4" />
+              Export Data
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={handleExportCSV}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Export as CSV (Excel)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportPDF}>
+              <FileText className="mr-2 h-4 w-4" />
+              Export as PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* ── Score visibility banner ─────────────────────────────────────── */}
+      <div
+        className={cn(
+          "flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors",
+          scoresVisible
+            ? "border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-400"
+            : "border-border bg-muted/30 text-muted-foreground"
         )}
+      >
+        <div className="flex items-center gap-2">
+          {scoresVisible ? (
+            <Eye className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <EyeOff className="h-3.5 w-3.5 shrink-0" />
+          )}
+          <span>
+            {scoresVisible
+              ? "Scores visible — hide before screen sharing with students."
+              : "Scores hidden locally. Students are unaffected."}
+          </span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-xs"
+          onClick={() => setScoresVisible((v) => !v)}
+        >
+          {scoresVisible ? "Hide" : "Show Scores"}
+        </Button>
       </div>
 
       {/* Mobile compact list */}
@@ -450,7 +629,7 @@ function AttemptsTab({
             </div>
             <div className="flex items-center gap-2.5 shrink-0">
               <div className="text-right">
-                <AttemptScore attempt={a} resultsAvailable={resultsAvailable} />
+                <AttemptScore attempt={a} scoresVisible={scoresVisible} />
                 <p className="text-[10px] tabular-nums text-muted-foreground leading-tight">
                   {formatSeconds(a.time_spent_seconds)}
                 </p>
@@ -497,7 +676,7 @@ function AttemptsTab({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end">
-                    <AttemptScore attempt={a} resultsAvailable={resultsAvailable} />
+                    <AttemptScore attempt={a} scoresVisible={scoresVisible} />
                   </div>
                 </TableCell>
                 <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
@@ -511,15 +690,12 @@ function AttemptsTab({
           </TableBody>
         </Table>
       </div>
-
     </div>
   )
 }
 
 
-
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-
 
 function OverviewTab({
   test,
@@ -534,8 +710,6 @@ function OverviewTab({
 }) {
   return (
     <div className="space-y-4">
-
-      {/* Test details card */}
       <Card className="rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Test Details</CardTitle>
@@ -586,7 +760,6 @@ function OverviewTab({
         </CardContent>
       </Card>
 
-      {/* Controls card */}
       <Card className="rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Controls</CardTitle>
@@ -644,15 +817,12 @@ function OverviewTab({
           ))}
         </CardContent>
       </Card>
-
     </div>
   )
 }
 
 
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
-
 
 interface Props {
   test: InstituteTestDetail
@@ -660,7 +830,6 @@ interface Props {
   onTogglePublish?: () => Promise<void>
   onDeleteTest?: () => Promise<void>
 }
-
 
 export function InstituteTestDetailClient({
   test,
@@ -674,13 +843,14 @@ export function InstituteTestDetailClient({
 
   const run = (fn?: () => Promise<void>) => {
     if (!fn) return
-    startTransition(async () => { await fn() })
+    startTransition(async () => {
+      await fn()
+    })
   }
 
   return (
     <div className="min-h-screen w-full bg-background">
       <div className="mx-auto space-y-6 px-4 py-8 md:px-8">
-
         {/* ── Page Header ────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1 min-w-0">
@@ -717,8 +887,6 @@ export function InstituteTestDetailClient({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-
-              {/* ── Edit Test ── */}
               <DropdownMenuItem onClick={() => router.push(`/~/tests/${test.id}/edit`)}>
                 <Pencil className="mr-2 h-3.5 w-3.5" />
                 Edit Test
@@ -728,16 +896,28 @@ export function InstituteTestDetailClient({
 
               <DropdownMenuItem onClick={() => run(onTogglePublish)} disabled={isPending}>
                 {test.status === "published" ? (
-                  <><EyeOff className="mr-2 h-3.5 w-3.5" />Unpublish</>
+                  <>
+                    <EyeOff className="mr-2 h-3.5 w-3.5" />
+                    Unpublish
+                  </>
                 ) : (
-                  <><Eye className="mr-2 h-3.5 w-3.5" />Publish</>
+                  <>
+                    <Eye className="mr-2 h-3.5 w-3.5" />
+                    Publish
+                  </>
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => run(onToggleResults)} disabled={isPending}>
                 {test.results_available ? (
-                  <><EyeOff className="mr-2 h-3.5 w-3.5" />Hide Results</>
+                  <>
+                    <EyeOff className="mr-2 h-3.5 w-3.5" />
+                    Hide Results
+                  </>
                 ) : (
-                  <><Eye className="mr-2 h-3.5 w-3.5" />Release Results</>
+                  <>
+                    <Eye className="mr-2 h-3.5 w-3.5" />
+                    Release Results
+                  </>
                 )}
               </DropdownMenuItem>
 
@@ -757,8 +937,7 @@ export function InstituteTestDetailClient({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete "{test.title}"?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This permanently deletes the test, all questions, and all student attempts.
-                      This action cannot be undone.
+                      This permanently deletes the test, all questions, and all student attempts. This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -772,7 +951,6 @@ export function InstituteTestDetailClient({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -797,12 +975,14 @@ export function InstituteTestDetailClient({
                   {icon}
                   <span>{label}</span>
                   {count != null && count > 0 && (
-                    <span className={cn(
-                      "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums",
-                      activeTab === value
-                        ? "bg-foreground text-background"
-                        : "bg-muted-foreground/20 text-muted-foreground"
-                    )}>
+                    <span
+                      className={cn(
+                        "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums",
+                        activeTab === value
+                          ? "bg-foreground text-background"
+                          : "bg-muted-foreground/20 text-muted-foreground"
+                      )}
+                    >
                       {count}
                     </span>
                   )}
@@ -825,13 +1005,9 @@ export function InstituteTestDetailClient({
           </TabsContent>
 
           <TabsContent value="attempts" className="m-0">
-            <AttemptsTab
-              attempts={test.attempts}
-              resultsAvailable={test.results_available}
-            />
+            <AttemptsTab test={test} />
           </TabsContent>
         </Tabs>
-
       </div>
     </div>
   )

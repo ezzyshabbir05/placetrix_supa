@@ -12,13 +12,14 @@ import type {
   QuestionForm,
   AiGenerateForm,
   InitialTestData,
+  GenerateQuestionsResult, // ← add this
 } from "../actions"
 
 interface Props {
   testId?: string
   initialData?: InitialTestData
   availableTags: { id: string; name: string }[]
-  generateQuestionsAction: (input: AiGenerateForm) => Promise<QuestionForm[]>
+  generateQuestionsAction: (input: AiGenerateForm) => Promise<GenerateQuestionsResult> // ← updated
   onSaveDraft: (id: string, settings: SettingsForm, questions: LocalQuestion[]) => Promise<void>
   onPublish: (id: string, settings: SettingsForm, questions: LocalQuestion[]) => Promise<void>
 }
