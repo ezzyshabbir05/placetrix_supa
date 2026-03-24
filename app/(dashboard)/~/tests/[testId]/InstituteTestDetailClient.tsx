@@ -4,7 +4,7 @@
 // app/~/tests/[id]/InstituteTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useTransition, type ReactNode } from "react"
+import { useState, useCallback, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -68,6 +68,33 @@ import {
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
+
+
+// ─── Action State Hook ────────────────────────────────────────────────────────
+
+type ActionKey = "toggleResults" | "togglePublish" | "deleteTest" | null
+
+function useActionState() {
+  const [activeAction, setActiveAction] = useState<ActionKey>(null)
+
+  const run = useCallback(
+    async (key: ActionKey, fn?: () => Promise<void>) => {
+      if (!fn || activeAction !== null) return
+      setActiveAction(key)
+      try {
+        await fn()
+      } finally {
+        setActiveAction(null)
+      }
+    },
+    [activeAction]
+  )
+
+  const isLoading = (key: ActionKey) => activeAction === key
+  const anyLoading = activeAction !== null
+
+  return { run, isLoading, anyLoading }
+}
 
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
@@ -357,10 +384,7 @@ function AttemptScore({
 
 function AttemptsTab({ test }: { test: InstituteTestDetail }) {
   const attempts = test.attempts
-
-  // Scores are visible by default for the institute.
-  // Toggle locally to hide before screen-sharing with students.
-  const [scoresVisible, setScoresVisible] = useState(true)
+  const [scoresVisible, setScoresVisible] = useState(false)
 
   const submitted = attempts.filter((a) => a.status === "submitted")
   const inProgress = attempts.filter((a) => a.status === "in_progress")
@@ -584,7 +608,7 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
         </DropdownMenu>
       </div>
 
-      {/* ── Score visibility banner ─────────────────────────────────────── */}
+      {/* Score visibility banner */}
       <div
         className={cn(
           "flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors",
@@ -599,11 +623,7 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
           ) : (
             <EyeOff className="h-3.5 w-3.5 shrink-0" />
           )}
-          <span>
-            {scoresVisible
-              ? "Scores visible — hide before screen sharing with students."
-              : "Scores hidden locally. Students are unaffected."}
-          </span>
+          <span>{scoresVisible ? "Scores visible" : "Scores hidden"}</span>
         </div>
         <Button
           variant="ghost"
@@ -618,7 +638,10 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
       {/* Mobile compact list */}
       <div className="rounded-xl border overflow-hidden divide-y md:hidden">
         {sorted.map((a) => (
-          <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors">
+          <div
+            key={a.id}
+            className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors"
+          >
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium leading-tight">
                 {a.student_name ?? "Unknown"}
@@ -701,13 +724,43 @@ function OverviewTab({
   test,
   onToggleResults,
   onTogglePublish,
-  isLoading,
+  isToggleResultsLoading,
+  isTogglePublishLoading,
+  anyLoading,
 }: {
   test: InstituteTestDetail
   onToggleResults: () => void
   onTogglePublish: () => void
-  isLoading: boolean
+  isToggleResultsLoading: boolean
+  isTogglePublishLoading: boolean
+  anyLoading: boolean
 }) {
+  const controls = [
+    {
+      title: "Visibility",
+      description:
+        test.status === "published"
+          ? "Visible to students within the availability window."
+          : "Draft mode — students cannot see this test.",
+      active: test.status === "published",
+      onAction: onTogglePublish,
+      activeLabel: "Unpublish",
+      inactiveLabel: "Publish",
+      isLoading: isTogglePublishLoading,
+    },
+    {
+      title: "Results",
+      description: test.results_available
+        ? "Students can see scores and question review."
+        : "Scores remain hidden until you release results.",
+      active: test.results_available,
+      onAction: onToggleResults,
+      activeLabel: "Hide Results",
+      inactiveLabel: "Release Results",
+      isLoading: isToggleResultsLoading,
+    },
+  ]
+
   return (
     <div className="space-y-4">
       <Card className="rounded-xl">
@@ -766,55 +819,35 @@ function OverviewTab({
           <CardDescription className="text-xs">Manage visibility and result release.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {[
-            {
-              title: "Visibility",
-              description:
-                test.status === "published"
-                  ? "Visible to students within the availability window."
-                  : "Draft mode — students cannot see this test.",
-              active: test.status === "published",
-              onAction: onTogglePublish,
-              activeLabel: "Unpublish",
-              inactiveLabel: "Publish",
-            },
-            {
-              title: "Results",
-              description: test.results_available
-                ? "Students can see scores and question review."
-                : "Scores remain hidden until you release results.",
-              active: test.results_available,
-              onAction: onToggleResults,
-              activeLabel: "Hide Results",
-              inactiveLabel: "Release Results",
-            },
-          ].map(({ title, description, active, onAction, activeLabel, inactiveLabel }, i) => (
-            <div key={title}>
-              {i > 0 && <Separator className="mb-4" />}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">{title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          {controls.map(
+            ({ title, description, active, onAction, activeLabel, inactiveLabel, isLoading }, i) => (
+              <div key={title}>
+                {i > 0 && <Separator className="mb-4" />}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onAction}
+                    disabled={anyLoading}
+                    className="w-full shrink-0 sm:w-auto"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : active ? (
+                      <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {isLoading ? "Saving…" : active ? activeLabel : inactiveLabel}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onAction}
-                  disabled={isLoading}
-                  className="w-full shrink-0 sm:w-auto"
-                >
-                  {isLoading ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : active ? (
-                    <EyeOff className="mr-1.5 h-3.5 w-3.5" />
-                  ) : (
-                    <Eye className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  {active ? activeLabel : inactiveLabel}
-                </Button>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </CardContent>
       </Card>
     </div>
@@ -839,19 +872,13 @@ export function InstituteTestDetailClient({
 }: Props) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("overview")
-  const [isPending, startTransition] = useTransition()
-
-  const run = (fn?: () => Promise<void>) => {
-    if (!fn) return
-    startTransition(async () => {
-      await fn()
-    })
-  }
+  const { run, isLoading, anyLoading } = useActionState()
 
   return (
     <div className="min-h-screen w-full bg-background">
       <div className="mx-auto space-y-6 px-4 py-8 md:px-8">
-        {/* ── Page Header ────────────────────────────────────────────────── */}
+
+        {/* ── Page Header ─────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1 min-w-0">
             {test.institute_name && (
@@ -863,7 +890,10 @@ export function InstituteTestDetailClient({
               <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
                 {test.title}
               </h1>
-              <Badge variant={test.status === "published" ? "default" : "secondary"} className="text-xs">
+              <Badge
+                variant={test.status === "published" ? "default" : "secondary"}
+                className="text-xs"
+              >
                 {test.status === "published" ? "Published" : "Draft"}
               </Badge>
               {test.results_available && (
@@ -881,53 +911,78 @@ export function InstituteTestDetailClient({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full gap-1.5 sm:w-auto">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5 sm:w-auto"
+                disabled={anyLoading}
+              >
+                {anyLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MoreHorizontal className="h-4 w-4" />
+                )}
                 Actions
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => router.push(`/~/tests/${test.id}/edit`)}>
+              <DropdownMenuItem
+                onClick={() => router.push(`/~/tests/${test.id}/edit`)}
+                disabled={anyLoading}
+              >
                 <Pencil className="mr-2 h-3.5 w-3.5" />
                 Edit Test
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem onClick={() => run(onTogglePublish)} disabled={isPending}>
-                {test.status === "published" ? (
-                  <>
-                    <EyeOff className="mr-2 h-3.5 w-3.5" />
-                    Unpublish
-                  </>
+              {/* Publish toggle */}
+              <DropdownMenuItem
+                onClick={() => run("togglePublish", onTogglePublish)}
+                disabled={anyLoading}
+              >
+                {isLoading("togglePublish") ? (
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : test.status === "published" ? (
+                  <EyeOff className="mr-2 h-3.5 w-3.5" />
                 ) : (
-                  <>
-                    <Eye className="mr-2 h-3.5 w-3.5" />
-                    Publish
-                  </>
+                  <Eye className="mr-2 h-3.5 w-3.5" />
                 )}
+                {isLoading("togglePublish")
+                  ? "Saving…"
+                  : test.status === "published"
+                  ? "Unpublish"
+                  : "Publish"}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => run(onToggleResults)} disabled={isPending}>
-                {test.results_available ? (
-                  <>
-                    <EyeOff className="mr-2 h-3.5 w-3.5" />
-                    Hide Results
-                  </>
+
+              {/* Results toggle */}
+              <DropdownMenuItem
+                onClick={() => run("toggleResults", onToggleResults)}
+                disabled={anyLoading}
+              >
+                {isLoading("toggleResults") ? (
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : test.results_available ? (
+                  <EyeOff className="mr-2 h-3.5 w-3.5" />
                 ) : (
-                  <>
-                    <Eye className="mr-2 h-3.5 w-3.5" />
-                    Release Results
-                  </>
+                  <Eye className="mr-2 h-3.5 w-3.5" />
                 )}
+                {isLoading("toggleResults")
+                  ? "Saving…"
+                  : test.results_available
+                  ? "Hide Results"
+                  : "Release Results"}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
+              {/* Delete */}
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <DropdownMenuItem
                     variant="destructive"
                     onSelect={(e) => e.preventDefault()}
+                    disabled={anyLoading}
                   >
                     <Trash2 className="mr-2 h-3.5 w-3.5" />
                     Delete Test
@@ -937,16 +992,30 @@ export function InstituteTestDetailClient({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete "{test.title}"?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This permanently deletes the test, all questions, and all student attempts. This action cannot be undone.
+                      This permanently deletes the test, all questions, and all student
+                      attempts. This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel disabled={isLoading("deleteTest")}>
+                      Cancel
+                    </AlertDialogCancel>
                     <AlertDialogAction
-                      variant={"destructive"}
-                      onClick={() => run(onDeleteTest)}
+                      variant="destructive"
+                      disabled={isLoading("deleteTest")}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        run("deleteTest", onDeleteTest)
+                      }}
                     >
-                      Delete permanently
+                      {isLoading("deleteTest") ? (
+                        <>
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Deleting…
+                        </>
+                      ) : (
+                        "Delete permanently"
+                      )}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -994,9 +1063,11 @@ export function InstituteTestDetailClient({
           <TabsContent value="overview" className="m-0">
             <OverviewTab
               test={test}
-              onToggleResults={() => run(onToggleResults)}
-              onTogglePublish={() => run(onTogglePublish)}
-              isLoading={isPending}
+              onToggleResults={() => run("toggleResults", onToggleResults)}
+              onTogglePublish={() => run("togglePublish", onTogglePublish)}
+              isToggleResultsLoading={isLoading("toggleResults")}
+              isTogglePublishLoading={isLoading("togglePublish")}
+              anyLoading={anyLoading}
             />
           </TabsContent>
 
