@@ -17,8 +17,9 @@ export interface CandidateTest {
   id: string
   title: string
   description?: string
-  time_limit_seconds: number
+  time_limit_seconds?: number        // undefined = no time limit
   available_from?: string
+  available_until?: string           // ← added
   derived_status: DerivedCandidateStatus
   results_available: boolean
   attempt?: CandidateTestAttempt
@@ -28,7 +29,7 @@ export interface InstituteTest {
   id: string
   title: string
   description?: string
-  time_limit_seconds: number
+  time_limit_seconds?: number        // undefined = no time limit
   available_from?: string
   available_until?: string
   derived_status: DerivedInstituteStatus
@@ -43,11 +44,11 @@ export interface InstituteTest {
 // Derives the display status for a test from its DB status + availability window.
 //
 // Rules:
-//   draft                                → "draft"
-//   published, available_from > now      → "upcoming"
-//   published, available_until < now     → "past"
-//   published, within window (or no window set) → "live"
-// ──────────────────────────────────────────────────────────────────────────────
+//   draft                                          → "draft"
+//   published, available_from > now                → "upcoming"
+//   published, available_until < now               → "past"
+//   published, within window (or no window set)    → "live"
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function deriveStatus(
   dbStatus: string,
@@ -56,7 +57,7 @@ export function deriveStatus(
 ): DerivedInstituteStatus {
   if (dbStatus === "draft") return "draft"
 
-  const now = new Date()
+  const now   = new Date()
   const from  = available_from  ? new Date(available_from)  : null
   const until = available_until ? new Date(available_until) : null
 

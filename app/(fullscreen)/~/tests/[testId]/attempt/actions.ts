@@ -31,14 +31,12 @@ export async function saveAnswerAction(
   if (error) throw new Error(error.message)
 }
 
-
 // ─── Submit Attempt ────────────────────────────────────────────────────────────
 //
 // 1. Persists final time_spent_seconds.
 // 2. Calls grade_attempt RPC which scores every answer and marks the attempt
 //    as submitted.
-// 3. Redirects to the results page — Next.js propagates this redirect to the
-//    browser automatically even when the action is called from a Client Component.
+// 3. Redirects back to the test page.
 // ──────────────────────────────────────────────────────────────────────────────
 
 export async function submitAttemptAction(
@@ -67,11 +65,8 @@ export async function submitAttemptAction(
     .eq("id", attemptId)
     .single()
 
-  if (data?.test_id) {
-    redirect(`/~/tests/${data.test_id}/results/${attemptId}`)
-  }
+  redirect(data?.test_id ? `/~/tests/${data.test_id}` : "/~/tests")
 }
-
 
 // ─── Record Violation ──────────────────────────────────────────────────────────
 //

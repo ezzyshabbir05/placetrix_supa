@@ -7,10 +7,9 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import {
   CalendarClock,
   PlayCircle,
@@ -19,12 +18,9 @@ import {
   FileText,
   AlertCircle,
   BookOpen,
-  ArrowRight,
-  Trophy,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CandidateTest, DerivedCandidateStatus } from "./_types"
-
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +32,6 @@ interface TabConfig {
   icon: React.ReactNode
   count: number
 }
-
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -52,7 +47,6 @@ export function formatDateTime(dt?: string): string {
   if (!dt) return "—"
   return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
 }
-
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
@@ -84,11 +78,10 @@ function StatusBadge({ status }: { status: DerivedCandidateStatus }) {
   )
 }
 
-
 // ─── Test Card ────────────────────────────────────────────────────────────────
 
 function TestCard({ test }: { test: CandidateTest }) {
-  const isSubmitted = test.attempt?.status === "submitted"
+  const isSubmitted  = test.attempt?.status === "submitted"
   const isInProgress = test.attempt?.status === "in_progress"
 
   return (
@@ -113,7 +106,10 @@ function TestCard({ test }: { test: CandidateTest }) {
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
-            {formatDuration(test.time_limit_seconds)}
+            {/* ← null guard: undefined means no time limit */}
+            {test.time_limit_seconds
+              ? formatDuration(test.time_limit_seconds)
+              : "No time limit"}
           </span>
           {test.available_from && (
             <span className="flex items-center gap-1.5">
@@ -178,8 +174,6 @@ function TestCard({ test }: { test: CandidateTest }) {
   )
 }
 
-
-
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState({ label }: { label: string }) {
@@ -195,7 +189,6 @@ function EmptyState({ label }: { label: string }) {
     </div>
   )
 }
-
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

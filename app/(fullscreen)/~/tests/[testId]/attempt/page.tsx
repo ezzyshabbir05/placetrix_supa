@@ -8,7 +8,6 @@ import { AttemptClient } from "./AttemptClient"
 import { saveAnswerAction, submitAttemptAction, recordViolationAction } from "./actions"
 import type { AttemptQuestion, AttemptTest, AttemptInfo, SavedAnswer } from "./_types"
 
-
 export default async function AttemptPage({
   params,
 }: {
@@ -46,7 +45,6 @@ export default async function AttemptPage({
   }
 
   // ── Resolve or create attempt ───────────────────────────────────────────────
-
   let attemptInfo: AttemptInfo
 
   // Look for an existing in-progress attempt first (resume flow)
@@ -61,13 +59,13 @@ export default async function AttemptPage({
     .maybeSingle()
 
   if (existingAttempt) {
-    // Timer expired server-side — auto-grade and redirect to results
+    // Timer expired server-side — auto-grade and redirect back to test page
     if (
       existingAttempt.expires_at &&
       new Date(existingAttempt.expires_at) < now
     ) {
       await supabase.rpc("grade_attempt", { p_attempt_id: existingAttempt.id })
-      redirect(`/~/tests/${testId}/results/${existingAttempt.id}`)
+      redirect(`/~/tests/${testId}`)
     }
 
     attemptInfo = {
@@ -84,21 +82,7 @@ export default async function AttemptPage({
       .in("status", ["submitted", "auto_submitted"])
 
     if ((completedCount ?? 0) >= test.max_attempts) {
-      // Send student directly to their latest result
-      const { data: latestAttempt } = await supabase
-        .from("test_attempts")
-        .select("id")
-        .eq("test_id", testId)
-        .eq("student_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      redirect(
-        latestAttempt
-          ? `/~/tests/${testId}/results/${latestAttempt.id}`
-          : "/~/tests"
-      )
+      redirect(`/~/tests/${testId}`)
     }
 
     // Create a fresh attempt

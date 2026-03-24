@@ -16,6 +16,7 @@ export const metadata = {
   title: "Tests",
   description: "Mock Tests",
 }
+
 // ─── Candidate data ───────────────────────────────────────────────────────────
 
 async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
@@ -52,7 +53,7 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
     .select("test_id, status, submitted_at, score, total_marks, percentage")
     .eq("student_id", userId)
     .in("test_id", testIds)
-    .order("created_at", { ascending: false }) // newest first
+    .order("created_at", { ascending: false })
 
   // 4. Build a raw attempt map (score only — total_marks will be overridden below)
   const rawAttemptMap: Record<string, {
@@ -62,7 +63,7 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
     percentage?: number
   }> = {}
   for (const a of rawAttempts ?? []) {
-    if (rawAttemptMap[a.test_id]) continue // already have the latest
+    if (rawAttemptMap[a.test_id]) continue
     rawAttemptMap[a.test_id] = {
       status: a.status as "in_progress" | "submitted",
       submitted_at: a.submitted_at ?? undefined,
@@ -71,27 +72,24 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
     }
   }
 
-  // 5. FIX: Fetch all questions' marks for these tests in one query,
-  //    so total_marks is based on ALL questions, not just attempted ones.
+  // 5. Fetch all questions' marks for these tests in one query
   const { data: rawQuestions } = await supabase
     .from("questions")
     .select("test_id, marks")
     .in("test_id", testIds)
 
-  // Build a map of testId → total marks across ALL questions
   const totalMarksMap: Record<string, number> = {}
   for (const q of rawQuestions ?? []) {
     totalMarksMap[q.test_id] = (totalMarksMap[q.test_id] ?? 0) + (q.marks ?? 0)
   }
 
-  // 6. Shape into CandidateTest[], with corrected total_marks and percentage
+  // 6. Shape into CandidateTest[]
   return rawTests.map((t): CandidateTest => {
     const raw = rawAttemptMap[t.id]
     const fullTotalMarks = totalMarksMap[t.id] ?? 0
 
     let attempt: CandidateTestAttempt | undefined
     if (raw) {
-      // Recalculate percentage using the full question set total
       const correctedPct =
         raw.score != null && fullTotalMarks > 0
           ? Math.round((raw.score / fullTotalMarks) * 100)
@@ -101,7 +99,6 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
         status: raw.status,
         submitted_at: raw.submitted_at,
         score: raw.score,
-        // FIX: always use the sum of all questions' marks as denominator
         total_marks: fullTotalMarks > 0 ? fullTotalMarks : undefined,
         percentage: correctedPct,
       }
@@ -111,8 +108,9 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
       id: t.id,
       title: t.title,
       description: t.description ?? undefined,
-      time_limit_seconds: t.time_limit_seconds ?? 0,
+      time_limit_seconds: t.time_limit_seconds ?? undefined,   // ← undefined = no limit
       available_from: t.available_from ?? undefined,
+      available_until: t.available_until ?? undefined,         // ← included
       derived_status: deriveStatus(
         "published",
         t.available_from,
@@ -123,7 +121,6 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
     }
   })
 }
-
 
 // ─── Institute data ───────────────────────────────────────────────────────────
 
@@ -145,7 +142,7 @@ async function fetchInstituteTests(userId: string): Promise<InstituteTest[]> {
     id: t.id,
     title: t.title,
     description: t.description ?? undefined,
-    time_limit_seconds: t.time_limit_seconds ?? 0,
+    time_limit_seconds: t.time_limit_seconds ?? undefined,     // ← undefined = no limit
     available_from: t.available_from ?? undefined,
     available_until: t.available_until ?? undefined,
     derived_status: deriveStatus(t.status, t.available_from, t.available_until),
@@ -155,7 +152,6 @@ async function fetchInstituteTests(userId: string): Promise<InstituteTest[]> {
     attempt_count: (t.test_attempts as unknown as { count: number }[])?.[0]?.count ?? 0,
   }))
 }
-
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 

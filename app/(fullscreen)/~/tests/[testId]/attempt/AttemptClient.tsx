@@ -803,6 +803,8 @@ export function AttemptClient({
 
     // ── Submit ─────────────────────────────────────────────────────────────────
 
+    // ── Submit ─────────────────────────────────────────────────────────────────
+
     const handleSubmit = useCallback(
         async (auto = false) => {
             if (isSubmittingRef.current) return
@@ -818,8 +820,8 @@ export function AttemptClient({
             )
 
             try {
-                await onSubmit?.(attemptInfo.id, timeSpentSeconds)
-                await leaveFullscreen()
+                await leaveFullscreen()              // ← exit fullscreen FIRST
+                await onSubmit?.(attemptInfo.id, timeSpentSeconds)  // ← then redirect
             } catch (err: any) {
                 setIsSubmitting(false)
                 setSubmitError(err?.message ?? "Submission failed. Please try again.")
@@ -828,6 +830,7 @@ export function AttemptClient({
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [attemptInfo.id, attemptInfo.started_at, onSubmit, leaveFullscreen]
     )
+
 
     useEffect(() => {
         handleSubmitRef.current = handleSubmit
