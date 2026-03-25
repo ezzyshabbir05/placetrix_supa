@@ -55,7 +55,8 @@ const SOFTWARE_SKILLS = [
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const GENDER_MAP: Record<string, string> = { Male: "M", Female: "F", Other: "O" };
 const GENDER_REVERSE: Record<string, string> = { M: "Male", F: "Female", O: "Other" };
-const YEAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(2025 - i));
+const YEAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(new Date().getFullYear() - i));
+const PASSOUT_YEAR_OPTIONS = Array.from({ length: 11 }, (_, i) => String(new Date().getFullYear() - 5 + i));
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
@@ -716,6 +717,10 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     if (!sscPercentage) e.sscPercentage = "SSC percentage is required";
     if (!sscPassYear) e.sscPassYear = "SSC passing year is required";
     if (!isHsc && !isDiploma) e.educationAfterSsc = "Select at least one option (HSC or Diploma)";
+    if (isHsc && !hscPercentage) e.hscPercentage = "HSC percentage is required";
+    if (isHsc && !hscPassYear) e.hscPassYear = "HSC passing year is required";
+    if (isDiploma && !diplomaPercentage) e.diplomaPercentage = "Diploma percentage is required";
+    if (isDiploma && !diplomaPassYear) e.diplomaPassYear = "Diploma passing year is required";
     if (selectedSkills.length === 0) e.skills = "Select at least one skill";
     if (aadhaarNumber && !/^[0-9]{12}$/.test(aadhaarNumber))
       e.aadhaarNumber = "Aadhaar must be exactly 12 digits";
@@ -1002,9 +1007,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       <ComboboxContent>
                         <ComboboxEmpty>No gender found.</ComboboxEmpty>
                         <ComboboxList>
-                          {GENDER_OPTIONS.map((item) => (
-                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
-                          ))}
+                          {(item: string) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -1091,9 +1094,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <ComboboxContent>
                       <ComboboxEmpty>No institution found.</ComboboxEmpty>
                       <ComboboxList>
-                        {instituteNames.map((item) => (
-                          <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
-                        ))}
+                        {(item: string) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
@@ -1110,9 +1111,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       <ComboboxContent>
                         <ComboboxEmpty>No course found.</ComboboxEmpty>
                         <ComboboxList>
-                          {availableCourses.map((item) => (
-                            <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
-                          ))}
+                          {(item: string) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -1120,14 +1119,15 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   </div>
                   <div className="space-y-2">
                     <Label>Passout Year<RequiredMark /></Label>
-                    <Input
-                      placeholder="e.g. 2026"
-                      type="number"
-                      min={2020}
-                      max={2035}
-                      value={passoutYear}
-                      onChange={(e) => handlePassoutYear(e.target.value)}
-                    />
+                    <Combobox items={PASSOUT_YEAR_OPTIONS} value={passoutYear} onValueChange={(v) => handlePassoutYear(v)}>
+                      <ComboboxInput placeholder="Select year" />
+                      <ComboboxContent>
+                        <ComboboxEmpty>No year found.</ComboboxEmpty>
+                        <ComboboxList>
+                          {(item: string) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
                     <FieldError message={errors.passoutYear} />
                   </div>
                 </div>
@@ -1147,7 +1147,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       <ComboboxContent>
                         <ComboboxEmpty>No year found.</ComboboxEmpty>
                         <ComboboxList>
-                          {YEAR_OPTIONS.map((item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>)}
+                          {(item: string) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
@@ -1172,20 +1172,22 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   {isHsc && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                       <div className="space-y-2">
-                        <Label>HSC Percentage</Label>
+                        <Label>HSC Percentage<RequiredMark /></Label>
                         <Input placeholder="e.g. 78.40" type="number" step={0.01} max={100} value={hscPercentage} onChange={(e) => handleHscPercentage(e.target.value)} />
+                        <FieldError message={errors.hscPercentage} />
                       </div>
                       <div className="space-y-2">
-                        <Label>HSC Passing Year</Label>
+                        <Label>HSC Passing Year<RequiredMark /></Label>
                         <Combobox items={YEAR_OPTIONS} value={hscPassYear} onValueChange={(v) => handleHscPassYear(v)}>
                           <ComboboxInput placeholder="Select year" />
                           <ComboboxContent>
                             <ComboboxEmpty>No year found.</ComboboxEmpty>
                             <ComboboxList>
-                              {YEAR_OPTIONS.map((item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>)}
+                              {(item: string) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                             </ComboboxList>
                           </ComboboxContent>
                         </Combobox>
+                        <FieldError message={errors.hscPassYear} />
                       </div>
                     </div>
                   )}
@@ -1193,20 +1195,22 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                   {isDiploma && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                       <div className="space-y-2">
-                        <Label>Diploma Percentage</Label>
+                        <Label>Diploma Percentage<RequiredMark /></Label>
                         <Input placeholder="e.g. 72.00" type="number" step={0.01} max={100} value={diplomaPercentage} onChange={(e) => handleDiplomaPercentage(e.target.value)} />
+                        <FieldError message={errors.diplomaPercentage} />
                       </div>
                       <div className="space-y-2">
-                        <Label>Diploma Passing Year</Label>
+                        <Label>Diploma Passing Year<RequiredMark /></Label>
                         <Combobox items={YEAR_OPTIONS} value={diplomaPassYear} onValueChange={(v) => handleDiplomaPassYear(v)}>
                           <ComboboxInput placeholder="Select year" />
                           <ComboboxContent>
                             <ComboboxEmpty>No year found.</ComboboxEmpty>
                             <ComboboxList>
-                              {YEAR_OPTIONS.map((item) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>)}
+                              {(item: string) => <ComboboxItem key={item} value={item}>{item}</ComboboxItem>}
                             </ComboboxList>
                           </ComboboxContent>
                         </Combobox>
+                        <FieldError message={errors.diplomaPassYear} />
                       </div>
                     </div>
                   )}
