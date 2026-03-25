@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils"
 import type { CandidateTest, DerivedCandidateStatus } from "./_types"
 
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = "live" | "upcoming" | "past"
@@ -32,6 +33,7 @@ interface TabConfig {
   icon: React.ReactNode
   count: number
 }
+
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ export function formatDateTime(dt?: string): string {
   if (!dt) return "—"
   return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
 }
+
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
@@ -78,6 +81,7 @@ function StatusBadge({ status }: { status: DerivedCandidateStatus }) {
   )
 }
 
+
 // ─── Test Card ────────────────────────────────────────────────────────────────
 
 function TestCard({ test }: { test: CandidateTest }) {
@@ -90,11 +94,16 @@ function TestCard({ test }: { test: CandidateTest }) {
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <CardTitle className="text-base leading-snug">{test.title}</CardTitle>
-            {test.description && (
-              <CardDescription className="line-clamp-2 text-xs">
-                {test.description}
-              </CardDescription>
-            )}
+            <CardDescription
+              className={cn(
+                "text-xs",
+                test.description
+                  ? "line-clamp-2"
+                  : "italic text-muted-foreground/60"
+              )}
+            >
+              {test.description ?? "No description provided"}
+            </CardDescription>
           </div>
           <StatusBadge status={test.derived_status} />
         </div>
@@ -106,15 +115,19 @@ function TestCard({ test }: { test: CandidateTest }) {
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
-            {/* ← null guard: undefined means no time limit */}
             {test.time_limit_seconds
               ? formatDuration(test.time_limit_seconds)
               : "No time limit"}
           </span>
-          {test.available_from && (
+          {test.available_from ? (
             <span className="flex items-center gap-1.5">
               <CalendarClock className="h-3.5 w-3.5" />
               {formatDateTime(test.available_from)}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 italic text-muted-foreground/60">
+              <CalendarClock className="h-3.5 w-3.5" />
+              No schedule set
             </span>
           )}
         </div>
@@ -136,29 +149,39 @@ function TestCard({ test }: { test: CandidateTest }) {
         )}
 
         {/* Submitted timestamp */}
-        {isSubmitted && test.attempt?.submitted_at && (
+        {isSubmitted && (
           <p className="text-xs text-muted-foreground">
-            Submitted {formatDateTime(test.attempt.submitted_at)}
+            {test.attempt?.submitted_at
+              ? <>Submitted {formatDateTime(test.attempt.submitted_at)}</>
+              : <span className="italic">Submission time unavailable</span>
+            }
           </p>
         )}
 
         {/* Score (only when results are released) */}
-        {isSubmitted && test.results_available && test.attempt?.percentage != null && (
-          <p className="text-sm font-semibold">
-            Score:{" "}
-            <span className="text-primary">
-              {test.attempt.score}/{test.attempt.total_marks}
-            </span>{" "}
-            <span className="text-xs font-normal text-muted-foreground">
-              ({test.attempt.percentage.toFixed(1)}%)
-            </span>
-          </p>
+        {isSubmitted && test.results_available && (
+          test.attempt?.percentage != null ? (
+            <p className="text-sm font-semibold">
+              Score:{" "}
+              <span className="text-primary">
+                {test.attempt.score}/{test.attempt.total_marks}
+              </span>{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                ({test.attempt.percentage.toFixed(1)}%)
+              </span>
+            </p>
+          ) : (
+            <p className="text-xs italic text-muted-foreground/60">Score not available yet</p>
+          )
         )}
 
         {/* Upcoming note */}
         {test.derived_status === "upcoming" && (
           <p className="text-xs text-muted-foreground">
-            Opens {formatDateTime(test.available_from)}
+            {test.available_from
+              ? <>Opens {formatDateTime(test.available_from)}</>
+              : <span className="italic">Opening time not set</span>
+            }
           </p>
         )}
 
@@ -173,6 +196,7 @@ function TestCard({ test }: { test: CandidateTest }) {
     </Card>
   )
 }
+
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
@@ -189,6 +213,7 @@ function EmptyState({ label }: { label: string }) {
     </div>
   )
 }
+
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

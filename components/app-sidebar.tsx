@@ -228,27 +228,6 @@ export function NavUser({ user }: { user: UserProfile | null }) {
 
               <DropdownMenuSeparator />
 
-              {/* ── Account / billing / notifications ─────── */}
-              <DropdownMenuGroup>
-                <DropdownMenuItem>
-                  <IconUserCircle />
-                  Account{" "}
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[accountType]}`}>
-                    {ROLE_LABELS[accountType]}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <IconCreditCard />
-                  Billing
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <IconNotification />
-                  Notifications
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-
-              <DropdownMenuSeparator />
-
               {/* ── Theme selector ─────────────────────────── */}
               <DropdownMenuGroup>
                 <DropdownMenuLabel className="px-2 py-1 text-xs font-medium text-muted-foreground">
@@ -392,30 +371,29 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
           <SidebarMenuItem>
             {user ? (
               <SidebarMenuButton
+                asChild                          // ← add this
                 className="group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent group-data-[collapsible=icon]/sidebar-wrapper:p-1.5!"
               >
-                {/* ✅ size-5 (20px) wrapper isolated from button flex/overflow.
-                    collapsed: 32px button − (2 × 6px p-1.5) = 20px → exact fit.
-                    expanded:  unconstrained width, logo renders at full 20px.     */}
-                <div className="shrink-0 size-5 flex items-center justify-center">
-                  <Image
-                    src={PlaceTrixLogo}
-                    alt="PlaceTrix"
-                    width={20}
-                    height={20}
-                    className="size-full dark:invert"
-                  />
-                </div>
+                <Link href="/">                  {/* ← wrap children in Link */}
+                  <div className="shrink-0 size-5 flex items-center justify-center">
+                    <Image
+                      src={PlaceTrixLogo}
+                      alt="PlaceTrix"
+                      width={20}
+                      height={20}
+                      className="size-full dark:invert"
+                    />
+                  </div>
 
-                {/* ── Logo text + version badge (hidden when collapsed) ── */}
-                <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
-                  <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider truncate">
-                    PlaceTrix
-                  </span>
-                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
-                    v{version}
-                  </span>
-                </div>
+                  <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
+                    <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider truncate">
+                      PlaceTrix
+                    </span>
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
+                      v{version}
+                    </span>
+                  </div>
+                </Link>
               </SidebarMenuButton>
             ) : (
               <div className="flex items-center gap-2 p-1.5">

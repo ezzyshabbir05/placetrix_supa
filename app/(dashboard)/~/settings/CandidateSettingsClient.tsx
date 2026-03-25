@@ -715,7 +715,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     if (!passoutYear) e.passoutYear = "Passout year is required";
     if (!sscPercentage) e.sscPercentage = "SSC percentage is required";
     if (!sscPassYear) e.sscPassYear = "SSC passing year is required";
-    if (!universityPrn.trim()) e.universityPrn = "University PRN is required";
+    if (!isHsc && !isDiploma) e.educationAfterSsc = "Select at least one option (HSC or Diploma)";
     if (selectedSkills.length === 0) e.skills = "Select at least one skill";
     if (aadhaarNumber && !/^[0-9]{12}$/.test(aadhaarNumber))
       e.aadhaarNumber = "Aadhaar must be exactly 12 digits";
@@ -787,7 +787,6 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         }
       }
 
-      const isFirstSave = !initialData?.profile_updated;
       const payload = {
         profile_id: userProfile.id,
         first_name: firstName.trim() || null,
@@ -823,7 +822,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         linkedin_url: linkedinUrl.trim() || null,
         github_url: githubUrl.trim() || null,
         portfolio_links: portfolioLinks.filter((l) => l.trim()),
-        ...(isFirstSave ? { profile_updated: true } : {}),
+        profile_updated: true,
       };
 
       const { error } = await supabase
@@ -1157,7 +1156,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Education After SSC</Label>
+                  <Label>Education After SSC<RequiredMark /></Label>
                   <div className="flex gap-6">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={isHsc} onChange={(e) => handleIsHsc(e.target.checked)} className="h-4 w-4 accent-primary" />
@@ -1168,6 +1167,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       <span className="text-sm">Diploma</span>
                     </label>
                   </div>
+                  <FieldError message={errors.educationAfterSsc} />
 
                   {isHsc && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -1215,9 +1215,8 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                 <Separator />
 
                 <div className="space-y-2">
-                  <Label>University PRN<RequiredMark /></Label>
+                  <Label>University PRN</Label>
                   <Input placeholder="University PRN / Enrollment number" value={universityPrn} onChange={(e) => handleUniversityPrn(e.target.value)} />
-                  <FieldError message={errors.universityPrn} />
                 </div>
 
                 <div className="space-y-3">

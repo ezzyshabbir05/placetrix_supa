@@ -623,7 +623,6 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
-
   function handleSave() {
     const newErrors = validate()
     setErrors(newErrors)
@@ -631,25 +630,29 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
       toast.error("Please fix the validation errors before saving.")
       return
     }
+
     startTransition(async () => {
       const trimmedUsername = username.trim() || null
+
+      // 1. Update main `profiles` table (username only)
       if (trimmedUsername !== (userProfile.username ?? null)) {
-        const { error: usernameError } = await supabase
+        const { error: profileError } = await supabase
           .from("profiles")
           .update({ username: trimmedUsername })
           .eq("id", userProfile.id)
-        if (usernameError) {
-          if (usernameError.code === "23505") {
+
+        if (profileError) {
+          if (profileError.code === "23505") {
             setErrors((prev) => ({ ...prev, username: "This username is already taken." }))
             setUsernameStatus("taken")
           } else {
-            toast.error("Failed to update username. Please try again.")
+            toast.error("Failed to update account settings. Please try again.")
           }
           return
         }
       }
 
-      const isFirstSave = !initialData?.profile_updated
+      // 2. Prepare payload for `institute_profiles`
       const payload = {
         profile_id: userProfile.id,
         institute_name: instituteName.trim() || null,
@@ -669,16 +672,17 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         principal_phone: principalPhone.trim() || null,
         courses: courses.filter((c) => c.trim()),
         social_links: socialLinks.filter((l) => l.trim()),
-        ...(isFirstSave ? { profile_updated: true } : {}),
+        profile_updated: true,
       }
 
-      const { error } = await supabase
-        .from("institute_profiles")
-        .upsert(payload, { onConflict: "profile_id" })
+      // 3. Save Institute Profile (Bypass ON CONFLICT errors)
+      const { error } = initialData
+        ? await supabase.from("institute_profiles").update(payload).eq("profile_id", userProfile.id)
+        : await supabase.from("institute_profiles").insert(payload)
 
       if (error) {
-        console.error(error)
-        toast.error("Failed to save profile. Please try again.")
+        console.error("Supabase Save Error:", error)
+        toast.error(error.message || "Failed to save profile. Please try again.")
       } else {
         toast.success("Profile saved successfully!")
         setIsDirty(false)

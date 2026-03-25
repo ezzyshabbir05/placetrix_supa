@@ -15,7 +15,7 @@ export default async function SettingsPage() {
       .from("candidate_profiles")
       .select("*")
       .eq("profile_id", profile.id)
-      .single()
+      .maybeSingle() // Fix: prevents throwing if 0 rows exist
 
     return (
       <CandidateSettingsClient
@@ -30,7 +30,7 @@ export default async function SettingsPage() {
       .from("institute_profiles")
       .select("*")
       .eq("profile_id", profile.id)
-      .single()
+      .maybeSingle() // Fix: prevents throwing if 0 rows exist
 
     return (
       <InstituteSettingsClient

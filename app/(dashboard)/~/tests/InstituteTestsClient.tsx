@@ -8,10 +8,9 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import {
   LayoutList,
   Plus,
@@ -26,7 +25,6 @@ import {
   FileText,
   PlayCircle,
   PenLine,
-  ArrowRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { InstituteTest, DerivedInstituteStatus } from "./_types"
@@ -120,11 +118,16 @@ function TestCard({ test }: { test: InstituteTest }) {
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <CardTitle className="text-base leading-snug">{test.title}</CardTitle>
-            {test.description && (
-              <CardDescription className="line-clamp-2 text-xs">
-                {test.description}
-              </CardDescription>
-            )}
+            <CardDescription
+              className={cn(
+                "text-xs",
+                test.description
+                  ? "line-clamp-2"
+                  : "italic text-muted-foreground/60"
+              )}
+            >
+              {test.description ?? "No description provided"}
+            </CardDescription>
           </div>
           <StatusBadge status={test.derived_status} />
         </div>
@@ -140,7 +143,11 @@ function TestCard({ test }: { test: InstituteTest }) {
           />
           <StatPill
             icon={<ListCheck className="h-3.5 w-3.5" />}
-            label={`${test.question_count} question${test.question_count !== 1 ? "s" : ""}`}
+            label={
+              test.question_count > 0
+                ? `${test.question_count} question${test.question_count !== 1 ? "s" : ""}`
+                : "No questions yet"
+            }
           />
           <StatPill
             icon={<Users className="h-3.5 w-3.5" />}
@@ -149,7 +156,7 @@ function TestCard({ test }: { test: InstituteTest }) {
         </div>
 
         {/* Schedule window */}
-        {(test.available_from || test.available_until) && (
+        {test.available_from || test.available_until ? (
           <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <CalendarClock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
             <span>
@@ -159,6 +166,13 @@ function TestCard({ test }: { test: InstituteTest }) {
               )}
             </span>
           </div>
+        ) : (
+          test.derived_status !== "draft" && (
+            <div className="flex items-start gap-1.5 text-xs italic text-muted-foreground/60">
+              <CalendarClock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>No schedule set — test is always available</span>
+            </div>
+          )
         )}
 
         {/* Results visibility (past only) */}
@@ -175,9 +189,12 @@ function TestCard({ test }: { test: InstituteTest }) {
         )}
 
         {/* Upcoming note */}
-        {test.derived_status === "upcoming" && test.available_from && (
+        {test.derived_status === "upcoming" && (
           <p className="text-xs text-muted-foreground">
-            Opens {formatDateTime(test.available_from)}
+            {test.available_from
+              ? <>Opens {formatDateTime(test.available_from)}</>
+              : <span className="italic text-muted-foreground/60">Opening time not set</span>
+            }
           </p>
         )}
 
@@ -199,7 +216,6 @@ function TestCard({ test }: { test: InstituteTest }) {
     </Card>
   )
 }
-
 
 
 // ─── Empty State ──────────────────────────────────────────────────────────────

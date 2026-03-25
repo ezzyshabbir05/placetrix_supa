@@ -20,9 +20,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-
 // ─── Label map ────────────────────────────────────────────────────────────────
-
 
 const SEGMENT_LABELS: Record<string, string> = {
     home:          "Home",
@@ -45,9 +43,7 @@ const SEGMENT_LABELS: Record<string, string> = {
     help:          "Get Help",
 }
 
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 
 function toLabel(segment: string): string {
     return (
@@ -59,8 +55,7 @@ function toLabel(segment: string): string {
     )
 }
 
-
-function useBreadcrumbs(): { label: string; href: string }[] {
+function useBreadcrumbs() {
     const pathname = usePathname()
     const segments = pathname.split("/").filter((s) => s && s !== "~")
 
@@ -70,34 +65,31 @@ function useBreadcrumbs(): { label: string; href: string }[] {
     }))
 }
 
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-
-/** How many crumbs to show before collapsing. Tune to taste. */
 const ITEMS_TO_DISPLAY = 3
 
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SiteHeaderProps {
     onManualToggle: () => void
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
     const crumbs = useBreadcrumbs()
     const [open, setOpen] = useState(false)
 
     const isCollapsed = crumbs.length > ITEMS_TO_DISPLAY
-    const hiddenCrumbs = isCollapsed ? crumbs.slice(1, crumbs.length - 1) : []
-    const visibleCrumbs = isCollapsed
-        ? [crumbs[0], ...crumbs.slice(crumbs.length - 1)]
-        : crumbs
+
+    // When collapsed: show first + last only; hide everything in between
+    const firstCrumb  = crumbs[0]
+    const lastCrumb   = crumbs[crumbs.length - 1]
+    const hiddenCrumbs = isCollapsed ? crumbs.slice(1, -1) : []
 
     return (
-        <header className="flex h-[calc(var(--spacing)*10)] shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-[calc(var(--spacing)*10)]">
+        <header className="flex h-[calc(var(--spacing)*10)] shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
             <div className="flex w-full min-w-0 items-center gap-1 px-4 lg:gap-2 lg:px-6">
                 <SidebarTrigger className="-ml-1 md:hidden" onClick={onManualToggle} />
                 <Separator
@@ -105,32 +97,28 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
                     className="mx-2 data-[orientation=vertical]:h-4 md:hidden"
                 />
 
-                {/* Render breadcrumbs only when there are segments to show */}
-                {visibleCrumbs.length > 0 && (
+                {crumbs.length > 0 && (
                     <Breadcrumb className="min-w-0 flex-1">
                         <BreadcrumbList className="flex-nowrap">
 
-                            {/* ── First crumb (always visible) ───────────────── */}
+                            {/* ── First crumb (always visible) ── */}
                             <BreadcrumbItem>
-                                {visibleCrumbs.length === 1 ? (
-                                    <BreadcrumbPage
-                                        className="max-w-[8rem] truncate"
-                                        title={visibleCrumbs[0].label}
-                                    >
-                                        {visibleCrumbs[0].label}
+                                {crumbs.length === 1 ? (
+                                    <BreadcrumbPage className="max-w-[8rem] truncate" title={firstCrumb.label}>
+                                        {firstCrumb.label}
                                     </BreadcrumbPage>
                                 ) : (
                                     <Link
-                                        href={visibleCrumbs[0].href}
+                                        href={firstCrumb.href}
                                         className="max-w-[8rem] truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
-                                        title={visibleCrumbs[0].label}
+                                        title={firstCrumb.label}
                                     >
-                                        {visibleCrumbs[0].label}
+                                        {firstCrumb.label}
                                     </Link>
                                 )}
                             </BreadcrumbItem>
 
-                            {/* ── Ellipsis dropdown (only when collapsed) ─────── */}
+                            {/* ── Ellipsis dropdown (only when collapsed) ── */}
                             {isCollapsed && (
                                 <>
                                     <BreadcrumbSeparator />
@@ -154,37 +142,33 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
                                 </>
                             )}
 
-                            {/* ── Remaining visible crumbs (last when collapsed) ── */}
-                            {visibleCrumbs.slice(1).map((crumb, idx) => {
-                                const absoluteIdx = isCollapsed
-                                    ? crumbs.length - (visibleCrumbs.length - 1) + idx
-                                    : idx + 1
-                                const isLast = absoluteIdx === crumbs.length - 1
+                            {/* ── Middle crumbs (non-collapsed) ── */}
+                            {!isCollapsed && crumbs.slice(1, -1).map((crumb) => (
+                                <>
+                                    <BreadcrumbSeparator key={`sep-${crumb.href}`} />
+                                    <BreadcrumbItem key={crumb.href}>
+                                        <Link
+                                            href={crumb.href}
+                                            className="max-w-[8rem] truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
+                                            title={crumb.label}
+                                        >
+                                            {crumb.label}
+                                        </Link>
+                                    </BreadcrumbItem>
+                                </>
+                            ))}
 
-                                return (
-                                    <span key={crumb.href} className="flex items-center gap-1.5">
-                                        <BreadcrumbSeparator />
-                                        <BreadcrumbItem>
-                                            {isLast ? (
-                                                <BreadcrumbPage
-                                                    className="max-w-[12rem] truncate"
-                                                    title={crumb.label}
-                                                >
-                                                    {crumb.label}
-                                                </BreadcrumbPage>
-                                            ) : (
-                                                <Link
-                                                    href={crumb.href}
-                                                    className="max-w-[8rem] truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
-                                                    title={crumb.label}
-                                                >
-                                                    {crumb.label}
-                                                </Link>
-                                            )}
-                                        </BreadcrumbItem>
-                                    </span>
-                                )
-                            })}
+                            {/* ── Last crumb (always visible when >1 crumbs) ── */}
+                            {crumbs.length > 1 && (
+                                <>
+                                    <BreadcrumbSeparator />
+                                    <BreadcrumbItem>
+                                        <BreadcrumbPage className="max-w-[12rem] truncate" title={lastCrumb.label}>
+                                            {lastCrumb.label}
+                                        </BreadcrumbPage>
+                                    </BreadcrumbItem>
+                                </>
+                            )}
 
                         </BreadcrumbList>
                     </Breadcrumb>
