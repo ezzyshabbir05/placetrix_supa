@@ -82,8 +82,8 @@ export function Footer() {
 
 const company = [
   {
-    title: "About Us",
-    href: "https://360viewtech.in/",
+    title: "Our Team",
+    href: "/our-team",
   },
   {
     title: "Privacy Policy",

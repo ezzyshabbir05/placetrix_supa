@@ -176,10 +176,11 @@ export function Header({ user = null }: HeaderProps) {
           "flex h-14 w-full items-center justify-between px-4 md:h-12 md:transition-all md:ease-out",
           { "md:px-2": scrolled }
         )}
-      >
-        <a className="font-bold p-2" href="#">
+      > 
+      {/* font-bold p-2 */}
+        <Link href="/" className="font-bold p-2">
           PlaceTrix
-        </a>
+        </Link>
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-2 md:flex">
