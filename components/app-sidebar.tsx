@@ -178,7 +178,7 @@ export function NavUser({ user }: { user: UserProfile | null }) {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               asChild
             >
-              <div className="flex items-center justify-between gap-2 overflow-hidden w-full">
+              <div className="flex items-center justify-between gap-2 overflow-hidden w-full" suppressHydrationWarning>
                 {user ? (
                   <>
                     <div className="flex items-center gap-2 overflow-hidden">
@@ -191,7 +191,7 @@ export function NavUser({ user }: { user: UserProfile | null }) {
                         <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
                       </div>
                     </div>
-                    <IconDotsVertical className="shrink-0 size-4" />
+                    <IconDotsVertical className="shrink-0 size-4 group-data-[collapsible=icon]:hidden" />
                   </>
                 ) : (
                   <>

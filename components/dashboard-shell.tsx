@@ -52,7 +52,7 @@ function MobileHoverGuard({
   const { isMobile } = useSidebar()
 
   React.useEffect(() => {
-    suspendHoverRef.current = isMobile
+    suspendHoverRef.current = !!isMobile
   }, [isMobile, suspendHoverRef])
 
   return null
