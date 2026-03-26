@@ -426,11 +426,13 @@ function IntroScreen({
     test,
     questions,
     isResuming,
+    isStarting,
     onBegin,
 }: {
     test: AttemptTest
     questions: AttemptQuestion[]
     isResuming: boolean
+    isStarting: boolean
     onBegin: () => void
 }) {
     const totalMarks = questions.reduce((s, q) => s + q.marks, 0)
@@ -528,8 +530,14 @@ function IntroScreen({
                 </div>
 
                 <div className="pt-2">
-                    <Button size="lg" className="w-full sm:w-auto" onClick={onBegin}>
-                        {isResuming ? "Resume test" : "Begin test"}
+                    <Button size="lg" className="w-full sm:w-auto" onClick={onBegin} disabled={isStarting}>
+                        {isStarting ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Starting…</>
+                        ) : isResuming ? (
+                            "Resume test"
+                        ) : (
+                            "Begin test"
+                        )}
                     </Button>
                 </div>
             </div>
@@ -543,12 +551,14 @@ function IntroScreen({
 interface Props {
     test: AttemptTest
     questions: AttemptQuestion[]
-    attemptInfo: AttemptInfo
+    attemptInfo: AttemptInfo | null
     savedAnswers: SavedAnswer[]
+    onStartAttempt: () => Promise<AttemptInfo>
     onSaveAnswer?: (
         attemptId: string,
         questionId: string,
-        selectedIds: string[]
+        selectedIds: string[],
+        timeSpentSeconds?: number
     ) => Promise<void>
     onSubmit?: (attemptId: string, timeSpentSeconds: number) => Promise<void>
     // Called on every detected violation — fire-and-forget, never throws.
@@ -563,26 +573,44 @@ interface Props {
 export function AttemptClient({
     test,
     questions,
-    attemptInfo,
+    attemptInfo: initialAttemptInfo,
     savedAnswers,
+    onStartAttempt,
     onSaveAnswer,
     onSubmit,
     onViolation,
 }: Props) {
-    const isResuming = savedAnswers.length > 0
-
+    const isResuming = savedAnswers.length > 0 && initialAttemptInfo !== null
 
     // ── State ──────────────────────────────────────────────────────────────────
 
+    const [attemptInfo, setAttemptInfo] = useState<AttemptInfo | null>(initialAttemptInfo)
     const [phase, setPhase] = useState<"intro" | "active">("intro")
-    const [currentIndex, setCurrentIndex] = useState(0)
+
+    const storagePrefix = initialAttemptInfo ? `pt_attempt_${initialAttemptInfo.id}` : null
+
+    const [currentIndex, setCurrentIndex] = useState(() => {
+        if (typeof window !== "undefined" && storagePrefix) {
+            const saved = localStorage.getItem(`${storagePrefix}_idx`)
+            if (saved) return parseInt(saved, 10)
+        }
+        return 0
+    })
+
+    const [isStarting, setIsStarting] = useState(false)
 
     const [answers, setAnswers] = useState<Record<string, string[]>>(
         () => Object.fromEntries(savedAnswers.map((a) => [a.question_id, a.selected_option_ids]))
     )
 
     // flagged: tracks which question IDs are flagged for review (client-side only)
-    const [flagged, setFlagged] = useState<Record<string, boolean>>({})
+    const [flagged, setFlagged] = useState<Record<string, boolean>>(() => {
+        if (typeof window !== "undefined" && storagePrefix) {
+            const saved = localStorage.getItem(`${storagePrefix}_flags`)
+            if (saved) return JSON.parse(saved)
+        }
+        return {}
+    })
 
     const [savingId, setSavingId] = useState<string | null>(null)
     const [saveError, setSaveError] = useState<string | null>(null)
@@ -597,7 +625,7 @@ export function AttemptClient({
 
     // Anti-cheat
     const [showFocusWarning, setShowFocusWarning] = useState(false)
-    const [focusLostCount, setFocusLostCount] = useState(0)
+    const [focusLostCount, setFocusLostCount] = useState(initialAttemptInfo?.tab_switch_count ?? 0)
 
     // ── Refs ───────────────────────────────────────────────────────────────────
     const autoSubmitted = useRef(false)
@@ -612,7 +640,16 @@ export function AttemptClient({
     const isSubmittingRef = useRef(false)
     const showFocusWarningRef = useRef(false)
     // Ref mirror for violation count so closures always see the latest value.
-    const focusLostCountRef = useRef(0)
+    const focusLostCountRef = useRef(initialAttemptInfo?.tab_switch_count ?? 0)
+
+    // ── Persistence ───────────────────────────────────────────────────────────
+    useEffect(() => {
+        if (attemptInfo && typeof window !== "undefined") {
+            const prefix = `pt_attempt_${attemptInfo.id}`
+            localStorage.setItem(`${prefix}_idx`, currentIndex.toString())
+            localStorage.setItem(`${prefix}_flags`, JSON.stringify(flagged))
+        }
+    }, [attemptInfo, currentIndex, flagged])
 
 
     // ── Keep ref mirrors in sync ───────────────────────────────────────────────
@@ -645,7 +682,7 @@ export function AttemptClient({
         // 1. Fullscreen change ─────────────────────────────────────────────────
         const handleFullscreenChange = () => {
             const active = !!getFullscreenElement()
-            if (!active && !autoSubmitted.current && !isSubmittingRef.current) {
+            if (!active && !autoSubmitted.current && !isSubmittingRef.current && attemptInfo) {
                 setShowFullscreenWarning(true)
                 // Persist fullscreen-exit violation (fire-and-forget)
                 onViolation?.(
@@ -673,13 +710,15 @@ export function AttemptClient({
             setFocusLostCount(currentCount)
             setShowFocusWarning(true)
 
-            // Persist violation to the server immediately (fire-and-forget).
-            onViolation?.(
-                attemptInfo.id,
-                "focus_loss",
-                currentCount,
-                new Date().toISOString()
-            ).catch(() => { /* never throw */ })
+            if (attemptInfo) {
+                // Persist violation to the server immediately (fire-and-forget).
+                onViolation?.(
+                    attemptInfo.id,
+                    "focus_loss",
+                    currentCount,
+                    new Date().toISOString()
+                ).catch(() => { /* never throw */ })
+            }
 
             // Auto-submit once the threshold is crossed.
             if (currentCount >= MAX_VIOLATIONS && !autoSubmitted.current) {
@@ -709,8 +748,8 @@ export function AttemptClient({
         // 3. Copy / keyboard blocking ──────────────────────────────────────────
         const handleKeyDown = (e: KeyboardEvent) => {
             const ctrl = e.ctrlKey || e.metaKey
-            // Block copy, save, view-source, print
-            if (ctrl && ["c", "p", "s", "u"].includes(e.key.toLowerCase())) {
+            // Block copy, save, view-source, print, select all
+            if (ctrl && ["c", "p", "s", "u", "a"].includes(e.key.toLowerCase())) {
                 e.preventDefault()
             }
             // Block DevTools shortcuts
@@ -722,6 +761,13 @@ export function AttemptClient({
 
         const handleCopy = (e: ClipboardEvent) => e.preventDefault()
         const handleContextMenu = (e: MouseEvent) => e.preventDefault()
+        const handleDragStart = (e: DragEvent) => e.preventDefault()
+
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (autoSubmitted.current || isSubmittingRef.current) return;
+            e.preventDefault()
+            e.returnValue = "" // Modern browsers require setting this property
+        }
 
         // Register all listeners
         document.addEventListener("fullscreenchange", handleFullscreenChange)
@@ -731,7 +777,9 @@ export function AttemptClient({
         document.addEventListener("keydown", handleKeyDown)
         document.addEventListener("copy", handleCopy)
         document.addEventListener("contextmenu", handleContextMenu)
+        document.addEventListener("dragstart", handleDragStart)
         window.addEventListener("blur", handleBlur)
+        window.addEventListener("beforeunload", handleBeforeUnload)
 
         return () => {
             document.removeEventListener("fullscreenchange", handleFullscreenChange)
@@ -741,7 +789,9 @@ export function AttemptClient({
             document.removeEventListener("keydown", handleKeyDown)
             document.removeEventListener("copy", handleCopy)
             document.removeEventListener("contextmenu", handleContextMenu)
+            document.removeEventListener("dragstart", handleDragStart)
             window.removeEventListener("blur", handleBlur)
+            window.removeEventListener("beforeunload", handleBeforeUnload)
         }
         // ─── Intentionally only [phase] in deps ───────────────────────────────
         // isSubmitting and showFocusWarning are read from their ref mirrors so
@@ -760,19 +810,19 @@ export function AttemptClient({
     // ── Save answer ────────────────────────────────────────────────────────────
 
     const saveAnswer = useCallback(
-        async (questionId: string, selectedIds: string[]) => {
-            if (!onSaveAnswer) return
+        async (questionId: string, selectedIds: string[], timeSpentSeconds: number = 0) => {
+            if (!onSaveAnswer || !attemptInfo) return
             setSavingId(questionId)
             setSaveError(null)
             try {
-                await onSaveAnswer(attemptInfo.id, questionId, selectedIds)
+                await onSaveAnswer(attemptInfo.id, questionId, selectedIds, timeSpentSeconds)
             } catch (err: any) {
                 setSaveError(err?.message ?? "Failed to save answer")
             } finally {
                 setSavingId(null)
             }
         },
-        [attemptInfo.id, onSaveAnswer]
+        [attemptInfo, onSaveAnswer]
     )
 
 
@@ -807,7 +857,7 @@ export function AttemptClient({
 
     const handleSubmit = useCallback(
         async (auto = false) => {
-            if (isSubmittingRef.current) return
+            if (isSubmittingRef.current || !attemptInfo) return
             setIsSubmitting(true)
             setSubmitError(null)
             setShowSubmitDialog(false)
@@ -821,6 +871,12 @@ export function AttemptClient({
 
             try {
                 await leaveFullscreen()              // ← exit fullscreen FIRST
+                
+                // Clear persistent local state for this attempt
+                const prefix = `pt_attempt_${attemptInfo.id}`
+                localStorage.removeItem(`${prefix}_idx`)
+                localStorage.removeItem(`${prefix}_flags`)
+
                 await onSubmit?.(attemptInfo.id, timeSpentSeconds)  // ← then redirect
             } catch (err: any) {
                 setIsSubmitting(false)
@@ -828,7 +884,7 @@ export function AttemptClient({
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [attemptInfo.id, attemptInfo.started_at, onSubmit, leaveFullscreen]
+        [attemptInfo, onSubmit, leaveFullscreen]
     )
 
 
@@ -839,14 +895,20 @@ export function AttemptClient({
 
     // ── Timer ──────────────────────────────────────────────────────────────────
 
-    useEffect(() => {
-        if (phase !== "active" || !test.time_limit_seconds) return
+    const timerStartRef = useRef<number>(0)
+    const initialRemainingRef = useRef<number>(0)
 
-        const deadlineMs =
-            new Date(attemptInfo.started_at).getTime() + test.time_limit_seconds * 1000
+    useEffect(() => {
+        if (phase !== "active" || !test.time_limit_seconds || !attemptInfo || !attemptInfo.expires_at) return
+
+        const serverNowMs = new Date(attemptInfo.server_time).getTime()
+        const expiresAtMs = new Date(attemptInfo.expires_at).getTime()
+        initialRemainingRef.current = Math.max(0, expiresAtMs - serverNowMs)
+        timerStartRef.current = window.performance.now()
 
         const tick = () => {
-            const remaining = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000))
+            const elapsedMs = window.performance.now() - timerStartRef.current
+            const remaining = Math.max(0, Math.floor((initialRemainingRef.current - elapsedMs) / 1000))
             setTimeRemaining(remaining)
             if (remaining === 0 && !autoSubmitted.current) {
                 autoSubmitted.current = true
@@ -857,7 +919,7 @@ export function AttemptClient({
         tick()
         const id = setInterval(tick, 1000)
         return () => clearInterval(id)
-    }, [phase, test.time_limit_seconds, attemptInfo.started_at])
+    }, [phase, test.time_limit_seconds, attemptInfo])
 
 
     // ── Derived ────────────────────────────────────────────────────────────────
@@ -875,6 +937,61 @@ export function AttemptClient({
     const isLastQuestion = currentIndex === questions.length - 1
 
 
+    // ── Tracking Offline and Question Pacing ───────────────────────────────────
+    
+    const [isOffline, setIsOffline] = useState(false)
+    const timeTrackingRef = useRef<{ id: string; enteredAt: number }>({ id: "", enteredAt: 0 })
+
+    useEffect(() => {
+        setIsOffline(!navigator.onLine)
+        const handleOffline = () => setIsOffline(true)
+        const handleOnline = () => setIsOffline(false)
+        window.addEventListener("offline", handleOffline)
+        window.addEventListener("online", handleOnline)
+        return () => {
+            window.removeEventListener("offline", handleOffline)
+            window.removeEventListener("online", handleOnline)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (phase !== "active" || !currentQuestion || isSubmittingRef.current) return
+
+        const now = window.performance.now()
+        const track = timeTrackingRef.current
+
+        // If we switched away from a previous question, save the accumulated time
+        if (track.id && track.id !== currentQuestion.id && track.enteredAt > 0) {
+            const elapsed = Math.max(0, Math.floor((now - track.enteredAt) / 1000))
+            if (elapsed > 0 && attemptInfo) {
+                const prevSelections = answers[track.id] ?? []
+                onSaveAnswer?.(attemptInfo.id, track.id, prevSelections, elapsed).catch(() => {})
+            }
+        }
+
+        // Only explicitly reset tracker if we are indeed looking at a new/different question
+        if (track.id !== currentQuestion.id) {
+            timeTrackingRef.current = { id: currentQuestion.id, enteredAt: now }
+        }
+    }, [currentIndex, currentQuestion, phase, attemptInfo, answers, onSaveAnswer])
+
+    // Override handleSubmit for final time pacing sync
+    const finalHandleSubmit = useCallback(async (auto = false) => {
+        const finalTrack = timeTrackingRef.current
+        if (finalTrack.enteredAt > 0 && finalTrack.id && attemptInfo) {
+            const finalElapsed = Math.max(0, Math.floor((window.performance.now() - finalTrack.enteredAt) / 1000))
+            if (finalElapsed > 0) {
+               onSaveAnswer?.(attemptInfo.id, finalTrack.id, answers[finalTrack.id] ?? [], finalElapsed).catch(()=>{})
+            }
+        }
+        await handleSubmit(auto)
+    }, [handleSubmit, attemptInfo, answers, onSaveAnswer])
+
+    useEffect(() => {
+        handleSubmitRef.current = finalHandleSubmit
+    }, [finalHandleSubmit])
+
+
     // ── Intro ──────────────────────────────────────────────────────────────────
 
     if (phase === "intro") {
@@ -883,7 +1000,23 @@ export function AttemptClient({
                 test={test}
                 questions={questions}
                 isResuming={isResuming}
+                isStarting={isStarting}
                 onBegin={async () => {
+                    let info = attemptInfo
+                    if (!info) {
+                        setIsStarting(true)
+                        try {
+                            info = await onStartAttempt()
+                            setAttemptInfo(info)
+                            setFocusLostCount(info.tab_switch_count)
+                            focusLostCountRef.current = info.tab_switch_count
+                        } catch (err: any) {
+                            alert(err?.message || "Failed to start test")
+                            setIsStarting(false)
+                            return
+                        }
+                        setIsStarting(false)
+                    }
                     await enterFullscreen()
                     setPhase("active")
                 }}
@@ -982,11 +1115,21 @@ export function AttemptClient({
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 shrink-0 px-2 text-destructive hover:bg-destructive/10"
-                                onClick={() => handleSubmit()}
+                                onClick={() => finalHandleSubmit()}
                                 disabled={isSubmitting}
                             >
                                 Retry
                             </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Offline banner */}
+                {isOffline && (
+                    <div className="border-b border-destructive/20 bg-destructive/5 px-6 py-3">
+                        <div className="mx-auto flex flex-wrap items-center gap-2 text-sm font-semibold text-destructive">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span>You are currently offline. Answers cannot be saved until you reconnect to the internet.</span>
                         </div>
                     </div>
                 )}
@@ -1269,7 +1412,7 @@ export function AttemptClient({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isSubmitting}>Go back</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleSubmit()} disabled={isSubmitting}>
+                        <AlertDialogAction onClick={() => finalHandleSubmit()} disabled={isSubmitting}>
                             {isSubmitting ? (
                                 <><Loader2 className="animate-spin" />Submitting…</>
                             ) : (

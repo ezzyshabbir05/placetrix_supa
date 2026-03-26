@@ -39,6 +39,7 @@ export interface CandidateAnswerDetail {
   is_correct: boolean | null
   marks_awarded: number | null
   selected_option_ids: string[]
+  time_spent_seconds: number | null
   explanation: string | null
   options: CandidateOption[]
   tags: Pick<TagRow, "id" | "name">[]
@@ -47,7 +48,7 @@ export interface CandidateAnswerDetail {
 export interface CandidateAttemptDetail
   extends Pick<
     AttemptRow,
-    "id" | "status" | "submitted_at" | "score" | "total_marks" | "percentage" | "time_spent_seconds"
+    "id" | "status" | "submitted_at" | "score" | "total_marks" | "percentage" | "time_spent_seconds" | "tab_switch_count"
   > {
   status: "in_progress" | "submitted"   // narrow the DB string union
   answers: CandidateAnswerDetail[]
@@ -106,6 +107,7 @@ export interface InstituteAttemptRow
   id: string             // view types nullable, but we filter nulls before mapping
   started_at: string     // same — guaranteed by .filter() in page.tsx
   status: "in_progress" | "submitted" | "abandoned" | "auto_submitted"
+  tab_switch_count: number | null
 }
 
 export interface InstituteTestDetail

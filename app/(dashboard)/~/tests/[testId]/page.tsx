@@ -30,6 +30,14 @@ async function fetchCandidateView(
 ): Promise<{ test: CandidateTestDetail; attempt: CandidateAttemptDetail | null }> {
   const supabase = await createClient()
 
+  const { data: candidateProfile } = await supabase
+    .from("candidate_profiles")
+    .select("institute_id")
+    .eq("profile_id", userId)
+    .maybeSingle()
+
+  if (!candidateProfile?.institute_id) notFound()
+
   const { data: raw } = await supabase
     .from("tests")
     .select(
@@ -40,7 +48,7 @@ async function fetchCandidateView(
     .eq("id", testId)
     .single()
 
-  if (!raw || raw.status !== "published") notFound()
+  if (!raw || raw.status !== "published" || raw.institute_id !== candidateProfile.institute_id) notFound()
 
   const { data: institute } = await supabase
     .from("institute_profiles")
@@ -60,7 +68,7 @@ async function fetchCandidateView(
 
   const { data: rawAttempt } = await supabase
     .from("test_attempts")
-    .select("id, status, submitted_at, score, total_marks, percentage, time_spent_seconds")
+    .select("id, status, submitted_at, score, total_marks, percentage, time_spent_seconds, tab_switch_count")
     .eq("test_id", testId)
     .eq("student_id", userId)
     .order("created_at", { ascending: false })
@@ -95,6 +103,7 @@ async function fetchCandidateView(
         ? Math.round((rawAttempt.score / allQuestionsTotalMarks) * 100)
         : (rawAttempt.percentage ?? null),
     time_spent_seconds: rawAttempt.time_spent_seconds ?? null,
+    tab_switch_count: rawAttempt.tab_switch_count ?? null,
   }
 
   if (rawAttempt.status !== "submitted" || !raw.results_available) {
@@ -117,13 +126,14 @@ async function fetchCandidateView(
 
   const { data: rawAnswers } = await supabase
     .from("attempt_answers")
-    .select("question_id, selected_option_ids, is_correct, marks_awarded")
+    .select("question_id, selected_option_ids, is_correct, marks_awarded, time_spent_seconds")
     .eq("attempt_id", rawAttempt.id)
 
   const answerMap: Record<string, {
     selected_option_ids: string[]
     is_correct: boolean | null
     marks_awarded: number | null
+    time_spent_seconds: number | null
   }> = {}
 
   for (const a of rawAnswers ?? []) {
@@ -131,6 +141,7 @@ async function fetchCandidateView(
       selected_option_ids: (a.selected_option_ids as string[]) ?? [],
       is_correct: a.is_correct ?? null,
       marks_awarded: a.marks_awarded ?? null,
+      time_spent_seconds: a.time_spent_seconds ?? null,
     }
   }
 
@@ -143,6 +154,7 @@ async function fetchCandidateView(
       is_correct: ans?.is_correct ?? null,
       marks_awarded: ans?.marks_awarded ?? null,
       selected_option_ids: ans?.selected_option_ids ?? [],
+      time_spent_seconds: ans?.time_spent_seconds ?? null,
       explanation: (q.explanation as string) ?? null,
       options: ((q.options as any[]) ?? []).map((o) => ({
         id: o.id,
@@ -227,6 +239,13 @@ async function fetchInstituteView(
     .eq("test_id", testId)
     .order("started_at", { ascending: false })
 
+  const { data: switchCounts } = await supabase
+    .from("test_attempts")
+    .select("id, tab_switch_count")
+    .eq("test_id", testId)
+
+  const switchCountMap = new Map((switchCounts ?? []).map((r) => [r.id, r.tab_switch_count]))
+
   const fullTotalMarks = questions.reduce((s, q) => s + q.marks, 0)
 
   const attempts: InstituteAttemptRow[] = (rawAttempts ?? [])
@@ -247,6 +266,7 @@ async function fetchInstituteView(
       time_spent_seconds: a.time_spent_seconds ?? null,
       started_at: a.started_at,
       submitted_at: a.submitted_at ?? null,
+      tab_switch_count: switchCountMap.get(a.id) ?? null,
     }))
 
 

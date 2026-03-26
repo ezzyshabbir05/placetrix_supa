@@ -164,6 +164,12 @@ function QuestionReviewItem({
                   {answer.marks} pts
                 </Badge>
               )}
+              {answer.time_spent_seconds != null && answer.time_spent_seconds > 0 && (
+                <Badge variant="outline" className="h-4 gap-1 border bg-transparent px-1.5 text-[10px] font-normal text-muted-foreground">
+                  <Timer className="h-3 w-3 shrink-0" />
+                  {formatSeconds(answer.time_spent_seconds)}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -447,10 +453,20 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
                   )}
                 </div>
 
-                {attempt?.time_spent_seconds != null && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
-                    <Timer className="h-3.5 w-3.5 shrink-0" />
-                    <span className="tabular-nums">{formatSeconds(attempt.time_spent_seconds)}</span>
+                {(attempt?.time_spent_seconds != null || attempt?.tab_switch_count != null) && (
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    {attempt?.time_spent_seconds != null && (
+                      <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
+                        <Timer className="h-3.5 w-3.5 shrink-0" />
+                        <span className="tabular-nums">{formatSeconds(attempt.time_spent_seconds)}</span>
+                      </div>
+                    )}
+                    {attempt?.tab_switch_count != null && attempt.tab_switch_count > 0 && (
+                      <div className="flex items-center gap-1.5 rounded-lg border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-[10px] font-semibold text-destructive max-w-full">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{attempt.tab_switch_count} System Violation{attempt.tab_switch_count !== 1 && "s"}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

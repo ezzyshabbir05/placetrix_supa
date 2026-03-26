@@ -29,18 +29,19 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
     .eq("profile_id", userId)
     .maybeSingle()
 
+  if (!candidateProfile?.institute_id) {
+    return []
+  }
+
   // 2. Fetch published tests
-  let testsQuery = supabase
+  const testsQuery = supabase
     .from("tests")
     .select(
       "id, title, description, time_limit_seconds, available_from, available_until, results_available"
     )
     .eq("status", "published")
+    .eq("institute_id", candidateProfile.institute_id)
     .order("available_from", { ascending: false })
-
-  if (candidateProfile?.institute_id) {
-    testsQuery = testsQuery.eq("institute_id", candidateProfile.institute_id)
-  }
 
   const { data: rawTests } = await testsQuery
   if (!rawTests?.length) return []

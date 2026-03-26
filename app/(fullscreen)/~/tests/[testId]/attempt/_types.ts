@@ -28,6 +28,9 @@ export interface AttemptQuestion {
 export interface AttemptInfo {
   id: string
   started_at: string
+  server_time: string
+  expires_at: string | null
+  tab_switch_count: number
 }
 
 export interface SavedAnswer {

@@ -5,7 +5,7 @@
 import { notFound, redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AttemptClient } from "./AttemptClient"
-import { saveAnswerAction, submitAttemptAction, recordViolationAction } from "./actions"
+import { saveAnswerAction, submitAttemptAction, recordViolationAction, startAttemptAction } from "./actions"
 import type { AttemptQuestion, AttemptTest, AttemptInfo, SavedAnswer } from "./_types"
 
 export default async function AttemptPage({
@@ -22,18 +22,48 @@ export default async function AttemptPage({
   } = await supabase.auth.getUser()
   if (!user) redirect("/auth/login")
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("account_type")
+    .eq("id", user.id)
+    .single()
+
+  if (profile?.account_type !== "candidate") {
+    redirect("/~/home")
+  }
+
+  const { data: candidateProfile } = await supabase
+    .from("candidate_profiles")
+    .select("institute_id, profile_complete, profile_updated")
+    .eq("profile_id", user.id)
+    .maybeSingle()
+
+  if (
+    !candidateProfile ||
+    !candidateProfile.profile_complete ||
+    !candidateProfile.profile_updated
+  ) {
+    redirect("/~/settings")
+  }
+
+  if (!candidateProfile.institute_id) {
+    redirect("/~/tests")
+  }
+
   // ── Fetch published test ────────────────────────────────────────────────────
   const { data: test } = await supabase
     .from("tests")
     .select(
       `id, title, description, instructions, time_limit_seconds,
        available_from, available_until, status,
-       shuffle_questions, shuffle_options, max_attempts`
+       shuffle_questions, shuffle_options, max_attempts, institute_id`
     )
     .eq("id", testId)
     .single()
 
-  if (!test || test.status !== "published") notFound()
+  if (!test || test.status !== "published" || test.institute_id !== candidateProfile.institute_id) {
+    notFound()
+  }
 
   // ── Availability window ─────────────────────────────────────────────────────
   const now = new Date()
@@ -44,13 +74,14 @@ export default async function AttemptPage({
     redirect("/~/tests")
   }
 
-  // ── Resolve or create attempt ───────────────────────────────────────────────
-  let attemptInfo: AttemptInfo
+  // ── Resolve or check max attempts ───────────────────────────────────────────
+  let attemptInfo: AttemptInfo | null = null
+  let savedAnswers: SavedAnswer[] = []
 
   // Look for an existing in-progress attempt first (resume flow)
   const { data: existingAttempt } = await supabase
     .from("test_attempts")
-    .select("id, started_at, expires_at")
+    .select("id, started_at, expires_at, tab_switch_count")
     .eq("test_id", testId)
     .eq("student_id", user.id)
     .eq("status", "in_progress")
@@ -71,9 +102,23 @@ export default async function AttemptPage({
     attemptInfo = {
       id: existingAttempt.id,
       started_at: existingAttempt.started_at,
+      server_time: now.toISOString(),
+      expires_at: existingAttempt.expires_at,
+      tab_switch_count: existingAttempt.tab_switch_count ?? 0,
     }
+
+    // ── Fetch saved answers (resume support) ────────────────────────────────────
+    const { data: rawAnswers } = await supabase
+      .from("attempt_answers")
+      .select("question_id, selected_option_ids")
+      .eq("attempt_id", attemptInfo.id)
+
+    savedAnswers = (rawAnswers ?? []).map((a) => ({
+      question_id: a.question_id,
+      selected_option_ids: (a.selected_option_ids as string[]) ?? [],
+    }))
   } else {
-    // Count completed attempts to enforce max_attempts
+    // Count completed attempts to enforce max_attempts BEFORE intro screen
     const { count: completedCount } = await supabase
       .from("test_attempts")
       .select("*", { count: "exact", head: true })
@@ -84,29 +129,6 @@ export default async function AttemptPage({
     if ((completedCount ?? 0) >= test.max_attempts) {
       redirect(`/~/tests/${testId}`)
     }
-
-    // Create a fresh attempt
-    const attemptNumber = (completedCount ?? 0) + 1
-    const expiresAt = test.time_limit_seconds
-      ? new Date(now.getTime() + test.time_limit_seconds * 1000).toISOString()
-      : null
-
-    const { data: newAttempt, error: createError } = await supabase
-      .from("test_attempts")
-      .insert({
-        test_id: testId,
-        student_id: user.id,
-        attempt_number: attemptNumber,
-        expires_at: expiresAt,
-      })
-      .select("id, started_at")
-      .single()
-
-    if (createError || !newAttempt) {
-      throw new Error("Failed to start attempt: " + (createError?.message ?? "unknown"))
-    }
-
-    attemptInfo = { id: newAttempt.id, started_at: newAttempt.started_at }
   }
 
   // ── Fetch questions with options & tags ─────────────────────────────────────
@@ -147,6 +169,7 @@ export default async function AttemptPage({
   }))
 
   // Apply test-level shuffles (server-side so every student session is consistent)
+  // (In a highly robust app, these random orders might be persisted per attempt, but we just use the default array matching)
   if (test.shuffle_questions) {
     questions = [...questions].sort(() => Math.random() - 0.5)
   }
@@ -156,17 +179,6 @@ export default async function AttemptPage({
       options: [...q.options].sort(() => Math.random() - 0.5),
     }))
   }
-
-  // ── Fetch saved answers (resume support) ────────────────────────────────────
-  const { data: rawAnswers } = await supabase
-    .from("attempt_answers")
-    .select("question_id, selected_option_ids")
-    .eq("attempt_id", attemptInfo.id)
-
-  const savedAnswers: SavedAnswer[] = (rawAnswers ?? []).map((a) => ({
-    question_id: a.question_id,
-    selected_option_ids: (a.selected_option_ids as string[]) ?? [],
-  }))
 
   // ── Build client-safe test object ───────────────────────────────────────────
   const testForClient: AttemptTest = {
@@ -184,6 +196,7 @@ export default async function AttemptPage({
       questions={questions}
       attemptInfo={attemptInfo}
       savedAnswers={savedAnswers}
+      onStartAttempt={startAttemptAction.bind(null, testId)}
       onSaveAnswer={saveAnswerAction}
       onSubmit={submitAttemptAction}
       onViolation={recordViolationAction}

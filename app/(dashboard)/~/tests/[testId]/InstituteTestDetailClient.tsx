@@ -64,6 +64,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  AlertCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
@@ -414,6 +415,7 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
       "Total Marks",
       "Percentage (%)",
       "Time Spent",
+      "Violations",
       "Started At",
       "Submitted At",
     ]
@@ -426,6 +428,7 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
       a.total_marks ?? "—",
       a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks) : "—",
       formatSeconds(a.time_spent_seconds),
+      a.tab_switch_count?.toString() ?? "0",
       formatDateTime(a.started_at),
       a.submitted_at ? formatDateTime(a.submitted_at) : "—",
     ])
@@ -485,7 +488,7 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
     doc.text(attemptInfo, 14, currentY)
     currentY += 8
 
-    const tableColumn = ["Student", "Email", "Status", "Score", "Pct", "Time", "Submitted"]
+    const tableColumn = ["Student", "Email", "Status", "Score", "Pct", "Time", "Viol", "Submitted"]
     const tableRows = sorted.map((a) => [
       a.student_name || "Unknown",
       a.student_email || "—",
@@ -493,6 +496,7 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
       a.status === "submitted" ? `${a.score ?? "—"}/${a.total_marks ?? "—"}` : "—",
       a.status === "submitted" ? `${resolvePct(a.percentage, a.score, a.total_marks)}%` : "—",
       formatSeconds(a.time_spent_seconds),
+      a.tab_switch_count?.toString() ?? "0",
       a.submitted_at ? formatDateTime(a.submitted_at) : "—",
     ])
 
@@ -520,13 +524,14 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
         lineColor: [230, 230, 230],
       },
       columnStyles: {
-        0: { cellWidth: 45 },
-        1: { cellWidth: 70 },
-        2: { cellWidth: 22 },
+        0: { cellWidth: 40 },
+        1: { cellWidth: 65 },
+        2: { cellWidth: 20 },
         3: { halign: "right", cellWidth: 16 },
         4: { halign: "right", cellWidth: 12 },
-        5: { halign: "right", cellWidth: 26 },
-        6: { halign: "right" },
+        5: { halign: "right", cellWidth: 20 },
+        6: { halign: "right", cellWidth: 10 },
+        7: { halign: "right" },
       },
       didDrawPage: (data) => {
         const currentPage = data.pageNumber
@@ -656,6 +661,11 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
                 <p className="text-[10px] tabular-nums text-muted-foreground leading-tight">
                   {formatSeconds(a.time_spent_seconds)}
                 </p>
+                {a.tab_switch_count != null && a.tab_switch_count > 0 && (
+                  <p className="text-[10px] font-semibold text-destructive leading-tight min-w-0 max-w-full">
+                    {a.tab_switch_count} violation{a.tab_switch_count !== 1 && "s"}
+                  </p>
+                )}
               </div>
               <Badge
                 variant={a.status === "submitted" ? "default" : "secondary"}
@@ -687,6 +697,12 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
                   <p className="truncate text-sm font-medium">{a.student_name ?? "Unknown"}</p>
                   {a.student_email && (
                     <p className="truncate text-xs text-muted-foreground">{a.student_email}</p>
+                  )}
+                  {a.tab_switch_count != null && a.tab_switch_count > 0 && (
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-destructive">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {a.tab_switch_count} system violation{a.tab_switch_count !== 1 && "s"}
+                    </div>
                   )}
                 </TableCell>
                 <TableCell>

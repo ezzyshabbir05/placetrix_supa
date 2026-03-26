@@ -85,7 +85,7 @@ function StatusBadge({ status }: { status: DerivedCandidateStatus }) {
 // ─── Test Card ────────────────────────────────────────────────────────────────
 
 function TestCard({ test }: { test: CandidateTest }) {
-  const isSubmitted  = test.attempt?.status === "submitted"
+  const isSubmitted = test.attempt?.status === "submitted"
   const isInProgress = test.attempt?.status === "in_progress"
 
   return (
@@ -227,14 +227,14 @@ export function CandidateTestsClient({ tests }: Props) {
   // A submitted test always goes to "past", regardless of the time-window status.
   const isSubmitted = (t: CandidateTest) => t.attempt?.status === "submitted"
 
-  const live     = tests.filter((t) => t.derived_status === "live"     && !isSubmitted(t))
+  const live = tests.filter((t) => t.derived_status === "live" && !isSubmitted(t))
   const upcoming = tests.filter((t) => t.derived_status === "upcoming" && !isSubmitted(t))
-  const past     = tests.filter((t) => t.derived_status === "past"     || isSubmitted(t))
+  const past = tests.filter((t) => t.derived_status === "past" || isSubmitted(t))
 
   const tabConfig: TabConfig[] = [
-    { value: "live",     label: "Live",     icon: <PlayCircle    className="h-3.5 w-3.5" />, count: live.length     },
+    { value: "live", label: "Live", icon: <PlayCircle className="h-3.5 w-3.5" />, count: live.length },
     { value: "upcoming", label: "Upcoming", icon: <CalendarClock className="h-3.5 w-3.5" />, count: upcoming.length },
-    { value: "past",     label: "Past",     icon: <FileText      className="h-3.5 w-3.5" />, count: past.length     },
+    { value: "past", label: "Past", icon: <FileText className="h-3.5 w-3.5" />, count: past.length },
   ]
 
   const tabTests: Record<Tab, CandidateTest[]> = { live, upcoming, past }
