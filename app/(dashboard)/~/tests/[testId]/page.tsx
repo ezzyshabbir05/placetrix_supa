@@ -30,31 +30,49 @@ async function fetchCandidateView(
 ): Promise<{ test: CandidateTestDetail; attempt: CandidateAttemptDetail | null }> {
   const supabase = await createClient()
 
-  // 1. Parallelize initial checks and base test data
-  const [profileRes, testRes, questionsMarksRes, attemptRes] = await Promise.all([
-    supabase.from("candidate_profiles").select("institute_id").eq("profile_id", userId).maybeSingle(),
-    supabase.from("tests").select(`id, title, description, instructions, time_limit_seconds, available_from, available_until, results_available, status, institute_id`).eq("id", testId).single(),
-    supabase.from("questions").select("marks").eq("test_id", testId),
-    supabase.from("test_attempts").select("id, status, submitted_at, score, total_marks, percentage, time_spent_seconds, tab_switch_count").eq("test_id", testId).eq("student_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+  // 1. Fetch user's institute profile and the test with its nested data in parallel.
+  // This reduces 7-8 sequential/parallel calls to just 2 master calls.
+  const [profileRes, testRes] = await Promise.all([
+    supabase
+      .from("candidate_profiles")
+      .select("institute_id, profile_complete, profile_updated")
+      .eq("profile_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("tests")
+      .select(`
+        id, title, description, instructions, time_limit_seconds, 
+        available_from, available_until, results_available, status, institute_id,
+        institute:institute_profiles(institute_name),
+        questions (
+          id, question_text, marks, explanation, order_index,
+          options (id, option_text, is_correct, order_index),
+          question_tags (tags (id, name))
+        ),
+        test_attempts (
+          id, status, submitted_at, score, total_marks, percentage, 
+          time_spent_seconds, tab_switch_count,
+          attempt_answers (
+            question_id, selected_option_ids, is_correct, marks_awarded, time_spent_seconds
+          )
+        )
+      `)
+      .eq("id", testId)
+      // We filter attempts for THIS student only
+      .eq("test_attempts.student_id", userId)
+      .order("created_at", { foreignTable: "test_attempts", ascending: false })
+      .limit(1, { foreignTable: "test_attempts" })
+      .maybeSingle()
   ])
 
   const candidateProfile = profileRes.data
   const raw = testRes.data
-  const rawQuestions = questionsMarksRes.data
-  const rawAttempt = attemptRes.data
 
   if (!candidateProfile?.institute_id || !raw || raw.status !== "published" || raw.institute_id !== candidateProfile.institute_id) {
     notFound()
   }
 
-  // 2. Fetch institute name in parallel with total marks calculation
-  const { data: institute } = await supabase
-    .from("institute_profiles")
-    .select("institute_name")
-    .eq("profile_id", raw.institute_id)
-    .maybeSingle()
-
-  const allQuestionsTotalMarks = (rawQuestions ?? []).reduce((sum, q) => sum + (q.marks ?? 0), 0)
+  const allQuestionsTotalMarks = (raw.questions ?? []).reduce((sum: number, q: any) => sum + (q.marks ?? 0), 0)
 
   const test: CandidateTestDetail = {
     id: raw.id,
@@ -65,10 +83,11 @@ async function fetchCandidateView(
     available_from: raw.available_from ?? null,
     available_until: raw.available_until ?? null,
     results_available: raw.results_available,
-    institute_name: institute?.institute_name ?? null,
-    questions: (rawQuestions ?? []).map((q) => ({ marks: q.marks })),
+    institute_name: (raw.institute as any)?.institute_name ?? null,
+    questions: (raw.questions ?? []).map((q: any) => ({ marks: q.marks })),
   }
 
+  const rawAttempt = raw.test_attempts?.[0]
   if (!rawAttempt) return { test, attempt: null }
 
   const attemptBase = {
@@ -82,40 +101,17 @@ async function fetchCandidateView(
     tab_switch_count: rawAttempt.tab_switch_count ?? null,
   }
 
+  // If results aren't available, we don't return the full answer set
   if (rawAttempt.status !== "submitted" || !raw.results_available) {
     return { test, attempt: { ...attemptBase, answers: [] } }
   }
 
-  // 3. Fetch full questions and answers in parallel
-  const [qRes, aRes] = await Promise.all([
-    supabase.from("questions").select(`id, question_text, marks, explanation, order_index, options (id, option_text, is_correct, order_index), question_tags (tags (id, name))`).eq("test_id", testId).order("order_index"),
-    supabase.from("attempt_answers").select("question_id, selected_option_ids, is_correct, marks_awarded, time_spent_seconds").eq("attempt_id", rawAttempt.id)
-  ])
-
-  const rawQFull = qRes.data
-  const rawAnswers = aRes.data
-
-  if (!rawQFull?.length) {
-    return { test, attempt: { ...attemptBase, answers: [] } }
+  const answerMap: Record<string, any> = {}
+  for (const a of rawAttempt.attempt_answers ?? []) {
+    answerMap[a.question_id] = a
   }
 
-  const answerMap: Record<string, {
-    selected_option_ids: string[]
-    is_correct: boolean | null
-    marks_awarded: number | null
-    time_spent_seconds: number | null
-  }> = {}
-
-  for (const a of rawAnswers ?? []) {
-    answerMap[a.question_id] = {
-      selected_option_ids: (a.selected_option_ids as string[]) ?? [],
-      is_correct: a.is_correct ?? null,
-      marks_awarded: a.marks_awarded ?? null,
-      time_spent_seconds: a.time_spent_seconds ?? null,
-    }
-  }
-
-  const answers: CandidateAnswerDetail[] = rawQFull.map((q) => {
+  const answers: CandidateAnswerDetail[] = (raw.questions ?? []).map((q: any) => {
     const ans = answerMap[q.id]
     return {
       question_id: q.id,
@@ -123,7 +119,7 @@ async function fetchCandidateView(
       marks: q.marks,
       is_correct: ans?.is_correct ?? null,
       marks_awarded: ans?.marks_awarded ?? null,
-      selected_option_ids: ans?.selected_option_ids ?? [],
+      selected_option_ids: (ans?.selected_option_ids as string[]) ?? [],
       time_spent_seconds: ans?.time_spent_seconds ?? null,
       explanation: (q.explanation as string) ?? null,
       options: ((q.options as any[]) ?? []).map((o) => ({
@@ -143,6 +139,7 @@ async function fetchCandidateView(
 }
 
 
+
 // ─── Institute data ───────────────────────────────────────────────────────────
 
 
@@ -152,33 +149,48 @@ async function fetchInstituteView(
 ): Promise<InstituteTestDetail> {
   const supabase = await createClient()
 
-  // 1. Parallelize core test, questions, attempts, and attempt info
-  const [testRes, questionsRes, attemptsRes, testAttemptsInfoRes] = await Promise.all([
-    supabase.from("tests").select(`id, title, description, instructions, time_limit_seconds, available_from, available_until, status, results_available, institute_id`).eq("id", testId).eq("institute_id", userId).single(),
-    supabase.from("questions").select(`id, question_text, question_type, marks, order_index, explanation, options (id, option_text, is_correct, order_index), question_tags (tags (id, name))`).eq("test_id", testId).order("order_index"),
-    supabase.from("attempt_details").select(`id, student_name, student_email, status, score, total_marks, percentage, time_spent_seconds, started_at, submitted_at`).eq("test_id", testId).order("started_at", { ascending: false }),
-    supabase.from("test_attempts").select("id, student_id, tab_switch_count").eq("test_id", testId)
-  ])
+  // 1. Unified Institute View Query
+  // Combines core test data, questions, and baseline attempt info.
+  // Note: We still fetch candidate_profiles in a separate step to handle 
+  // the 'IN' filter for batching profiles.
+  const { data: raw, error } = await supabase
+    .from("tests")
+    .select(`
+      id, title, description, instructions, time_limit_seconds, 
+      available_from, available_until, status, results_available, institute_id,
+      institute:institute_profiles(institute_name),
+      questions (
+        id, question_text, question_type, marks, order_index, explanation, 
+        options (id, option_text, is_correct, order_index),
+        question_tags (tags (id, name))
+      ),
+      test_attempts (
+        id, student_id, tab_switch_count, status, score, 
+        total_marks, percentage, time_spent_seconds, 
+        started_at, submitted_at
+      )
+    `)
+    .eq("id", testId)
+    .eq("institute_id", userId)
+    .single()
 
-  const raw = testRes.data
-  const rawQuestions = questionsRes.data
-  const rawAttempts = attemptsRes.data
-  const testAttemptsInfo = testAttemptsInfoRes.data
+  if (error || !raw) notFound()
 
-  if (!raw) notFound()
+  // 2. Resolve human-readable details for attempts (student names/emails)
+  // We use the already-fetched test_attempts to find unique student IDs.
+  const studentIds = Array.from(new Set((raw.test_attempts ?? []).map((r: any) => r.student_id).filter(Boolean)))
 
-  // 2. Parallelize institute name and candidate profiles
-  const studentIds = Array.from(new Set((testAttemptsInfo ?? []).map((r) => r.student_id).filter(Boolean)))
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select(`
+      id, display_name, email,
+      candidate:candidate_profiles(course_name, passout_year)
+    `)
+    .in("id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
 
-  const [instituteRes, profilesRes] = await Promise.all([
-    supabase.from("institute_profiles").select("institute_name").eq("profile_id", raw.institute_id).maybeSingle(),
-    supabase.from("candidate_profiles").select("profile_id, course_name, passout_year").in("profile_id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
-  ])
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]))
 
-  const institute = instituteRes.data
-  const candidateProfiles = profilesRes.data
-
-  const questions: InstituteQuestion[] = (rawQuestions ?? []).map((q) => ({
+  const questions: InstituteQuestion[] = (raw.questions ?? []).map((q: any) => ({
     id: q.id,
     question_text: q.question_text,
     question_type: q.question_type as "single_correct" | "multiple_correct",
@@ -197,29 +209,18 @@ async function fetchInstituteView(
       .flat(),
   }))
 
-  const profileMap = new Map((candidateProfiles ?? []).map((p) => [p.profile_id, p]))
-
-  const extraInfoMap = new Map((testAttemptsInfo ?? []).map((r) => [
-    r.id,
-    {
-      tab_switch_count: r.tab_switch_count,
-      branch: r.student_id ? profileMap.get(r.student_id)?.course_name ?? null : null,
-      passout_year: r.student_id ? profileMap.get(r.student_id)?.passout_year ?? null : null,
-    }
-  ]))
-
   const fullTotalMarks = questions.reduce((s, q) => s + q.marks, 0)
 
-  const attempts: InstituteAttemptRow[] = (rawAttempts ?? [])
-    .filter((a): a is typeof a & { id: string; started_at: string } =>
+  const attempts: InstituteAttemptRow[] = (raw.test_attempts ?? [])
+    .filter((a: any): a is any & { id: string; started_at: string } =>
       a.id != null && a.started_at != null
     )
-    .map((a) => {
-      const extra = extraInfoMap.get(a.id)
+    .map((a: any) => {
+      const profile = profileMap.get(a.student_id)
       return {
         id: a.id,
-        student_name: a.student_name ?? null,
-        student_email: a.student_email ?? null,
+        student_name: profile?.display_name ?? null,
+        student_email: profile?.email ?? null,
         status: a.status as InstituteAttemptRow["status"],
         score: a.score ?? null,
         total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
@@ -230,11 +231,12 @@ async function fetchInstituteView(
         time_spent_seconds: a.time_spent_seconds ?? null,
         started_at: a.started_at,
         submitted_at: a.submitted_at ?? null,
-        tab_switch_count: extra?.tab_switch_count ?? null,
-        branch: extra?.branch ?? null,
-        passout_year: extra?.passout_year ?? null,
+        tab_switch_count: a.tab_switch_count ?? null,
+        branch: profile?.candidate?.course_name ?? null,
+        passout_year: profile?.candidate?.passout_year ?? null,
       }
     })
+    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
 
 
   return {
@@ -247,11 +249,12 @@ async function fetchInstituteView(
     available_until: raw.available_until ?? null,
     status: raw.status as "draft" | "published" | "archived",
     results_available: raw.results_available,
-    institute_name: institute?.institute_name ?? null,
+    institute_name: (raw.institute as any)?.institute_name ?? null,
     questions,
     attempts,
   }
 }
+
 
 
 // ─── Page ─────────────────────────────────────────────────────────────────────

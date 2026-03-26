@@ -828,6 +828,18 @@ export function AttemptClient({
 
     // ── Handle option select ───────────────────────────────────────────────────
 
+    // Ref to hold the debounce timer for answer saving
+    const saveDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+    const flushPendingSave = useCallback((questionId: string) => {
+        if (saveDebounceRef.current[questionId]) {
+            clearTimeout(saveDebounceRef.current[questionId])
+            const pendingAnswers = answers[questionId] ?? []
+            saveAnswer(questionId, pendingAnswers)
+            delete saveDebounceRef.current[questionId]
+        }
+    }, [answers, saveAnswer])
+
     const handleAnswer = useCallback(
         (
             questionId: string,
@@ -843,12 +855,24 @@ export function AttemptClient({
                             ? current.filter((id) => id !== optionId)
                             : [...current, optionId]
 
-                Promise.resolve().then(() => saveAnswer(questionId, next))
+                // Debounce saving: wait 1.5s after the last click for this question
+                // before firing the network request.
+                if (saveDebounceRef.current[questionId]) {
+                    clearTimeout(saveDebounceRef.current[questionId])
+                }
+                
+                saveDebounceRef.current[questionId] = setTimeout(() => {
+                    saveAnswer(questionId, next)
+                    delete saveDebounceRef.current[questionId]
+                }, 1500)
+
                 return { ...prev, [questionId]: next }
             })
         },
         [saveAnswer]
     )
+
+
 
 
     // ── Submit ─────────────────────────────────────────────────────────────────
@@ -960,11 +984,16 @@ export function AttemptClient({
         const now = window.performance.now()
         const track = timeTrackingRef.current
 
-        // If we switched away from a previous question, save the accumulated time
+        // If we switched away from a previous question:
+        // 1. Flush any pending debounced save for the old question.
+        // 2. Save the accumulated time.
         if (track.id && track.id !== currentQuestion.id && track.enteredAt > 0) {
+            flushPendingSave(track.id)
             const elapsed = Math.max(0, Math.floor((now - track.enteredAt) / 1000))
             if (elapsed > 0 && attemptInfo) {
                 const prevSelections = answers[track.id] ?? []
+                // Note: flushPendingSave already handles the saveAnswer call for content,
+                // but we still want to report the elapsed time.
                 onSaveAnswer?.(attemptInfo.id, track.id, prevSelections, elapsed).catch(() => {})
             }
         }
@@ -973,19 +1002,21 @@ export function AttemptClient({
         if (track.id !== currentQuestion.id) {
             timeTrackingRef.current = { id: currentQuestion.id, enteredAt: now }
         }
-    }, [currentIndex, currentQuestion, phase, attemptInfo, answers, onSaveAnswer])
+    }, [currentIndex, currentQuestion, phase, attemptInfo, answers, onSaveAnswer, flushPendingSave])
 
-    // Override handleSubmit for final time pacing sync
+    // Override handleSubmit for final time pacing sync and flush
     const finalHandleSubmit = useCallback(async (auto = false) => {
         const finalTrack = timeTrackingRef.current
         if (finalTrack.enteredAt > 0 && finalTrack.id && attemptInfo) {
+            flushPendingSave(finalTrack.id)
             const finalElapsed = Math.max(0, Math.floor((window.performance.now() - finalTrack.enteredAt) / 1000))
             if (finalElapsed > 0) {
                onSaveAnswer?.(attemptInfo.id, finalTrack.id, answers[finalTrack.id] ?? [], finalElapsed).catch(()=>{})
             }
         }
         await handleSubmit(auto)
-    }, [handleSubmit, attemptInfo, answers, onSaveAnswer])
+    }, [handleSubmit, attemptInfo, answers, onSaveAnswer, flushPendingSave])
+
 
     useEffect(() => {
         handleSubmitRef.current = finalHandleSubmit
