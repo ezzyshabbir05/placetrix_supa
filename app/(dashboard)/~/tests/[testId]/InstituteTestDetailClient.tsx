@@ -662,17 +662,19 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
                   {formatSeconds(a.time_spent_seconds)}
                 </p>
                 {a.tab_switch_count != null && a.tab_switch_count > 0 && (
-                  <p className="text-[10px] font-semibold text-destructive leading-tight min-w-0 max-w-full">
-                    {a.tab_switch_count} violation{a.tab_switch_count !== 1 && "s"}
-                  </p>
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block leading-tight">
+                    {a.tab_switch_count} viol.
+                  </span>
                 )}
               </div>
-              <Badge
-                variant={a.status === "submitted" ? "default" : "secondary"}
-                className="text-[10px] px-1.5 shrink-0"
+              <span
+                className={cn(
+                  "text-xs shrink-0 text-right w-[68px]",
+                  a.status === "submitted" ? "text-foreground font-medium" : "text-muted-foreground text-[11px]"
+                )}
               >
                 {a.status === "submitted" ? "Submitted" : "In Progress"}
-              </Badge>
+              </span>
             </div>
           </div>
         ))}
@@ -687,6 +689,7 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
               <TableHead className="text-xs font-semibold">Status</TableHead>
               <TableHead className="text-right text-xs font-semibold">Score</TableHead>
               <TableHead className="text-right text-xs font-semibold">Time</TableHead>
+              <TableHead className="text-center text-xs font-semibold">Violations</TableHead>
               <TableHead className="text-xs font-semibold">Submitted</TableHead>
             </TableRow>
           </TableHeader>
@@ -698,20 +701,16 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
                   {a.student_email && (
                     <p className="truncate text-xs text-muted-foreground">{a.student_email}</p>
                   )}
-                  {a.tab_switch_count != null && a.tab_switch_count > 0 && (
-                    <div className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-destructive">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {a.tab_switch_count} system violation{a.tab_switch_count !== 1 && "s"}
-                    </div>
-                  )}
                 </TableCell>
                 <TableCell>
-                  <Badge
-                    variant={a.status === "submitted" ? "default" : "secondary"}
-                    className="text-[10px]"
+                  <span
+                    className={cn(
+                      "text-sm whitespace-nowrap",
+                      a.status === "submitted" ? "text-foreground" : "text-muted-foreground"
+                    )}
                   >
                     {a.status === "submitted" ? "Submitted" : "In Progress"}
-                  </Badge>
+                  </span>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end">
@@ -720,6 +719,13 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
                 </TableCell>
                 <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                   {formatSeconds(a.time_spent_seconds)}
+                </TableCell>
+                <TableCell className="text-center text-sm tabular-nums text-muted-foreground">
+                  {a.tab_switch_count != null && a.tab_switch_count > 0 ? (
+                    a.tab_switch_count
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {a.submitted_at ? formatDateTime(a.submitted_at) : "—"}

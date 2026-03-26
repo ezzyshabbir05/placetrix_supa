@@ -33,8 +33,11 @@ import {
   Upload, Plus, Minus, Copy, CalendarIcon, Loader2, Camera,
   CheckCircle2, XCircle, AtSign, Lock, Clock, Monitor, Smartphone,
   Tablet, RefreshCw, LogOut, MapPin, ShieldAlert, CalendarClock,
-  Eye, EyeOff, KeyRound,
+  Eye, EyeOff, KeyRound, HelpCircle,
 } from "lucide-react";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -95,6 +98,16 @@ interface ParsedUA {
 
 function RequiredMark() {
   return <span className="text-destructive ml-0.5">*</span>;
+}
+
+/** Returns a simple confirmation for the selected graduation year, without assuming degree length. */
+function getGraduationYearHint(selectedYear: string): string | null {
+  if (!selectedYear) return null;
+  const gradYear = Number(selectedYear);
+  const currentYear = new Date().getFullYear();
+  if (gradYear < currentYear) return `You graduated in ${gradYear}`;
+  if (gradYear === currentYear) return `Graduating this year (${gradYear})`;
+  return `Graduating in ${gradYear} — ${gradYear - currentYear} year${gradYear - currentYear > 1 ? "s" : ""} from now`;
 }
 
 function FieldError({ message }: { message?: string }) {
@@ -713,7 +726,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     if (!dateOfBirth) e.dateOfBirth = "Date of birth is required";
     if (!instituteId) e.institute = "Institution is required";
     if (!courseName) e.courseName = "Course/branch is required";
-    if (!passoutYear) e.passoutYear = "Passout year is required";
+    if (!passoutYear) e.passoutYear = "Expected graduation year is required";
     if (!sscPercentage) e.sscPercentage = "SSC percentage is required";
     if (!sscPassYear) e.sscPassYear = "SSC passing year is required";
     if (!isHsc && !isDiploma) e.educationAfterSsc = "Select at least one option (HSC or Diploma)";
@@ -1118,9 +1131,24 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <FieldError message={errors.courseName} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Passout Year<RequiredMark /></Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label>Expected Graduation Year<RequiredMark /></Label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="What is graduation year?">
+                              <HelpCircle className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed p-3">
+                            <p className="font-medium mb-1">How to pick the right year?</p>
+                            <p>Select the year when you will finish your degree and receive your marksheet/certificate.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                     <Combobox items={PASSOUT_YEAR_OPTIONS} value={passoutYear} onValueChange={(v) => handlePassoutYear(v)}>
-                      <ComboboxInput placeholder="Select year" />
+                      <ComboboxInput placeholder="Select graduation year" />
                       <ComboboxContent>
                         <ComboboxEmpty>No year found.</ComboboxEmpty>
                         <ComboboxList>
@@ -1128,7 +1156,17 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
-                    <FieldError message={errors.passoutYear} />
+                    {errors.passoutYear ? (
+                      <FieldError message={errors.passoutYear} />
+                    ) : passoutYear ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        {getGraduationYearHint(passoutYear)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        The year you will receive your final degree marksheet/certificate
+                      </p>
+                    )}
                   </div>
                 </div>
 
