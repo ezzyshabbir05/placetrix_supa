@@ -120,19 +120,11 @@ export function GoogleOneTap({ next = "/~" }: GoogleOneTapProps) {
     }, []);
 
     return (
-        <>
-            {/*
-       * ✅ Fix 3: Use onReady instead of onLoad.
-       * onReady fires on both the initial script load AND on subsequent
-       * client-side navigations, making it reliable across page transitions.
-       */}
-            <Script
-                src="https://accounts.google.com/gsi/client"
-                strategy="afterInteractive"
-                onReady={() => { initialize(); }}
-            />
-            {/* Google renders the One Tap UI inside this div */}
-            <div id="g_id_onload" className="fixed top-4 right-4 z-[200]" />
-        </>
+        <Script
+            src="https://accounts.google.com/gsi/client"
+            strategy="afterInteractive"
+            onReady={() => { initialize(); }}
+        />
     );
 }
+

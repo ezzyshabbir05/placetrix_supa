@@ -224,9 +224,12 @@ interface Props {
 export function CandidateTestsClient({ tests }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("live")
 
-  const live     = tests.filter((t) => t.derived_status === "live")
-  const upcoming = tests.filter((t) => t.derived_status === "upcoming")
-  const past     = tests.filter((t) => t.derived_status === "past")
+  // A submitted test always goes to "past", regardless of the time-window status.
+  const isSubmitted = (t: CandidateTest) => t.attempt?.status === "submitted"
+
+  const live     = tests.filter((t) => t.derived_status === "live"     && !isSubmitted(t))
+  const upcoming = tests.filter((t) => t.derived_status === "upcoming" && !isSubmitted(t))
+  const past     = tests.filter((t) => t.derived_status === "past"     || isSubmitted(t))
 
   const tabConfig: TabConfig[] = [
     { value: "live",     label: "Live",     icon: <PlayCircle    className="h-3.5 w-3.5" />, count: live.length     },
