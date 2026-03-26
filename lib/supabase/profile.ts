@@ -113,14 +113,12 @@ function profileFromAuthUser(
 export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
 
-  // ── Step 1: Read session from cookie (no Auth DB hit) ─────────────────────
-  // getSession() is safe here because middleware already called getUser() to
-  // refresh/validate the token once per request. We trust the refreshed cookie.
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  // ── Step 1: Read session from cookie (validated by Supabase) ──────────────
+  // Use getUser() instead of getSession() as it re-validates the user with
+  // the Supabase Auth server, providing better security.
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (session?.user) {
-    const user = session.user;
-
+  if (user) {
     const { data: profile, error: dbError } = await supabase
       .from("profiles")
       .select("id, display_name, email, account_type, avatar_path, username")
@@ -136,8 +134,8 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   }
 
   // ── Step 2 & 3: Handle auth errors ────────────────────────────────────────
-  if (sessionError instanceof AuthApiError) {
-    if (isDefinitiveRevocation(sessionError)) {
+  if (authError instanceof AuthApiError) {
+    if (isDefinitiveRevocation(authError)) {
       await supabase.auth.signOut({ scope: "local" });
       redirect("/auth/login");
     }

@@ -602,13 +602,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const loadSessions = useCallback(async () => {
     setSessLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setSessions([]); return; }
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) { setSessions([]); return; }
-      if (session.access_token) setCurrentSessionId(getSessionIdFromJwt(session.access_token));
+      if (session?.access_token) setCurrentSessionId(getSessionIdFromJwt(session.access_token));
       const { data, error } = await supabase
         .from("user_sessions")
         .select("id, created_at, updated_at, not_after, ip, user_agent")
-        .eq("user_id", session.user.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw error;

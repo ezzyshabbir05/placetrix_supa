@@ -75,15 +75,15 @@ function ChangePasswordContent() {
   useEffect(() => {
     const checkSession = async () => {
       const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (session && isRecoveryMode) {
+      if (user && isRecoveryMode) {
         setPageState("password-form");
-      } else if (session && !isRecoveryMode) {
+      } else if (user && !isRecoveryMode) {
         // Authenticated user who navigated here directly — bounce back.
         router.replace("/auth/reset-password");
       } else {
-        // No session: link expired, already used, or never valid.
+        // No valid user session: link expired, already used, or never valid.
         setPageState("expired");
       }
     };

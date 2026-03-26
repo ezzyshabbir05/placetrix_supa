@@ -69,10 +69,10 @@ export function GoogleOneTap({ next = "/~" }: GoogleOneTapProps) {
         initialized.current = true;
 
         const supabase = createClient();
-
-        // Skip prompt if a session already exists
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
+        
+        // Skip prompt if a verified user session already exists
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
             router.push(next);
             return;
         }

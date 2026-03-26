@@ -68,8 +68,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   //    for the prefetch to stay fast (~1ms). If the user actually clicks
   //    the link, the "real" request will trigger getUser() (~50ms) for 
   //    full security validation. This helps avoid "Auth Storms" (504s).
-  const isPrefetch = request.headers.get("next-router-prefetch") || 
-                    request.headers.get("purpose") === "prefetch";
+  const isPrefetch = request.headers.get("next-router-prefetch") ||
+    request.headers.get("purpose") === "prefetch";
 
   let user = null;
 
