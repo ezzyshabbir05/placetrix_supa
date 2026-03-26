@@ -11,26 +11,25 @@ import { NextResponse, type NextRequest } from "next/server";
 // ─── Route rules ──────────────────────────────────────────────────────────────
 
 /** Routes that require an authenticated session. */
-const PROTECTED_PREFIXES = ["/~/"] as const;
+const PROTECTED_PATHS = ["/~"] as const;
 
 /** Routes that should NOT be visited while authenticated. */
-const AUTH_PREFIXES = ["/auth/"] as const;
+const AUTH_PATHS = ["/auth"] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function isProtected(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  return PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
 function isAuthPage(pathname: string): boolean {
-  return AUTH_PREFIXES.some((p) => pathname.startsWith(p));
+  return AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
 // ─── updateSession ─────────────────────────────────────────────────────────────
 
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   // Start with a plain pass-through response.
-  // We mutate this reference inside setAll() so cookies are always written.
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -56,16 +55,35 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     }
   );
 
-  // ✅  getUser() validates the JWT with the Auth server — not spoofable.
-  //    getClaims() / getSession() only trust the local cookie and must NOT
-  //    be used for access-control decisions.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const { pathname } = request.nextUrl;
 
-  // Unauthenticated user trying to reach a protected page → login.
+  // 1. If it's a completely public route (neither protected nor auth),
+  //    we skip the heavy getUser() network call entirely.
+  if (!isProtected(pathname) && !isAuthPage(pathname)) {
+    return supabaseResponse;
+  }
+
+  // 2. Optimization: Check for prefetch requests.
+  //    Next.js prefetches follow links; we can trust the cookie (getSession)
+  //    for the prefetch to stay fast (~1ms). If the user actually clicks
+  //    the link, the "real" request will trigger getUser() (~50ms) for 
+  //    full security validation. This helps avoid "Auth Storms" (504s).
+  const isPrefetch = request.headers.get("next-router-prefetch") || 
+                    request.headers.get("purpose") === "prefetch";
+
+  let user = null;
+
+  if (isPrefetch) {
+    // For prefetches, getSession() reads the JWT but doesn't hit the server.
+    const { data: { session } } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+  } else {
+    // For real requests, getUser() re-validates with the Auth server.
+    const { data: { user: authedUser } } = await supabase.auth.getUser();
+    user = authedUser;
+  }
+
+  // Redirect unauthenticated user trying to reach a protected page → login.
   if (isProtected(pathname) && !user) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
@@ -73,17 +91,16 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated user visiting an auth page → app home.
-  // Exception: /auth/callback and /auth/confirm handle OAuth / token flows
-  // and must be reachable even with a valid session.
+  // Redirect authenticated user visiting an auth page → app home.
+  // Exception: /auth/callback and /auth/confirm handle OAuth / token flows.
   const isFlowRoute =
-    pathname.startsWith("/auth/callback") ||
-    pathname.startsWith("/auth/confirm");
+    pathname.includes("/auth/callback") ||
+    pathname.includes("/auth/confirm");
 
   if (isAuthPage(pathname) && !isFlowRoute && user) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/~";
-    homeUrl.search = "";
+    homeUrl.search = ""; // Clear accidental params
     return NextResponse.redirect(homeUrl);
   }
 

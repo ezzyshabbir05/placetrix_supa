@@ -1011,21 +1011,23 @@ export function InstituteTestDetailClient({
   const refreshAttempts = useCallback(async () => {
     const supabase = createClient()
 
-    const { data: rawAttempts } = await supabase
-      .from("attempt_details")
-      .select(
-        `id, student_name, student_email, status,
-         score, total_marks, percentage, time_spent_seconds,
-         started_at, submitted_at`
-      )
-      .eq("test_id", testId)
-      .order("started_at", { ascending: false })
+    // 1. Parallelize initial attempt details and metadata
+    const [detailsRes, infoRes] = await Promise.all([
+      supabase
+        .from("attempt_details")
+        .select(`id, student_name, student_email, status, score, total_marks, percentage, time_spent_seconds, started_at, submitted_at`)
+        .eq("test_id", testId)
+        .order("started_at", { ascending: false }),
+      supabase
+        .from("test_attempts")
+        .select("id, student_id, tab_switch_count")
+        .eq("test_id", testId)
+    ])
 
-    const { data: attemptsInfo } = await supabase
-      .from("test_attempts")
-      .select("id, student_id, tab_switch_count")
-      .eq("test_id", testId)
+    const rawAttempts = detailsRes.data
+    const attemptsInfo = infoRes.data
 
+    // 2. Extract student IDs and fetch profiles in parallel
     const studentIds = Array.from(
       new Set((attemptsInfo ?? []).map((r) => r.student_id).filter(Boolean))
     ) as string[]
@@ -1079,6 +1081,8 @@ export function InstituteTestDetailClient({
     setLiveAttempts(freshAttempts)
   }, [testId, test.questions])
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
@@ -1092,7 +1096,12 @@ export function InstituteTestDetailClient({
           filter: `test_id=eq.${testId}`,
         },
         () => {
-          refreshAttempts()
+          // Debounce the refresh to once every 2 seconds to handle high load
+          if (refreshTimerRef.current) return
+          refreshTimerRef.current = setTimeout(() => {
+            refreshAttempts()
+            refreshTimerRef.current = null
+          }, 2000)
         }
       )
       .subscribe()
@@ -1101,6 +1110,7 @@ export function InstituteTestDetailClient({
 
     return () => {
       supabase.removeChannel(channel)
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
   }, [testId, refreshAttempts])
 

@@ -30,50 +30,31 @@ async function fetchCandidateView(
 ): Promise<{ test: CandidateTestDetail; attempt: CandidateAttemptDetail | null }> {
   const supabase = await createClient()
 
-  const { data: candidateProfile } = await supabase
-    .from("candidate_profiles")
-    .select("institute_id")
-    .eq("profile_id", userId)
-    .maybeSingle()
+  // 1. Parallelize initial checks and base test data
+  const [profileRes, testRes, questionsMarksRes, attemptRes] = await Promise.all([
+    supabase.from("candidate_profiles").select("institute_id").eq("profile_id", userId).maybeSingle(),
+    supabase.from("tests").select(`id, title, description, instructions, time_limit_seconds, available_from, available_until, results_available, status, institute_id`).eq("id", testId).single(),
+    supabase.from("questions").select("marks").eq("test_id", testId),
+    supabase.from("test_attempts").select("id, status, submitted_at, score, total_marks, percentage, time_spent_seconds, tab_switch_count").eq("test_id", testId).eq("student_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+  ])
 
-  if (!candidateProfile?.institute_id) notFound()
+  const candidateProfile = profileRes.data
+  const raw = testRes.data
+  const rawQuestions = questionsMarksRes.data
+  const rawAttempt = attemptRes.data
 
-  const { data: raw } = await supabase
-    .from("tests")
-    .select(
-      `id, title, description, instructions, time_limit_seconds,
-       available_from, available_until, results_available, status,
-       institute_id`
-    )
-    .eq("id", testId)
-    .single()
+  if (!candidateProfile?.institute_id || !raw || raw.status !== "published" || raw.institute_id !== candidateProfile.institute_id) {
+    notFound()
+  }
 
-  if (!raw || raw.status !== "published" || raw.institute_id !== candidateProfile.institute_id) notFound()
-
+  // 2. Fetch institute name in parallel with total marks calculation
   const { data: institute } = await supabase
     .from("institute_profiles")
     .select("institute_name")
     .eq("profile_id", raw.institute_id)
     .maybeSingle()
 
-  const { data: rawQuestions } = await supabase
-    .from("questions")
-    .select("marks")
-    .eq("test_id", testId)
-
-  const allQuestionsTotalMarks = (rawQuestions ?? []).reduce(
-    (sum, q) => sum + (q.marks ?? 0),
-    0
-  )
-
-  const { data: rawAttempt } = await supabase
-    .from("test_attempts")
-    .select("id, status, submitted_at, score, total_marks, percentage, time_spent_seconds, tab_switch_count")
-    .eq("test_id", testId)
-    .eq("student_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const allQuestionsTotalMarks = (rawQuestions ?? []).reduce((sum, q) => sum + (q.marks ?? 0), 0)
 
   const test: CandidateTestDetail = {
     id: raw.id,
@@ -95,13 +76,8 @@ async function fetchCandidateView(
     status: rawAttempt.status as "in_progress" | "submitted",
     submitted_at: rawAttempt.submitted_at ?? null,
     score: rawAttempt.score ?? null,
-    total_marks: allQuestionsTotalMarks > 0
-      ? allQuestionsTotalMarks
-      : (rawAttempt.total_marks ?? null),
-    percentage:
-      rawAttempt.score != null && allQuestionsTotalMarks > 0
-        ? Math.round((rawAttempt.score / allQuestionsTotalMarks) * 100)
-        : (rawAttempt.percentage ?? null),
+    total_marks: allQuestionsTotalMarks > 0 ? allQuestionsTotalMarks : (rawAttempt.total_marks ?? null),
+    percentage: rawAttempt.score != null && allQuestionsTotalMarks > 0 ? Math.round((rawAttempt.score / allQuestionsTotalMarks) * 100) : (rawAttempt.percentage ?? null),
     time_spent_seconds: rawAttempt.time_spent_seconds ?? null,
     tab_switch_count: rawAttempt.tab_switch_count ?? null,
   }
@@ -110,24 +86,18 @@ async function fetchCandidateView(
     return { test, attempt: { ...attemptBase, answers: [] } }
   }
 
-  const { data: rawQFull } = await supabase
-    .from("questions")
-    .select(
-      `id, question_text, marks, explanation, order_index,
-       options (id, option_text, is_correct, order_index),
-       question_tags (tags (id, name))`
-    )
-    .eq("test_id", testId)
-    .order("order_index")
+  // 3. Fetch full questions and answers in parallel
+  const [qRes, aRes] = await Promise.all([
+    supabase.from("questions").select(`id, question_text, marks, explanation, order_index, options (id, option_text, is_correct, order_index), question_tags (tags (id, name))`).eq("test_id", testId).order("order_index"),
+    supabase.from("attempt_answers").select("question_id, selected_option_ids, is_correct, marks_awarded, time_spent_seconds").eq("attempt_id", rawAttempt.id)
+  ])
+
+  const rawQFull = qRes.data
+  const rawAnswers = aRes.data
 
   if (!rawQFull?.length) {
     return { test, attempt: { ...attemptBase, answers: [] } }
   }
-
-  const { data: rawAnswers } = await supabase
-    .from("attempt_answers")
-    .select("question_id, selected_option_ids, is_correct, marks_awarded, time_spent_seconds")
-    .eq("attempt_id", rawAttempt.id)
 
   const answerMap: Record<string, {
     selected_option_ids: string[]
@@ -182,33 +152,31 @@ async function fetchInstituteView(
 ): Promise<InstituteTestDetail> {
   const supabase = await createClient()
 
-  const { data: raw } = await supabase
-    .from("tests")
-    .select(
-      `id, title, description, instructions, time_limit_seconds,
-       available_from, available_until, status, results_available, institute_id`
-    )
-    .eq("id", testId)
-    .eq("institute_id", userId)
-    .single()
+  // 1. Parallelize core test, questions, attempts, and attempt info
+  const [testRes, questionsRes, attemptsRes, testAttemptsInfoRes] = await Promise.all([
+    supabase.from("tests").select(`id, title, description, instructions, time_limit_seconds, available_from, available_until, status, results_available, institute_id`).eq("id", testId).eq("institute_id", userId).single(),
+    supabase.from("questions").select(`id, question_text, question_type, marks, order_index, explanation, options (id, option_text, is_correct, order_index), question_tags (tags (id, name))`).eq("test_id", testId).order("order_index"),
+    supabase.from("attempt_details").select(`id, student_name, student_email, status, score, total_marks, percentage, time_spent_seconds, started_at, submitted_at`).eq("test_id", testId).order("started_at", { ascending: false }),
+    supabase.from("test_attempts").select("id, student_id, tab_switch_count").eq("test_id", testId)
+  ])
+
+  const raw = testRes.data
+  const rawQuestions = questionsRes.data
+  const rawAttempts = attemptsRes.data
+  const testAttemptsInfo = testAttemptsInfoRes.data
 
   if (!raw) notFound()
 
-  const { data: institute } = await supabase
-    .from("institute_profiles")
-    .select("institute_name")
-    .eq("profile_id", raw.institute_id)
-    .maybeSingle()
+  // 2. Parallelize institute name and candidate profiles
+  const studentIds = Array.from(new Set((testAttemptsInfo ?? []).map((r) => r.student_id).filter(Boolean)))
 
-  const { data: rawQuestions } = await supabase
-    .from("questions")
-    .select(
-      `id, question_text, question_type, marks, order_index, explanation,
-       options (id, option_text, is_correct, order_index),
-       question_tags (tags (id, name))`
-    )
-    .eq("test_id", testId)
-    .order("order_index")
+  const [instituteRes, profilesRes] = await Promise.all([
+    supabase.from("institute_profiles").select("institute_name").eq("profile_id", raw.institute_id).maybeSingle(),
+    supabase.from("candidate_profiles").select("profile_id, course_name, passout_year").in("profile_id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
+  ])
+
+  const institute = instituteRes.data
+  const candidateProfiles = profilesRes.data
 
   const questions: InstituteQuestion[] = (rawQuestions ?? []).map((q) => ({
     id: q.id,
@@ -228,28 +196,6 @@ async function fetchInstituteView(
       .filter(Boolean)
       .flat(),
   }))
-
-  const { data: rawAttempts } = await supabase
-    .from("attempt_details")
-    .select(
-      `id, student_name, student_email, status,
-       score, total_marks, percentage, time_spent_seconds,
-       started_at, submitted_at`
-    )
-    .eq("test_id", testId)
-    .order("started_at", { ascending: false })
-
-  const { data: testAttemptsInfo } = await supabase
-    .from("test_attempts")
-    .select("id, student_id, tab_switch_count")
-    .eq("test_id", testId)
-
-  const studentIds = Array.from(new Set((testAttemptsInfo ?? []).map((r) => r.student_id).filter(Boolean)))
-
-  const { data: candidateProfiles } = await supabase
-    .from("candidate_profiles")
-    .select("profile_id, course_name, passout_year")
-    .in("profile_id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
 
   const profileMap = new Map((candidateProfiles ?? []).map((p) => [p.profile_id, p]))
 
