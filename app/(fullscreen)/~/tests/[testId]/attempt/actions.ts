@@ -16,35 +16,39 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("Unauthorized")
 
-  const { data: candidateProfile } = await supabase
-    .from("candidate_profiles")
-    .select("institute_id, profile_complete, profile_updated")
-    .eq("profile_id", user.id)
-    .maybeSingle()
+  // Parallelize: check profile, test details, and active attempt in one block.
+  const [profileRes, testRes, existingRes] = await Promise.all([
+    supabase
+      .from("candidate_profiles")
+      .select("institute_id, profile_complete, profile_updated")
+      .eq("profile_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("tests")
+      .select("status, institute_id, time_limit_seconds, max_attempts")
+      .eq("id", testId)
+      .single(),
+    supabase
+      .from("test_attempts")
+      .select("id, started_at, expires_at, tab_switch_count")
+      .eq("test_id", testId)
+      .eq("student_id", user.id)
+      .eq("status", "in_progress")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  ])
+
+  const candidateProfile = profileRes.data
+  const test = testRes.data
+  const existingAttempt = existingRes.data
 
   if (!candidateProfile || !candidateProfile.profile_complete || !candidateProfile.profile_updated) {
     throw new Error("Profile is incomplete")
   }
-
-  const { data: test } = await supabase
-    .from("tests")
-    .select("status, institute_id, time_limit_seconds, max_attempts")
-    .eq("id", testId)
-    .single()
-
   if (!test || test.status !== "published" || test.institute_id !== candidateProfile.institute_id) {
     throw new Error("Test not available")
   }
-
-  const { data: existingAttempt } = await supabase
-    .from("test_attempts")
-    .select("id, started_at, expires_at, tab_switch_count")
-    .eq("test_id", testId)
-    .eq("student_id", user.id)
-    .eq("status", "in_progress")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   if (existingAttempt) {
     return {
@@ -98,46 +102,17 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
 
 // ─── Verification ──────────────────────────────────────────────────────────────
 
-async function verifyAttemptAccess(attemptId: string) {
+/**
+ * Efficiently returns the Supabase client and user.
+ * We rely on Postgres-level checks (RLS and the save_answer/grade_attempt RPCs)
+ * for deep security (ownership, institute matching, status) rather than
+ * doing multiple expensive sequential queries here in the server action.
+ */
+async function getSupabaseForAction() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("Unauthorized")
-
-  const { data: attempt } = await supabase
-    .from("test_attempts")
-    .select("student_id, test_id")
-    .eq("id", attemptId)
-    .single()
-  
-  if (!attempt || attempt.student_id !== user.id) {
-    throw new Error("Unauthorized: attempt ownership mismatch")
-  }
-
-  const { data: candidateProfile } = await supabase
-    .from("candidate_profiles")
-    .select("institute_id, profile_complete, profile_updated")
-    .eq("profile_id", user.id)
-    .maybeSingle()
-
-  if (!candidateProfile || !candidateProfile.profile_complete || !candidateProfile.profile_updated) {
-    throw new Error("Forbidden: Profile incomplete")
-  }
-
-  if (!candidateProfile.institute_id) {
-    throw new Error("Forbidden: No institute assigned")
-  }
-
-  const { data: test } = await supabase
-    .from("tests")
-    .select("institute_id")
-    .eq("id", attempt.test_id)
-    .single()
-
-  if (!test || test.institute_id !== candidateProfile.institute_id) {
-    throw new Error("Forbidden: Institute mismatch")
-  }
-
-  return supabase
+  return { supabase, user }
 }
 
 
@@ -154,8 +129,9 @@ export async function saveAnswerAction(
   selectedOptionIds: string[],
   timeSpentSeconds: number = 0
 ): Promise<void> {
-  const supabase = await verifyAttemptAccess(attemptId)
+  const { supabase } = await getSupabaseForAction()
 
+  // The save_answer RPC handles ownership and status checks internally.
   const { error } = await supabase.rpc("save_answer", {
     p_attempt_id: attemptId,
     p_question_id: questionId,
@@ -178,29 +154,30 @@ export async function submitAttemptAction(
   attemptId: string,
   timeSpentSeconds: number
 ): Promise<void> {
-  const supabase = await verifyAttemptAccess(attemptId)
+  const { supabase, user } = await getSupabaseForAction()
 
-  // Persist time spent (best-effort — do not throw on failure)
-  await supabase
-    .from("test_attempts")
-    .update({ time_spent_seconds: timeSpentSeconds })
-    .eq("id", attemptId)
-
-  // Grade + mark as submitted
-  const { error } = await supabase.rpc("grade_attempt", {
+  // 1. Grade the attempt first via self-guarding RPC.
+  const { error: gradeError } = await supabase.rpc("grade_attempt", {
     p_attempt_id: attemptId,
   })
+  if (gradeError) throw new Error(gradeError.message)
 
-  if (error) throw new Error(error.message)
+  // 2. Perform final metadata updates + resolve test_id in parallel.
+  const [{ data: attemptData }] = await Promise.all([
+    supabase
+      .from("test_attempts")
+      .select("test_id")
+      .eq("id", attemptId)
+      .eq("student_id", user.id)
+      .single(),
+    supabase
+      .from("test_attempts")
+      .update({ time_spent_seconds: timeSpentSeconds })
+      .eq("id", attemptId)
+      .eq("student_id", user.id)
+  ])
 
-  // Resolve test_id for redirect
-  const { data } = await supabase
-    .from("test_attempts")
-    .select("test_id")
-    .eq("id", attemptId)
-    .single()
-
-  redirect(data?.test_id ? `/~/tests/${data.test_id}` : "/~/tests")
+  redirect(attemptData?.test_id ? `/~/tests/${attemptData.test_id}` : "/~/tests")
 }
 
 // ─── Record Violation ──────────────────────────────────────────────────────────
@@ -216,12 +193,13 @@ export async function recordViolationAction(
   totalCount: number,
   _timestamp: string
 ): Promise<void> {
-  const supabase = await verifyAttemptAccess(attemptId)
+  const { supabase, user } = await getSupabaseForAction()
 
-  // Unconditionally set the count (idempotent if the same value is written twice)
+  // Direct ownership check in the .eq() filter for high performance
   await supabase
     .from("test_attempts")
     .update({ tab_switch_count: totalCount })
     .eq("id", attemptId)
-    .eq("status", "in_progress") // guard: don't touch already-submitted attempts
+    .eq("student_id", user.id)    // Ownership check
+    .eq("status", "in_progress") // Guard
 }

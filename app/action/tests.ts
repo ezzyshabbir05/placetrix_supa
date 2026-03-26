@@ -62,17 +62,14 @@ async function resolveTagIds(
 
   const normalised = [...new Set(tagNames.map((n) => n.trim()).filter(Boolean))]
 
-  await supabase
+  // Use upsert with select to fetch IDs in one network call
+  const { data, error } = await supabase
     .from("tags")
     .upsert(
       normalised.map((name) => ({ name, created_by: userId })),
-      { onConflict: "name", ignoreDuplicates: true }
+      { onConflict: "name" }
     )
-
-  const { data, error } = await supabase
-    .from("tags")
     .select("id")
-    .in("name", normalised)
   if (error) throw new Error(error.message)
 
   return (data ?? []).map((t) => t.id)
@@ -131,22 +128,24 @@ export async function addQuestionAction(
   testId: string,
   form: QuestionForm
 ): Promise<LocalQuestion> {
-  const supabase = await createClient()
-  const { data: { user }, error: authErr } = await supabase.auth.getUser()
-  if (authErr || !user) throw new Error("Unauthorized")
+  const supabase = await createClient();
+  // ── 1. Parallelize prep (user check + order index) ───────────────────
+  const [authRes, lastRes] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from("questions")
+      .select("order_index")
+      .eq("test_id", testId)
+      .order("order_index", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  ]);
 
-  // Next order_index
-  const { data: last } = await supabase
-    .from("questions")
-    .select("order_index")
-    .eq("test_id", testId)
-    .order("order_index", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  if (authRes.error || !authRes.data.user) throw new Error("Unauthorized");
+  const user = authRes.data.user;
+  const orderIndex = (lastRes.data?.order_index ?? 0) + 1;
 
-  const orderIndex = (last?.order_index ?? 0) + 1
-
-  // Insert question
+  // ── 2. Insert question (must happen before options/tags) ─────────────
   const { data: q, error: qErr } = await supabase
     .from("questions")
     .insert({
@@ -158,32 +157,29 @@ export async function addQuestionAction(
       order_index: orderIndex,
     })
     .select("id, order_index")
-    .single()
-  if (qErr) throw new Error(qErr.message)
+    .single();
+  if (qErr) throw new Error(qErr.message);
 
-  // Insert options
-  const { error: optErr } = await supabase
-    .from("options")                          // ✅ fixed: was "question_options"
-    .insert(
+  // ── 3. Parallelize options + tags ───────────────────────────────────
+  await Promise.all([
+    supabase.from("options").insert(
       form.options.map((o, i) => ({
         question_id: q.id,
         option_text: o.option_text.trim(),
         is_correct: o.is_correct,
         order_index: i,
       }))
-    )
-  if (optErr) throw new Error(optErr.message)
+    ),
+    resolveTagIds(supabase, form.tag_names, user.id).then(async (tagIds) => {
+      if (tagIds.length) {
+        await supabase
+          .from("question_tags")
+          .insert(tagIds.map((tag_id) => ({ question_id: q.id, tag_id })));
+      }
+    }),
+  ]);
 
-  // Resolve & attach tags
-  const tagIds = await resolveTagIds(supabase, form.tag_names, user.id)
-  if (tagIds.length) {
-    const { error: tagErr } = await supabase
-      .from("question_tags")
-      .insert(tagIds.map((tag_id) => ({ question_id: q.id, tag_id })))
-    if (tagErr) throw new Error(tagErr.message)
-  }
-
-  revalidatePath(`/~/tests/${testId}/edit`)
+  revalidatePath(`/~/tests/${testId}/edit`);
 
   return {
     id: q.id,
@@ -204,57 +200,52 @@ export async function updateQuestionAction(
   form: QuestionForm,
   testId: string
 ): Promise<LocalQuestion> {
-  const supabase = await createClient()
-  const { data: { user }, error: authErr } = await supabase.auth.getUser()
-  if (authErr || !user) throw new Error("Unauthorized")
+  const supabase = await createClient();
+  const [authRes, qRes] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from("questions")
+      .update({
+        question_text: form.question_text.trim(),
+        question_type: form.question_type,
+        marks: parseFloat(form.marks),
+        explanation: form.explanation.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", questionId)
+      .select("id, order_index")
+      .single()
+  ]);
 
-  const { data: q, error: qErr } = await supabase
-    .from("questions")
-    .update({
-      question_text: form.question_text.trim(),
-      question_type: form.question_type,
-      marks: parseFloat(form.marks),
-      explanation: form.explanation.trim() || null,
-      updated_at: new Date().toISOString(),
+  if (authRes.error || !authRes.data.user) throw new Error("Unauthorized");
+  if (qRes.error) throw new Error(qRes.error.message);
+  
+  const user = authRes.data.user;
+  const q = qRes.data;
+
+  // Parallelize cleanup and rewrite of options/tags
+  await Promise.all([
+    supabase.from("options").delete().eq("question_id", questionId).then(() => 
+      supabase.from("options").insert(
+        form.options.map((o, i) => ({
+          question_id: questionId,
+          option_text: o.option_text.trim(),
+          is_correct: o.is_correct,
+          order_index: i,
+        }))
+      )
+    ),
+    supabase.from("question_tags").delete().eq("question_id", questionId).then(async () => {
+      const tagIds = await resolveTagIds(supabase, form.tag_names, user.id);
+      if (tagIds.length) {
+        await supabase
+          .from("question_tags")
+          .insert(tagIds.map((tag_id) => ({ question_id: questionId, tag_id })));
+      }
     })
-    .eq("id", questionId)
-    .select("id, order_index")
-    .single()
-  if (qErr) throw new Error(qErr.message)
+  ]);
 
-  // Replace options
-  await supabase
-    .from("options")                          // ✅ fixed: was "question_options"
-    .delete()
-    .eq("question_id", questionId)
-
-  const { error: optErr } = await supabase
-    .from("options")                          // ✅ fixed: was "question_options"
-    .insert(
-      form.options.map((o, i) => ({
-        question_id: questionId,
-        option_text: o.option_text.trim(),
-        is_correct: o.is_correct,
-        order_index: i,
-      }))
-    )
-  if (optErr) throw new Error(optErr.message)
-
-  // Replace tags
-  await supabase
-    .from("question_tags")
-    .delete()
-    .eq("question_id", questionId)
-
-  const tagIds = await resolveTagIds(supabase, form.tag_names, user.id)
-  if (tagIds.length) {
-    const { error: tagErr } = await supabase
-      .from("question_tags")
-      .insert(tagIds.map((tag_id) => ({ question_id: questionId, tag_id })))
-    if (tagErr) throw new Error(tagErr.message)
-  }
-
-  revalidatePath(`/~/tests/${testId}/edit`)
+  revalidatePath(`/~/tests/${testId}/edit`);
 
   return {
     id: questionId,

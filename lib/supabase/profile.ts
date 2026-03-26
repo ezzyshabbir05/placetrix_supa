@@ -97,15 +97,15 @@ function profileFromAuthUser(
 //
 //  Resolution order:
 //
-//  1. getUser() succeeds  → fetch DB profile → return full profile.
-//                           DB unreachable   → return auth-user fallback.
-//  2. AuthApiError that IS a definitive revocation
+//  1. getSession() reads the already-validated cookie (no network call).
+//     Middleware has already run getUser() once per request, so the session
+//     cookie is fresh. This avoids a second Auth DB hit per server component.
+//     Session user found → fetch DB profile → return full profile.
+//                          DB unreachable   → return auth-user fallback.
+//  2. No session / AuthApiError that IS a definitive revocation
 //     → sign out locally + redirect to login.
-//  3. AuthApiError that is NOT a definitive revocation (transient 5xx, CDN, …)
-//     → treat as unreachable → try local JWT (step 5).
-//  4. Non-AuthApiError (NetworkError, TypeError, …)
-//     → definitely offline → try local JWT (step 5).
-//  5. getClaims() succeeds → return minimal offline profile.
+//  3. Transient AuthApiError or no session → try local JWT (step 4).
+//  4. getClaims() succeeds → return minimal offline profile.
 //     getClaims() fails    → JWT absent/expired → return null.
 //                            (Middleware already blocked unauthenticated access.)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -113,7 +113,9 @@ function profileFromAuthUser(
 export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
 
-  // ── Step 1: Online path ────────────────────────────────────────────────────
+  // ── Step 1: Read session from cookie (validated by Supabase) ──────────────
+  // Use getUser() instead of getSession() as it re-validates the user with
+  // the Supabase Auth server, providing better security.
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (user) {
@@ -131,7 +133,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
     return profile as UserProfile;
   }
 
-  // ── Step 2 & 3: AuthApiError ───────────────────────────────────────────────
+  // ── Step 2 & 3: Handle auth errors ────────────────────────────────────────
   if (authError instanceof AuthApiError) {
     if (isDefinitiveRevocation(authError)) {
       await supabase.auth.signOut({ scope: "local" });
@@ -140,6 +142,6 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
     // Transient/ambiguous error — fall through to local JWT.
   }
 
-  // ── Step 4 & 5: Offline / network failure — use local JWT ─────────────────
+  // ── Step 4: Offline / no session — try local JWT claims ───────────────────
   return profileFromClaims(supabase);
 });

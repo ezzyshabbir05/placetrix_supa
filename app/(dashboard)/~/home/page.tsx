@@ -99,42 +99,49 @@ export default async function HomePage() {
       ? "Your profile has been started but not saved yet."
       : "A few required fields are still missing.";
 
-    // ── Fetch test stats ────────────────────────────────────────────────────
-    let totalTests = 0;
-    let liveTests = 0;
+    // ── Fetch test stats (Optimized) ───────────────────────────────
+    let totalTests    = 0;
+    let liveTests     = 0;
     let upcomingTests = 0;
     let completedTests = 0;
 
     if (cp?.institute_id) {
-      const { data: rawTests } = await supabase
-        .from("tests")
-        .select("id, available_from, available_until")
-        .eq("status", "published")
-        .eq("institute_id", cp.institute_id);
+      const nowIso = new Date().toISOString();
 
-      if (rawTests?.length) {
-        totalTests = rawTests.length;
-        const testIds = rawTests.map((t) => t.id);
+      // Parallelize count queries for performance
+      const [allRes, liveRes, upcomingRes, attemptsRes] = await Promise.all([
+        supabase
+          .from("tests")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "published")
+          .eq("institute_id", cp.institute_id),
 
-        const now = new Date();
-        for (const t of rawTests) {
-          const from  = t.available_from  ? new Date(t.available_from)  : null;
-          const until = t.available_until ? new Date(t.available_until) : null;
-          if (from && from > now)         upcomingTests++;
-          else if (until && until < now)  { /* past */ }
-          else                             liveTests++;
-        }
+        supabase
+          .from("tests")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "published")
+          .eq("institute_id", cp.institute_id)
+          .or(`available_from.is.null,available_from.lte.${nowIso}`)
+          .or(`available_until.is.null,available_until.gte.${nowIso}`),
 
-        // Submitted attempts by this candidate
-        const { data: attempts } = await supabase
+        supabase
+          .from("tests")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "published")
+          .eq("institute_id", cp.institute_id)
+          .gt("available_from", nowIso),
+
+        supabase
           .from("test_attempts")
-          .select("test_id")
+          .select("*", { count: "exact", head: true })
           .eq("student_id", profile.id)
           .eq("status", "submitted")
-          .in("test_id", testIds);
+      ]);
 
-        completedTests = attempts?.length ?? 0;
-      }
+      totalTests     = allRes.count ?? 0;
+      liveTests      = liveRes.count ?? 0;
+      upcomingTests  = upcomingRes.count ?? 0;
+      completedTests = attemptsRes.count ?? 0;
     }
 
     return (
@@ -239,32 +246,24 @@ export default async function HomePage() {
       ? "Your profile has been started but not saved yet."
       : "A few required fields are still missing.";
 
-    // ── Fetch test stats ────────────────────────────────────────────────────
-    const { data: rawTests } = await supabase
-      .from("tests")
-      .select(
-        `id, status, available_from, available_until,
-         questions(count),
-         test_attempts(count)`
-      )
-      .eq("institute_id", profile.id);
+    // ── Fetch test stats (Optimized) ───────────────────────────────
+    const nowIso = new Date().toISOString();
 
-    let totalTests    = 0;
-    let liveTests     = 0;
-    let upcomingTests = 0;
-    let pastTests     = 0;
-    let draftTests    = 0;
-    let totalAttempts = 0;
+    const [allRes, liveRes, upcomingRes, pastRes, draftRes, attemptsRes] = await Promise.all([
+      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id),
+      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "published").or(`available_from.is.null,available_from.lte.${nowIso}`).or(`available_until.is.null,available_until.gte.${nowIso}`),
+      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "published").gt("available_from", nowIso),
+      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "published").lt("available_until", nowIso),
+      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "draft"),
+      supabase.from("test_attempts").select("id, tests!inner(institute_id)", { count: "exact", head: true }).eq("tests.institute_id", profile.id)
+    ]);
 
-    for (const t of rawTests ?? []) {
-      totalTests++;
-      const derived = deriveStatus(t.status, t.available_from, t.available_until);
-      if (derived === "live")     liveTests++;
-      if (derived === "upcoming") upcomingTests++;
-      if (derived === "past")     pastTests++;
-      if (derived === "draft")    draftTests++;
-      totalAttempts += (t.test_attempts as unknown as { count: number }[])?.[0]?.count ?? 0;
-    }
+    const totalTests     = allRes.count ?? 0;
+    const liveTests      = liveRes.count ?? 0;
+    const upcomingTests  = upcomingRes.count ?? 0;
+    const pastTests      = pastRes.count ?? 0;
+    const draftTests     = draftRes.count ?? 0;
+    const totalAttempts  = attemptsRes.count ?? 0;
 
     return (
       <div className="min-h-screen w-full">

@@ -88,7 +88,23 @@ export default function SignUpPage() {
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
+
+      // 504 / network timeout: the account may have been created even though
+      // the server didn't respond in time. Don't let the user retry blindly —
+      // they may already have a confirmation email waiting.
+      if (error) {
+        if (
+          error.status === 504 ||
+          error.message?.toLowerCase().includes("timeout") ||
+          error.message?.toLowerCase().includes("fetch")
+        ) {
+          setError(
+            "The server took too long to respond. Your account may have been created — please check your email for a confirmation link, or try signing in."
+          );
+          return;
+        }
+        throw error;
+      }
 
       if (data.user?.identities?.length === 0) {
         setError(
@@ -105,6 +121,7 @@ export default function SignUpPage() {
       setIsLoading(false);
     }
   };
+
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
