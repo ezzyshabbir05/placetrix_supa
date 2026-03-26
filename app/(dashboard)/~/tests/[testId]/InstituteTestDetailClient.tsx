@@ -112,11 +112,11 @@ function StatsBar({ test, liveAttempts }: { test: InstituteTestDetail; liveAttem
   const avgPct =
     submitted.length > 0
       ? Math.round(
-          submitted.reduce(
-            (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
-            0
-          ) / submitted.length
-        )
+        submitted.reduce(
+          (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
+          0
+        ) / submitted.length
+      )
       : null
 
   const completionPct =
@@ -398,11 +398,11 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
   const avgPct =
     submitted.length > 0
       ? Math.round(
-          submitted.reduce(
-            (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
-            0
-          ) / submitted.length
-        )
+        submitted.reduce(
+          (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
+          0
+        ) / submitted.length
+      )
       : null
 
   type SortColumn = "student_name" | "education" | "status" | "score" | "time" | "violations" | "submitted"
@@ -449,12 +449,12 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
 
   const SortableHead = ({ label, col, align = "left" }: { label: ReactNode; col: SortColumn; align?: "left" | "center" | "right" }) => {
     return (
-      <TableHead 
+      <TableHead
         className={cn(
-          "text-xs font-semibold select-none cursor-pointer hover:bg-muted/60 transition-colors", 
-          align === "right" && "text-right", 
+          "text-xs font-semibold select-none cursor-pointer hover:bg-muted/60 transition-colors",
+          align === "right" && "text-right",
           align === "center" && "text-center"
-        )} 
+        )}
         onClick={() => handleSort(col)}
       >
         <div className={cn("flex items-center gap-1.5", align === "right" && "justify-end", align === "center" && "justify-center")}>
@@ -549,9 +549,8 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
       timeStyle: "short",
     })
 
-    const attemptInfo = `Total Attempts: ${attempts.length}   |   ${
-      avgPct != null ? `Average Score: ${avgPct}%   |   ` : ""
-    }Exported On: ${dateStr}`
+    const attemptInfo = `Total Attempts: ${attempts.length}   |   ${avgPct != null ? `Average Score: ${avgPct}%   |   ` : ""
+      }Exported On: ${dateStr}`
     doc.text(attemptInfo, 14, currentY)
     currentY += 8
 
@@ -606,12 +605,16 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
       },
       didDrawPage: (data) => {
         const currentPage = data.pageNumber
+        const pageHeight = doc.internal.pageSize.height
+        doc.setFontSize(6)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(180, 180, 180)
+        doc.text("Generated with Placetrix", 14, pageHeight - 8)
         doc.setFontSize(7)
-        doc.setTextColor(150, 150, 150)
         doc.text(
           `Page ${currentPage}`,
           pageWidth - 14,
-          doc.internal.pageSize.height - 8,
+          pageHeight - 8,
           { align: "right" }
         )
       },
@@ -712,7 +715,7 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
           </Button>
 
           <Separator orientation="vertical" className="h-4 md:hidden" />
-          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs md:hidden flex items-center gap-1.5">
@@ -1178,8 +1181,8 @@ export function InstituteTestDetailClient({
                 {isLoading("togglePublish")
                   ? "Saving…"
                   : test.status === "published"
-                  ? "Unpublish"
-                  : "Publish"}
+                    ? "Unpublish"
+                    : "Publish"}
               </DropdownMenuItem>
 
               {/* Results toggle */}
@@ -1197,8 +1200,8 @@ export function InstituteTestDetailClient({
                 {isLoading("toggleResults")
                   ? "Saving…"
                   : test.results_available
-                  ? "Hide Results"
-                  : "Release Results"}
+                    ? "Hide Results"
+                    : "Release Results"}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
