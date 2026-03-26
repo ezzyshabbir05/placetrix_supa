@@ -29,6 +29,14 @@ function isAuthPage(pathname: string): boolean {
 // ─── updateSession ─────────────────────────────────────────────────────────────
 
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
+  const { pathname } = request.nextUrl;
+
+  // 1. If it's a completely public route (neither protected nor auth),
+  //    we skip the heavy getUser() network call and Supabase client init entirely.
+  if (!isProtected(pathname) && !isAuthPage(pathname)) {
+    return NextResponse.next({ request });
+  }
+
   // Start with a plain pass-through response.
   let supabaseResponse = NextResponse.next({ request });
 
@@ -55,13 +63,6 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     }
   );
 
-  const { pathname } = request.nextUrl;
-
-  // 1. If it's a completely public route (neither protected nor auth),
-  //    we skip the heavy getUser() network call entirely.
-  if (!isProtected(pathname) && !isAuthPage(pathname)) {
-    return supabaseResponse;
-  }
 
   // 2. Optimization: Check for prefetch requests.
   //    Next.js prefetches follow links; we can trust the cookie (getSession)
