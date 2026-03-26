@@ -4,8 +4,9 @@
 // app/~/tests/[id]/InstituteTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useCallback, type ReactNode } from "react"
+import { useState, useCallback, useEffect, useRef, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -65,6 +66,9 @@ import {
   FileSpreadsheet,
   FileText,
   AlertCircle,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
@@ -100,9 +104,9 @@ function useActionState() {
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
 
-function StatsBar({ test }: { test: InstituteTestDetail }) {
-  const submitted = test.attempts.filter((a) => a.status === "submitted")
-  const inProgress = test.attempts.filter((a) => a.status === "in_progress")
+function StatsBar({ test, liveAttempts }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[] }) {
+  const submitted = liveAttempts.filter((a) => a.status === "submitted")
+  const inProgress = liveAttempts.filter((a) => a.status === "in_progress")
   const totalMarks = test.questions.reduce((s, q) => s + q.marks, 0)
 
   const avgPct =
@@ -116,8 +120,8 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
       : null
 
   const completionPct =
-    test.attempts.length > 0
-      ? Math.round((submitted.length / test.attempts.length) * 100)
+    liveAttempts.length > 0
+      ? Math.round((submitted.length / liveAttempts.length) * 100)
       : 0
 
   return (
@@ -139,7 +143,7 @@ function StatsBar({ test }: { test: InstituteTestDetail }) {
             <Users className="h-3.5 w-3.5" />
             <p className="text-xs font-medium">Attempts</p>
           </div>
-          <p className="text-2xl font-bold tabular-nums">{test.attempts.length}</p>
+          <p className="text-2xl font-bold tabular-nums">{liveAttempts.length}</p>
           <p className="text-xs text-muted-foreground mt-0.5">{inProgress.length} in progress</p>
         </CardContent>
       </Card>
@@ -383,8 +387,8 @@ function AttemptScore({
 
 // ─── Attempts Tab ─────────────────────────────────────────────────────────────
 
-function AttemptsTab({ test }: { test: InstituteTestDetail }) {
-  const attempts = test.attempts
+function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[] }) {
+  const attempts = liveAttempts
   const [scoresVisible, setScoresVisible] = useState(false)
 
   const submitted = attempts.filter((a) => a.status === "submitted")
@@ -401,15 +405,76 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
         )
       : null
 
-  const sorted = [
-    ...submitted.sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? "")),
-    ...inProgress.sort((a, b) => b.started_at.localeCompare(a.started_at)),
-  ]
+  type SortColumn = "student_name" | "education" | "status" | "score" | "time" | "violations" | "submitted"
+  type SortDirection = "asc" | "desc"
+  const [sortCol, setSortCol] = useState<SortColumn>("submitted")
+  const [sortDir, setSortDir] = useState<SortDirection>("desc")
+
+  const handleSort = (col: SortColumn) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc")
+    else { setSortCol(col); setSortDir("desc") }
+  }
+
+  const sorted = [...attempts].sort((a, b) => {
+    let diff = 0
+    switch (sortCol) {
+      case "student_name":
+        diff = (a.student_name || "").localeCompare(b.student_name || "")
+        break
+      case "education":
+        diff = (a.branch || "").localeCompare(b.branch || "")
+        if (diff === 0) diff = (a.passout_year || 0) - (b.passout_year || 0)
+        break
+      case "status":
+        diff = a.status.localeCompare(b.status)
+        break
+      case "score": {
+        const scoreA = a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks) : -1
+        const scoreB = b.status === "submitted" ? resolvePct(b.percentage, b.score, b.total_marks) : -1
+        diff = scoreA - scoreB
+        break
+      }
+      case "time":
+        diff = (a.time_spent_seconds || 0) - (b.time_spent_seconds || 0)
+        break
+      case "violations":
+        diff = (a.tab_switch_count || 0) - (b.tab_switch_count || 0)
+        break
+      case "submitted":
+        diff = (a.submitted_at ?? a.started_at).localeCompare(b.submitted_at ?? b.started_at)
+        break
+    }
+    return sortDir === "asc" ? diff : -diff
+  })
+
+  const SortableHead = ({ label, col, align = "left" }: { label: ReactNode; col: SortColumn; align?: "left" | "center" | "right" }) => {
+    return (
+      <TableHead 
+        className={cn(
+          "text-xs font-semibold select-none cursor-pointer hover:bg-muted/60 transition-colors", 
+          align === "right" && "text-right", 
+          align === "center" && "text-center"
+        )} 
+        onClick={() => handleSort(col)}
+      >
+        <div className={cn("flex items-center gap-1.5", align === "right" && "justify-end", align === "center" && "justify-center")}>
+          {label}
+          {sortCol === col ? (
+            sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+          ) : (
+            <ArrowUpDown className="h-3 w-3 opacity-20" />
+          )}
+        </div>
+      </TableHead>
+    )
+  }
 
   const handleExportCSV = () => {
     const headers = [
       "Student Name",
       "Email",
+      "Branch",
+      "Passout Year",
       "Status",
       "Score",
       "Total Marks",
@@ -423,6 +488,8 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
     const rows = sorted.map((a) => [
       a.student_name || "Unknown",
       a.student_email || "—",
+      a.branch || "—",
+      a.passout_year?.toString() || "—",
       a.status === "submitted" ? "Submitted" : "In Progress",
       a.score ?? "—",
       a.total_marks ?? "—",
@@ -488,10 +555,12 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
     doc.text(attemptInfo, 14, currentY)
     currentY += 8
 
-    const tableColumn = ["Student", "Email", "Status", "Score", "Pct", "Time", "Viol", "Submitted"]
+    const tableColumn = ["Student", "Email", "Branch", "Grad", "Status", "Score", "Pct", "Time", "Viol", "Submitted"]
     const tableRows = sorted.map((a) => [
       a.student_name || "Unknown",
       a.student_email || "—",
+      a.branch || "—",
+      a.passout_year?.toString() || "—",
       a.status === "submitted" ? "Submitted" : "In Progress",
       a.status === "submitted" ? `${a.score ?? "—"}/${a.total_marks ?? "—"}` : "—",
       a.status === "submitted" ? `${resolvePct(a.percentage, a.score, a.total_marks)}%` : "—",
@@ -507,31 +576,33 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
       theme: "plain",
       styles: {
         font: "helvetica",
-        fontSize: 8,
-        cellPadding: 2,
-        textColor: [40, 40, 40],
+        fontSize: 7,
+        cellPadding: 3,
+        textColor: [60, 60, 60],
       },
       headStyles: {
-        fontSize: 8.5,
-        textColor: [0, 0, 0],
+        fontSize: 7.5,
+        textColor: [20, 20, 20],
         fontStyle: "bold",
-        fillColor: [249, 250, 251],
-        lineWidth: { bottom: 0.5 },
+        fillColor: [252, 252, 252],
+        lineWidth: { bottom: 0.2 },
         lineColor: [200, 200, 200],
       },
       bodyStyles: {
         lineWidth: { bottom: 0.1 },
-        lineColor: [230, 230, 230],
+        lineColor: [240, 240, 240],
       },
       columnStyles: {
-        0: { cellWidth: 40 },
-        1: { cellWidth: 65 },
-        2: { cellWidth: 20 },
-        3: { halign: "right", cellWidth: 16 },
-        4: { halign: "right", cellWidth: 12 },
-        5: { halign: "right", cellWidth: 20 },
-        6: { halign: "right", cellWidth: 10 },
-        7: { halign: "right" },
+        0: { cellWidth: 35 }, // Student
+        1: { cellWidth: 50 }, // Email
+        2: { cellWidth: 40 }, // Branch
+        3: { halign: "center", cellWidth: 15 }, // Grad
+        4: { cellWidth: 18 }, // Status
+        5: { halign: "right", cellWidth: 15 }, // Score
+        6: { halign: "right", cellWidth: 12 }, // Pct
+        7: { halign: "right", cellWidth: 20 }, // Time
+        8: { halign: "center", cellWidth: 12 }, // Viol
+        9: { halign: "right" }, // Submitted
       },
       didDrawPage: (data) => {
         const currentPage = data.pageNumber
@@ -630,14 +701,32 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
           )}
           <span>{scoresVisible ? "Scores visible" : "Scores hidden"}</span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-2 text-xs"
-          onClick={() => setScoresVisible((v) => !v)}
-        >
-          {scoresVisible ? "Hide" : "Show Scores"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => setScoresVisible((v) => !v)}
+          >
+            {scoresVisible ? "Hide" : "Show Scores"}
+          </Button>
+
+          <Separator orientation="vertical" className="h-4 md:hidden" />
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs md:hidden flex items-center gap-1.5">
+                Sort <ArrowUpDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => handleSort("student_name")}>Name {sortCol === "student_name" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("score")}>Score {sortCol === "score" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("time")}>Time spent {sortCol === "time" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("submitted")}>Date submitted {sortCol === "submitted" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Mobile compact list */}
@@ -653,6 +742,12 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
               </p>
               <p className="truncate text-[11px] text-muted-foreground leading-tight mt-0.5">
                 {a.student_email ?? formatDateTime(a.started_at)}
+                {(a.branch || a.passout_year) && (
+                  <>
+                    <span className="mx-1.5 opacity-50">•</span>
+                    {a.branch || "—"} {a.passout_year ? `('${a.passout_year.toString().slice(-2)})` : ""}
+                  </>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2.5 shrink-0">
@@ -685,12 +780,13 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="text-xs font-semibold">Student</TableHead>
-              <TableHead className="text-xs font-semibold">Status</TableHead>
-              <TableHead className="text-right text-xs font-semibold">Score</TableHead>
-              <TableHead className="text-right text-xs font-semibold">Time</TableHead>
-              <TableHead className="text-center text-xs font-semibold">Violations</TableHead>
-              <TableHead className="text-xs font-semibold">Submitted</TableHead>
+              <SortableHead label="Student" col="student_name" />
+              <SortableHead label="Education" col="education" />
+              <SortableHead label="Status" col="status" />
+              <SortableHead label="Score" col="score" align="right" />
+              <SortableHead label="Time" col="time" align="right" />
+              <SortableHead label="Violations" col="violations" align="center" />
+              <SortableHead label="Submitted" col="submitted" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -701,6 +797,12 @@ function AttemptsTab({ test }: { test: InstituteTestDetail }) {
                   {a.student_email && (
                     <p className="truncate text-xs text-muted-foreground">{a.student_email}</p>
                   )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm">{a.branch || "—"}</span>
+                    <span className="text-xs text-muted-foreground">{a.passout_year || "—"}</span>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <span
@@ -880,6 +982,7 @@ function OverviewTab({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 interface Props {
+  testId: string
   test: InstituteTestDetail
   onToggleResults?: () => Promise<void>
   onTogglePublish?: () => Promise<void>
@@ -887,6 +990,7 @@ interface Props {
 }
 
 export function InstituteTestDetailClient({
+  testId,
   test,
   onToggleResults,
   onTogglePublish,
@@ -895,6 +999,107 @@ export function InstituteTestDetailClient({
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("overview")
   const { run, isLoading, anyLoading } = useActionState()
+
+  // ── Live attempts state ──────────────────────────────────────────────────
+  const [liveAttempts, setLiveAttempts] = useState<InstituteAttemptRow[]>(test.attempts)
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null)
+
+  // Re-fetch the full attempts list from the client side
+  const refreshAttempts = useCallback(async () => {
+    const supabase = createClient()
+
+    const { data: rawAttempts } = await supabase
+      .from("attempt_details")
+      .select(
+        `id, student_name, student_email, status,
+         score, total_marks, percentage, time_spent_seconds,
+         started_at, submitted_at`
+      )
+      .eq("test_id", testId)
+      .order("started_at", { ascending: false })
+
+    const { data: attemptsInfo } = await supabase
+      .from("test_attempts")
+      .select("id, student_id, tab_switch_count")
+      .eq("test_id", testId)
+
+    const studentIds = Array.from(
+      new Set((attemptsInfo ?? []).map((r) => r.student_id).filter(Boolean))
+    ) as string[]
+
+    const { data: candidateProfiles } = await supabase
+      .from("candidate_profiles")
+      .select("profile_id, course_name, passout_year")
+      .in("profile_id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
+
+    const profileMap = new Map((candidateProfiles ?? []).map((p) => [p.profile_id, p]))
+    const extraInfoMap = new Map(
+      (attemptsInfo ?? []).map((r) => [
+        r.id,
+        {
+          tab_switch_count: r.tab_switch_count,
+          branch: r.student_id ? profileMap.get(r.student_id)?.course_name ?? null : null,
+          passout_year: r.student_id ? profileMap.get(r.student_id)?.passout_year ?? null : null,
+        },
+      ])
+    )
+
+    const fullTotalMarks = test.questions.reduce((s, q) => s + q.marks, 0)
+
+    const freshAttempts: InstituteAttemptRow[] = (rawAttempts ?? [])
+      .filter(
+        (a): a is typeof a & { id: string; started_at: string } =>
+          a.id != null && a.started_at != null
+      )
+      .map((a) => {
+        const extra = extraInfoMap.get(a.id)
+        return {
+          id: a.id,
+          student_name: a.student_name ?? null,
+          student_email: a.student_email ?? null,
+          status: a.status as InstituteAttemptRow["status"],
+          score: a.score ?? null,
+          total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
+          percentage:
+            a.score != null && fullTotalMarks > 0
+              ? Math.round((a.score / fullTotalMarks) * 100)
+              : (a.percentage ?? null),
+          time_spent_seconds: a.time_spent_seconds ?? null,
+          started_at: a.started_at,
+          submitted_at: a.submitted_at ?? null,
+          tab_switch_count: extra?.tab_switch_count ?? null,
+          branch: extra?.branch ?? null,
+          passout_year: extra?.passout_year ?? null,
+        }
+      })
+
+    setLiveAttempts(freshAttempts)
+  }, [testId, test.questions])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`test-attempts:${testId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "test_attempts",
+          filter: `test_id=eq.${testId}`,
+        },
+        () => {
+          refreshAttempts()
+        }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [testId, refreshAttempts])
 
   return (
     <div className="min-h-screen w-full bg-background">
@@ -1047,7 +1252,7 @@ export function InstituteTestDetailClient({
         </div>
 
         {/* ── Stats ───────────────────────────────────────────────────────── */}
-        <StatsBar test={test} />
+        <StatsBar test={test} liveAttempts={liveAttempts} />
 
         {/* ── Tabs ────────────────────────────────────────────────────────── */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -1056,7 +1261,7 @@ export function InstituteTestDetailClient({
               {[
                 { value: "overview", label: "Overview", icon: <Info className="h-3.5 w-3.5" />, count: null },
                 { value: "questions", label: "Questions", icon: <ListChecks className="h-3.5 w-3.5" />, count: test.questions.length },
-                { value: "attempts", label: "Attempts", icon: <Users className="h-3.5 w-3.5" />, count: test.attempts.length },
+                { value: "attempts", label: "Attempts", icon: <Users className="h-3.5 w-3.5" />, count: liveAttempts.length },
               ].map(({ value, label, icon, count }) => (
                 <TabsTrigger
                   key={value}
@@ -1098,7 +1303,7 @@ export function InstituteTestDetailClient({
           </TabsContent>
 
           <TabsContent value="attempts" className="m-0">
-            <AttemptsTab test={test} />
+            <AttemptsTab test={test} liveAttempts={liveAttempts} />
           </TabsContent>
         </Tabs>
       </div>

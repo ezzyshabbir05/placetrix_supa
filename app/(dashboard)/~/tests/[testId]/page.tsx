@@ -239,12 +239,28 @@ async function fetchInstituteView(
     .eq("test_id", testId)
     .order("started_at", { ascending: false })
 
-  const { data: switchCounts } = await supabase
+  const { data: testAttemptsInfo } = await supabase
     .from("test_attempts")
-    .select("id, tab_switch_count")
+    .select("id, student_id, tab_switch_count")
     .eq("test_id", testId)
 
-  const switchCountMap = new Map((switchCounts ?? []).map((r) => [r.id, r.tab_switch_count]))
+  const studentIds = Array.from(new Set((testAttemptsInfo ?? []).map((r) => r.student_id).filter(Boolean)))
+
+  const { data: candidateProfiles } = await supabase
+    .from("candidate_profiles")
+    .select("profile_id, course_name, passout_year")
+    .in("profile_id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
+
+  const profileMap = new Map((candidateProfiles ?? []).map((p) => [p.profile_id, p]))
+
+  const extraInfoMap = new Map((testAttemptsInfo ?? []).map((r) => [
+    r.id,
+    {
+      tab_switch_count: r.tab_switch_count,
+      branch: r.student_id ? profileMap.get(r.student_id)?.course_name ?? null : null,
+      passout_year: r.student_id ? profileMap.get(r.student_id)?.passout_year ?? null : null,
+    }
+  ]))
 
   const fullTotalMarks = questions.reduce((s, q) => s + q.marks, 0)
 
@@ -252,22 +268,27 @@ async function fetchInstituteView(
     .filter((a): a is typeof a & { id: string; started_at: string } =>
       a.id != null && a.started_at != null
     )
-    .map((a) => ({
-      id: a.id,
-      student_name: a.student_name ?? null,
-      student_email: a.student_email ?? null,
-      status: a.status as InstituteAttemptRow["status"],
-      score: a.score ?? null,
-      total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
-      percentage:
-        a.score != null && fullTotalMarks > 0
-          ? Math.round((a.score / fullTotalMarks) * 100)
-          : (a.percentage ?? null),
-      time_spent_seconds: a.time_spent_seconds ?? null,
-      started_at: a.started_at,
-      submitted_at: a.submitted_at ?? null,
-      tab_switch_count: switchCountMap.get(a.id) ?? null,
-    }))
+    .map((a) => {
+      const extra = extraInfoMap.get(a.id)
+      return {
+        id: a.id,
+        student_name: a.student_name ?? null,
+        student_email: a.student_email ?? null,
+        status: a.status as InstituteAttemptRow["status"],
+        score: a.score ?? null,
+        total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
+        percentage:
+          a.score != null && fullTotalMarks > 0
+            ? Math.round((a.score / fullTotalMarks) * 100)
+            : (a.percentage ?? null),
+        time_spent_seconds: a.time_spent_seconds ?? null,
+        started_at: a.started_at,
+        submitted_at: a.submitted_at ?? null,
+        tab_switch_count: extra?.tab_switch_count ?? null,
+        branch: extra?.branch ?? null,
+        passout_year: extra?.passout_year ?? null,
+      }
+    })
 
 
   return {
@@ -312,6 +333,7 @@ export default async function TestDetailPage({
     const test = await fetchInstituteView(testId, profile.id)
     return (
       <InstituteTestDetailClient
+        testId={testId}
         test={test}
         onToggleResults={toggleResultsAction.bind(null, testId)}
         onTogglePublish={togglePublishAction.bind(null, testId)}

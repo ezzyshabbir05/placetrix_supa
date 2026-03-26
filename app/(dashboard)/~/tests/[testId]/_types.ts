@@ -108,6 +108,8 @@ export interface InstituteAttemptRow
   started_at: string     // same — guaranteed by .filter() in page.tsx
   status: "in_progress" | "submitted" | "abandoned" | "auto_submitted"
   tab_switch_count: number | null
+  branch: string | null
+  passout_year: number | null
 }
 
 export interface InstituteTestDetail
