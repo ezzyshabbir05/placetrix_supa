@@ -725,6 +725,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     if (usernameStatus === "taken") e.username = "This username is already taken.";
     if (usernameStatus === "checking") e.username = "Please wait for username availability check.";
     if (!firstName.trim()) e.firstName = "First name is required";
+    if (!middleName.trim()) e.middleName = "Middle name is required";
     if (!lastName.trim()) e.lastName = "Last name is required";
     if (!gender) e.gender = "Gender is required";
     if (!phoneNumber.trim()) e.phoneNumber = "Contact number is required";
@@ -1008,8 +1009,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                     <FieldError message={errors.firstName} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Middle Name</Label>
+                    <Label>Middle Name<RequiredMark /></Label>
                     <Input placeholder="Middle name" value={middleName} onChange={(e) => handleMiddleName(e.target.value)} />
+                    <FieldError message={errors.middleName} />
                   </div>
                   <div className="space-y-2">
                     <Label>Last Name<RequiredMark /></Label>
