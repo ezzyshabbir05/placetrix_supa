@@ -17,26 +17,39 @@ export default async function AttemptPage({
   const supabase = await createClient()
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("account_type")
-    .eq("id", user.id)
-    .single()
+  // ── Parallelize initial verification & test metadata ──────────────────────
+  const [profileRes, candidateRes, testRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("account_type")
+      .eq("id", user.id)
+      .single(),
+    supabase
+      .from("candidate_profiles")
+      .select("institute_id, profile_complete, profile_updated")
+      .eq("profile_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("tests")
+      .select(`
+        id, title, description, instructions, time_limit_seconds,
+        available_from, available_until, status,
+        shuffle_questions, shuffle_options, max_attempts, institute_id
+      `)
+      .eq("id", testId)
+      .single()
+  ])
+
+  const profile = profileRes.data
+  const candidateProfile = candidateRes.data
+  const test = testRes.data
 
   if (profile?.account_type !== "candidate") {
     redirect("/~/home")
   }
-
-  const { data: candidateProfile } = await supabase
-    .from("candidate_profiles")
-    .select("institute_id, profile_complete, profile_updated")
-    .eq("profile_id", user.id)
-    .maybeSingle()
 
   if (
     !candidateProfile ||
@@ -49,17 +62,6 @@ export default async function AttemptPage({
   if (!candidateProfile.institute_id) {
     redirect("/~/tests")
   }
-
-  // ── Fetch published test ────────────────────────────────────────────────────
-  const { data: test } = await supabase
-    .from("tests")
-    .select(
-      `id, title, description, instructions, time_limit_seconds,
-       available_from, available_until, status,
-       shuffle_questions, shuffle_options, max_attempts, institute_id`
-    )
-    .eq("id", testId)
-    .single()
 
   if (!test || test.status !== "published" || test.institute_id !== candidateProfile.institute_id) {
     notFound()
