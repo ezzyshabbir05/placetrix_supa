@@ -1,4 +1,6 @@
 import Team from '@/components/shadcn-studio/blocks/team-section-01/team-section-01'
+import { HeaderWrapper } from "@/components/header-wrapper"
+import { Footer } from "@/components/footer"
 
 const teamMembers = [
   {
@@ -34,7 +36,7 @@ const teamMembers = [
     }
   },
   {
-    image: 'https://ahrlqwqbbremngaeftjs.supabase.co/storage/v1/object/public/team-images/Pushkar.jpeg',
+    image: 'https://ahrlqwqbbremngaeftjs.supabase.co/storage/v1/object/public/team-images/Pushkar2.jpeg',
     alt: 'Pushkar Gaikwad',
     name: 'Pushkar Gaikwad',
     role: 'Database Manager',
@@ -119,7 +121,7 @@ const teamMembers = [
     }
   },
   {
-    image: 'https://ahrlqwqbbremngaeftjs.supabase.co/storage/v1/object/public/team-images/Vishal.jpeg',
+    image: 'https://ahrlqwqbbremngaeftjs.supabase.co/storage/v1/object/public/team-images/Vishal2.jpeg',
     alt: 'Vishal Raut',
     name: 'Vishal Raut',
     role: 'Software Team',
@@ -135,7 +137,15 @@ const teamMembers = [
 ]
 
 const TeamPage = () => {
-  return <Team teamMembers={teamMembers} />
+  return (
+    <div className="relative flex min-h-screen flex-col overflow-hidden supports-[overflow:clip]:overflow-clip">
+      <HeaderWrapper />
+      <main className="flex-1">
+        <Team teamMembers={teamMembers} />
+      </main>
+      {/* <Footer /> */}
+    </div>
+  )
 }
 
 export default TeamPage
