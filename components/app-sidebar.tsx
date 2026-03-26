@@ -178,20 +178,18 @@ export function NavUser({ user }: { user: UserProfile | null }) {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               asChild
             >
-              <div className="flex items-center justify-between gap-2 overflow-hidden w-full" suppressHydrationWarning>
+              <div className="flex items-center gap-2 w-full" suppressHydrationWarning>
                 {user ? (
                   <>
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <Avatar className="h-8 w-8 rounded-lg">
-                        <AvatarImage src={avatarUrl ?? undefined} alt={displayName} className="object-cover" />
-                        <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
-                      </Avatar>
-                      <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
-                        <span className="truncate font-medium">{displayName}</span>
-                        <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
-                      </div>
+                    <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                      <AvatarImage src={avatarUrl ?? undefined} alt={displayName} className="object-cover" />
+                      <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
+                      <span className="truncate font-medium">{displayName}</span>
+                      <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
                     </div>
-                    <IconDotsVertical className="shrink-0 size-4 group-data-[collapsible=icon]:hidden" />
+                    <IconDotsVertical className="ml-auto shrink-0 size-4" />
                   </>
                 ) : (
                   <>
