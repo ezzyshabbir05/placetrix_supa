@@ -112,6 +112,16 @@ function LoginContent() {
       });
 
       if (error) {
+        // 504 / network timeout — auth server is under load, ask user to retry
+        if (
+          error.status === 504 ||
+          error.message?.toLowerCase().includes("timeout") ||
+          error.message?.toLowerCase().includes("fetch")
+        ) {
+          setError("The server is temporarily busy. Please wait a moment and try again.");
+          return;
+        }
+
         if (error.message === "Email not confirmed") {
           const { error: resendError } = await supabase.auth.resend({
             type: "signup",
@@ -133,6 +143,7 @@ function LoginContent() {
       setIsLoading(false);
     }
   };
+
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();

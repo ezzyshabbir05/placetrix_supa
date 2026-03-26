@@ -6,6 +6,11 @@ import type { Database } from "@/types/supabase";
  * Creates a fresh server-side Supabase client per request.
  * Do NOT cache this in a module-level variable — each request needs its own
  * cookie context, especially with Next.js Fluid/Edge compute.
+ *
+ * autoRefreshToken and persistSession are disabled here intentionally.
+ * Token refresh happens exactly once per request in middleware (proxy.ts)
+ * via getUser(). Allowing server components to also auto-refresh would cause
+ * concurrent refresh storms (409 errors) under load.
  */
 export async function createClient() {
   const cookieStore = await cookies();
@@ -26,6 +31,10 @@ export async function createClient() {
             // Safe to ignore if middleware is refreshing sessions.
           }
         },
+      },
+      auth: {
+        autoRefreshToken: false, // Middleware handles the single refresh per request
+        persistSession: false,   // Server has no persistent storage — don't try to save
       },
     },
   );
