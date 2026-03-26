@@ -176,29 +176,34 @@ export function NavUser({ user }: { user: UserProfile | null }) {
             <SidebarMenuButton
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              asChild
             >
-              {user ? (
-                <>
-                  <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage src={avatarUrl ?? undefined} alt={displayName} className="object-cover" />
-                    <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{displayName}</span>
-                    <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
-                  </div>
-                  <IconDotsVertical className="ml-auto size-4" />
-                </>
-              ) : (
-                <>
-                  <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
-                  <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <Skeleton className="h-3.5 w-28" />
-                    <Skeleton className="h-3 w-36" />
-                  </div>
-                  <Skeleton className="h-4 w-4 rounded shrink-0 ml-auto" />
-                </>
-              )}
+              <div className="flex items-center justify-between gap-2 overflow-hidden w-full">
+                {user ? (
+                  <>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <Avatar className="h-8 w-8 rounded-lg">
+                        <AvatarImage src={avatarUrl ?? undefined} alt={displayName} className="object-cover" />
+                        <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
+                        <span className="truncate font-medium">{displayName}</span>
+                        <span className="truncate text-xs text-muted-foreground">{sidebarSubtitle}</span>
+                      </div>
+                    </div>
+                    <IconDotsVertical className="shrink-0 size-4" />
+                  </>
+                ) : (
+                  <>
+                    <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                      <Skeleton className="h-3.5 w-28" />
+                      <Skeleton className="h-3 w-36" />
+                    </div>
+                    <Skeleton className="h-4 w-4 rounded shrink-0" />
+                  </>
+                )}
+              </div>
             </SidebarMenuButton>
           </DropdownMenuTrigger>
 

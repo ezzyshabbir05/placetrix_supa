@@ -24,7 +24,7 @@ export default function HomeLoading() {
 
       {/* Page Header */}
       <div className="px-4 pt-8 pb-0 md:px-8">
-        <div className="space-y-2">
+        <div className="space-y-0.5">
           <Skeleton className="h-6 w-16" />
           <Skeleton className="h-4 w-40" />
         </div>
@@ -34,21 +34,22 @@ export default function HomeLoading() {
 
         {/* Banner card */}
         <div className="rounded-lg border bg-card p-4 flex items-start justify-between gap-4">
-          <div className="space-y-2 flex-1">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-3 w-72 max-w-full" />
+          <div className="space-y-2 flex-1 min-w-0">
+            <Skeleton className="h-4 w-3/4 max-w-[200px]" />
+            <Skeleton className="h-3 w-full max-w-[300px]" />
           </div>
-          <Skeleton className="h-8 w-28 rounded-md shrink-0" />
+          <Skeleton className="h-8 w-28 rounded-md shrink-0 hidden sm:block" />
+          <Skeleton className="h-8 w-8 rounded-md shrink-0 sm:hidden" />
         </div>
 
         {/* Section header + stat grid */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mt-1.5">
             <Skeleton className="h-3 w-28" />
             <Skeleton className="h-3 w-14" />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {Array.from({ length: 4 }).map((_, i) => (
               <StatCardSkeleton key={i} />
             ))}
           </div>
