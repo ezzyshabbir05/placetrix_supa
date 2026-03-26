@@ -72,6 +72,7 @@ interface InstituteOption {
   profile_id: string;
   institute_name: string;
   courses: string[] | null;
+  affiliation: string | null;
 }
 
 interface Props {
@@ -379,6 +380,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   // Institute lookup
   const [institutes, setInstitutes] = useState<InstituteOption[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>([]);
+  const [selectedAffiliation, setSelectedAffiliation] = useState<string | null>(null);
 
   // Login History
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
@@ -485,7 +487,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     (async () => {
       const { data } = await supabase
         .from("institute_profiles")
-        .select("profile_id, institute_name, courses")
+        .select("profile_id, institute_name, courses, affiliation")
         .order("institute_name");
       if (data) {
         setInstitutes(data);
@@ -494,6 +496,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
           if (found) {
             setInstituteName(found.institute_name);
             setAvailableCourses(found.courses ?? []);
+            setSelectedAffiliation(found.affiliation ?? null);
           }
         }
       }
@@ -504,6 +507,7 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     const found = institutes.find((i) => i.profile_id === instituteId);
     if (found) {
       setAvailableCourses(found.courses ?? []);
+      setSelectedAffiliation(found.affiliation ?? null);
       if (!found.courses?.includes(courseName)) setCourseName("");
     }
   }, [instituteId]);
@@ -561,13 +565,14 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
 
   function handleInstituteSelect(name: string | null) {
     if (!name) {
-      setInstituteId(""); setInstituteName(""); setAvailableCourses([]); setIsDirty(true); return;
+      setInstituteId(""); setInstituteName(""); setAvailableCourses([]); setSelectedAffiliation(null); setIsDirty(true); return;
     }
     const found = institutes.find((i) => i.institute_name === name);
     if (found) {
       setInstituteId(found.profile_id);
       setInstituteName(found.institute_name);
       setAvailableCourses(found.courses ?? []);
+      setSelectedAffiliation(found.affiliation ?? null);
       setIsDirty(true);
     }
   }
@@ -1111,6 +1116,12 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
+                  {selectedAffiliation && (
+                    <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Affiliated to {selectedAffiliation}
+                    </p>
+                  )}
                   <FieldError message={errors.institute} />
                 </div>
 
