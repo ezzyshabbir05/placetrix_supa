@@ -642,6 +642,13 @@ export function AttemptClient({
     // Ref mirror for violation count so closures always see the latest value.
     const focusLostCountRef = useRef(initialAttemptInfo?.tab_switch_count ?? 0)
 
+    const showSubmitDialogRef = useRef(false)
+    const navSheetOpenRef = useRef(false)
+    const showFullscreenWarningRef = useRef(false)
+    const questionsLengthRef = useRef(questions.length)
+    const currentIndexRef = useRef(currentIndex)
+    const questionsRef = useRef(questions)
+
     // ── Persistence ───────────────────────────────────────────────────────────
     useEffect(() => {
         if (attemptInfo && typeof window !== "undefined") {
@@ -656,6 +663,12 @@ export function AttemptClient({
 
     useEffect(() => { isSubmittingRef.current = isSubmitting }, [isSubmitting])
     useEffect(() => { showFocusWarningRef.current = showFocusWarning }, [showFocusWarning])
+    useEffect(() => { showSubmitDialogRef.current = showSubmitDialog }, [showSubmitDialog])
+    useEffect(() => { navSheetOpenRef.current = navSheetOpen }, [navSheetOpen])
+    useEffect(() => { showFullscreenWarningRef.current = showFullscreenWarning }, [showFullscreenWarning])
+    useEffect(() => { questionsLengthRef.current = questions.length }, [questions.length])
+    useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
+    useEffect(() => { questionsRef.current = questions }, [questions])
 
 
     // ── Fullscreen helpers ─────────────────────────────────────────────────────
@@ -745,8 +758,16 @@ export function AttemptClient({
             }, 200)
         }
 
-        // 3. Copy / keyboard blocking ──────────────────────────────────────────
+        // 3. Copy / keyboard blocking / Navigation ──────────────────────────
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Guard: stop logic if the user is typing in an input/textarea.
+            if (
+                e.target instanceof HTMLInputElement ||
+                e.target instanceof HTMLTextAreaElement
+            ) {
+                return
+            }
+
             const ctrl = e.ctrlKey || e.metaKey
             // Block copy, save, view-source, print, select all
             if (ctrl && ["c", "p", "s", "u", "a"].includes(e.key.toLowerCase())) {
@@ -757,6 +778,32 @@ export function AttemptClient({
                 e.preventDefault()
             }
             if (e.key === "F12") e.preventDefault()
+
+            if (
+                !showSubmitDialogRef.current &&
+                !navSheetOpenRef.current &&
+                !showFocusWarningRef.current &&
+                !showFullscreenWarningRef.current &&
+                !isSubmittingRef.current
+            ) {
+                // 'F' key: Toggle flag for review
+                if (e.key.toLowerCase() === "f") {
+                    const q = questionsRef.current[currentIndexRef.current]
+                    if (q) {
+                        toggleFlag(q.id)
+                        e.preventDefault()
+                    }
+                }
+
+                // Arrow keys for Next/Prev question
+                if (e.key === "ArrowLeft") {
+                    setCurrentIndex((i) => Math.max(0, i - 1))
+                    e.preventDefault()
+                } else if (e.key === "ArrowRight") {
+                    setCurrentIndex((i) => Math.min(questionsLengthRef.current - 1, i + 1))
+                    e.preventDefault()
+                }
+            }
         }
 
         const handleCopy = (e: ClipboardEvent) => e.preventDefault()

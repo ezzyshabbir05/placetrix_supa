@@ -13,7 +13,8 @@ import type { AttemptInfo } from "./_types"
 // ──────────────────────────────────────────────────────────────────────────────
 export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: authData } = await supabase.auth.getClaims()
+  const user = authData?.claims
   if (!user) throw new Error("Unauthorized")
 
   // Parallelize: check profile, test details, and active attempt in one block.
@@ -21,7 +22,7 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
     supabase
       .from("candidate_profiles")
       .select("institute_id, profile_complete, profile_updated")
-      .eq("profile_id", user.id)
+      .eq("profile_id", user.sub)
       .maybeSingle(),
     supabase
       .from("tests")
@@ -32,7 +33,7 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
       .from("test_attempts")
       .select("id, started_at, expires_at, tab_switch_count")
       .eq("test_id", testId)
-      .eq("student_id", user.id)
+      .eq("student_id", user.sub)
       .eq("status", "in_progress")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -64,7 +65,7 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
     .from("test_attempts")
     .select("*", { count: "exact", head: true })
     .eq("test_id", testId)
-    .eq("student_id", user.id)
+    .eq("student_id", user.sub)
     .in("status", ["submitted", "auto_submitted"])
 
   if ((completedCount ?? 0) >= test.max_attempts) {
@@ -80,7 +81,7 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
     .from("test_attempts")
     .insert({
       test_id: testId,
-      student_id: user.id,
+      student_id: user.sub,
       attempt_number: attemptNumber,
       expires_at: expiresAt,
     })
@@ -110,7 +111,8 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
  */
 async function getSupabaseForAction() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: authData } = await supabase.auth.getClaims()
+  const user = authData?.claims
   if (!user) throw new Error("Unauthorized")
   return { supabase, user }
 }
@@ -168,13 +170,13 @@ export async function submitAttemptAction(
       .from("test_attempts")
       .select("test_id")
       .eq("id", attemptId)
-      .eq("student_id", user.id)
+      .eq("student_id", user.sub)
       .single(),
     supabase
       .from("test_attempts")
       .update({ time_spent_seconds: timeSpentSeconds })
       .eq("id", attemptId)
-      .eq("student_id", user.id)
+      .eq("student_id", user.sub)
   ])
 
   redirect(attemptData?.test_id ? `/~/tests/${attemptData.test_id}` : "/~/tests")
@@ -200,6 +202,6 @@ export async function recordViolationAction(
     .from("test_attempts")
     .update({ tab_switch_count: totalCount })
     .eq("id", attemptId)
-    .eq("student_id", user.id)    // Ownership check
+    .eq("student_id", user.sub)    // Ownership check
     .eq("status", "in_progress") // Guard
 }

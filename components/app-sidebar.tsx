@@ -23,7 +23,10 @@ import {
 } from "./ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
+
+
 import { AccountType, UserProfile } from "@/lib/supabase/profile"
+
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -355,6 +358,20 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: UserProfile | null
 }
 
+const Logo = React.memo(() => (
+  <div className="shrink-0 size-5 flex items-center justify-center">
+    <Image
+      src={PlaceTrixLogo}
+      alt="PlaceTrix"
+      width={20}
+      height={20}
+      className="size-full dark:invert"
+      priority
+    />
+  </div>
+))
+Logo.displayName = "Logo"
+
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const accountType = safeAccountType(user?.account_type)
@@ -372,38 +389,22 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            {user ? (
-              <SidebarMenuButton
-                asChild                          // ← add this
-                className="group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent group-data-[collapsible=icon]/sidebar-wrapper:p-1.5!"
-              >
-                <Link href="/">                  {/* ← wrap children in Link */}
-                  <div className="shrink-0 size-5 flex items-center justify-center">
-                    <Image
-                      src={PlaceTrixLogo}
-                      alt="PlaceTrix"
-                      width={20}
-                      height={20}
-                      className="size-full dark:invert"
-                    />
-                  </div>
-
-                  <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
-                    <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider truncate">
-                      PlaceTrix
-                    </span>
-                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
-                      v{version}
-                    </span>
-                  </div>
-                </Link>
-              </SidebarMenuButton>
-            ) : (
-              <div className="flex items-center gap-2 p-1.5">
-                <Skeleton className="size-5 rounded-md shrink-0" />
-                <Skeleton className="h-5 w-24" />
-              </div>
-            )}
+            <SidebarMenuButton
+              asChild
+              className="group/logo cursor-pointer hover:bg-transparent hover:text-current active:bg-transparent focus:bg-transparent group-data-[collapsible=icon]/sidebar-wrapper:p-1.5!"
+            >
+              <Link href="/">
+                <Logo />
+                <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
+                  <span className="text-base font-bold transition-all duration-300 group-hover/logo:tracking-wider truncate">
+                    PlaceTrix
+                  </span>
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
+                    v{version}
+                  </span>
+                </div>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

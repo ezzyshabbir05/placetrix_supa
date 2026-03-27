@@ -64,13 +64,12 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   );
 
 
-  // 2. We use getSession() instead of getUser() to prevent "Auth Storms" (504s)
-  //    that occur when the Auth server is hit on every request under high load.
-  //    While getSession() only trusts the JWT in the cookie, it is significantly
-  //    faster and reliable for middleware routing logic. Hardened security
-  //    checks must continue to use getUser() in Server Components and Actions.
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+  // 2. We use getClaims() instead of getSession() or getUser().
+  //    Initially getSession() was used for speed, but getClaims() is safer
+  //    as it validates the JWT signature locally without a network hit.
+  //    This prevents "Auth request flooding" (504s) while maintaining security.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   // Redirect unauthenticated user trying to reach a protected page → login.
   if (isProtected(pathname) && !user) {

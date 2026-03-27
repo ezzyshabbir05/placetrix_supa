@@ -2,6 +2,7 @@
 // app/settings/CandidateSettingsClient.tsx
 
 import { useState, useEffect, useTransition, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { UserProfile } from "@/lib/supabase/profile";
 import { toast } from "sonner";
@@ -297,6 +298,7 @@ function DeviceIcon({ device }: { device: "desktop" | "mobile" | "tablet" }) {
 
 export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const supabase = createClient();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isPwPending, startPwTransition] = useTransition();
 
@@ -545,11 +547,17 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         .from("candidate_profiles")
         .upsert({ profile_id: userProfile.id, profile_image_path: newPath }, { onConflict: "profile_id" });
       if (dbError) throw dbError;
+
+      // Sync with global profiles table and Auth metadata
+      await supabase.from("profiles").update({ avatar_path: newPath }).eq("id", userProfile.id);
+      await supabase.auth.updateUser({ data: { avatar_path: newPath } });
+
       storedImagePath.current = newPath;
       const newPublicUrl = getStorageUrl(supabase, "avatars", newPath);
       setAvatarSrc(`${newPublicUrl}?v=${timestamp}`);
       URL.revokeObjectURL(blobUrl);
       toast.success("Profile picture updated!");
+      router.refresh(); // Update sidebar/layout
     } catch (err) {
       console.error(err);
       toast.error("Failed to upload profile picture. Please try again.");
@@ -602,18 +610,22 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const loadSessions = useCallback(async () => {
     setSessLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setSessions([]); return; }
+      const { data, error: authError } = await supabase.auth.getClaims();
+      const user = data?.claims;
+      if (!user || authError) { setSessions([]); return; }
+      
+      // We still need the session for the access_token to extract the current session_id
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) setCurrentSessionId(getSessionIdFromJwt(session.access_token));
-      const { data, error } = await supabase
+      
+      const { data: sessionData, error } = await supabase
         .from("user_sessions")
         .select("id, created_at, updated_at, not_after, ip, user_agent")
-        .eq("user_id", user.id)
+        .eq("user_id", user.sub)
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw error;
-      setSessions(data ?? []);
+      setSessions(sessionData ?? []);
     } catch {
       toast.error("Failed to load login history.");
     } finally {
@@ -858,12 +870,30 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
         console.error(error);
         toast.error("Failed to save profile. Please try again.");
       } else {
+        // Sync with global profiles table and Auth metadata
+        const newDisplayName = [firstName.trim(), middleName.trim(), lastName.trim()]
+          .filter(Boolean)
+          .join(" ") || userProfile.display_name;
+
+        await supabase.from("profiles").update({ 
+          display_name: newDisplayName,
+          username: trimmedUsername,
+        }).eq("id", userProfile.id);
+
+        await supabase.auth.updateUser({
+          data: { 
+            display_name: newDisplayName,
+            username: trimmedUsername 
+          }
+        });
+
         toast.success("Profile saved successfully!");
         setIsDirty(false);
         if (trimmedUsername) {
           initialUsername.current = trimmedUsername;
           setUsernameStatus("unchanged");
         }
+        router.refresh(); // Update sidebar/layout
       }
     });
   }

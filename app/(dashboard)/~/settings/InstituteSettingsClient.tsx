@@ -3,6 +3,7 @@
 // app/~/settings/InstituteSettingsClient.tsx
 
 import { useState, useTransition, useEffect, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { UserProfile } from "@/lib/supabase/profile"
 import { toast } from "sonner"
@@ -248,6 +249,7 @@ function DeviceIcon({ device }: { device: "desktop" | "mobile" | "tablet" }) {
 
 export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isPwPending, startPwTransition] = useTransition()
   const [isDirty, setIsDirty] = useState(false)
@@ -411,11 +413,17 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         .update({ logo_path: newPath })
         .eq("profile_id", userProfile.id);
       if (dbError) throw dbError
+
+      // Sync with global profiles table and Auth metadata
+      await supabase.from("profiles").update({ avatar_path: newPath }).eq("id", userProfile.id)
+      await supabase.auth.updateUser({ data: { avatar_path: newPath } })
+
       storedLogoPath.current = newPath
       const newPublicUrl = getStorageUrl(supabase, "avatars", newPath)
       setLogoSrc(`${newPublicUrl}?v=${timestamp}`)
       URL.revokeObjectURL(blobUrl)
       toast.success("Logo updated!")
+      router.refresh() // Update sidebar/layout
     } catch (err) {
       console.error(err)
       toast.error("Failed to upload logo. Please try again.")
@@ -456,18 +464,22 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
   const loadSessions = useCallback(async () => {
     setSessLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setSessions([]); return }
+      const { data, error: authError } = await supabase.auth.getClaims()
+      const user = data?.claims
+      if (!user || authError) { setSessions([]); return }
+
+      // We still need the session for the access_token to extract the current session_id
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.access_token) setCurrentSessionId(getSessionIdFromJwt(session.access_token))
-      const { data, error } = await supabase
+
+      const { data: sessionData, error } = await supabase
         .from("user_sessions")
         .select("id, created_at, updated_at, not_after, ip, user_agent")
-        .eq("user_id", user.id)
+        .eq("user_id", user.sub)
         .order("created_at", { ascending: false })
         .limit(20)
       if (error) throw error
-      setSessions(data ?? [])
+      setSessions(sessionData ?? [])
     } catch {
       toast.error("Failed to load login history.")
     } finally {
@@ -685,12 +697,28 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
         console.error("Supabase Save Error:", error)
         toast.error(error.message || "Failed to save profile. Please try again.")
       } else {
+        // Sync with global profiles table and Auth metadata
+        const newDisplayName = instituteName.trim() || userProfile.display_name
+
+        await supabase.from("profiles").update({ 
+          display_name: newDisplayName,
+          username: trimmedUsername,
+        }).eq("id", userProfile.id)
+
+        await supabase.auth.updateUser({
+          data: { 
+            display_name: newDisplayName,
+            username: trimmedUsername 
+          }
+        })
+
         toast.success("Profile saved successfully!")
         setIsDirty(false)
         if (trimmedUsername) {
           initialUsername.current = trimmedUsername
           setUsernameStatus("unchanged")
         }
+        router.refresh() // Update sidebar/layout
       }
     })
   }

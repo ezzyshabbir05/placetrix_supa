@@ -14,9 +14,8 @@ import { createClient } from "@/lib/supabase/server"
 
 async function assertOwner(testId: string): Promise<string> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data } = await supabase.auth.getClaims()
+  const user = data?.claims
   if (!user) throw new Error("Not authenticated")
 
   const { data: test, error } = await supabase
@@ -26,9 +25,9 @@ async function assertOwner(testId: string): Promise<string> {
     .single()
 
   if (error || !test) throw new Error("Test not found")
-  if (test.institute_id !== user.id) throw new Error("Forbidden")
+  if (test.institute_id !== user.sub) throw new Error("Forbidden")
 
-  return user.id
+  return user.sub as string
 }
 
 

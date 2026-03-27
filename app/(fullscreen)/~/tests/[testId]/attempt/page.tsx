@@ -17,7 +17,8 @@ export default async function AttemptPage({
   const supabase = await createClient()
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data } = await supabase.auth.getClaims()
+  const user = data?.claims
   if (!user) redirect("/auth/login")
 
   // ── Parallelize initial verification & test metadata ──────────────────────
@@ -25,12 +26,12 @@ export default async function AttemptPage({
     supabase
       .from("profiles")
       .select("account_type")
-      .eq("id", user.id)
+      .eq("id", user.sub)
       .single(),
     supabase
       .from("candidate_profiles")
       .select("institute_id, profile_complete, profile_updated")
-      .eq("profile_id", user.id)
+      .eq("profile_id", user.sub)
       .maybeSingle(),
     supabase
       .from("tests")
@@ -85,7 +86,7 @@ export default async function AttemptPage({
     .from("test_attempts")
     .select("id, started_at, expires_at, tab_switch_count")
     .eq("test_id", testId)
-    .eq("student_id", user.id)
+    .eq("student_id", user.sub)
     .eq("status", "in_progress")
     .order("created_at", { ascending: false })
     .limit(1)
@@ -125,7 +126,7 @@ export default async function AttemptPage({
       .from("test_attempts")
       .select("*", { count: "exact", head: true })
       .eq("test_id", testId)
-      .eq("student_id", user.id)
+      .eq("student_id", user.sub)
       .in("status", ["submitted", "auto_submitted"])
 
     if ((completedCount ?? 0) >= test.max_attempts) {

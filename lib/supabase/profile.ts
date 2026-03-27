@@ -71,17 +71,18 @@ async function profileFromClaims(
 }
 
 /**
- * Builds a minimal UserProfile from the auth `user` object (no DB query).
+ * Builds a minimal UserProfile from either the auth `user` object or local `claims`.
  * Used when the session is valid but the DB profile row is unreachable.
  */
 function profileFromAuthUser(
-  user: NonNullable<
-    Awaited<ReturnType<Awaited<ReturnType<typeof createClient>>["auth"]["getUser"]>>["data"]["user"]
-  >,
+  user: { id?: string; sub?: string; user_metadata?: any; email?: string }
 ): UserProfile {
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const id = user.sub ?? user.id;
+  if (!id) throw new Error("User ID is required");
+
   return {
-    id: user.id,
+    id,
     email: user.email ?? "",
     display_name: (meta.full_name as string)
       ?? (meta.name as string)
@@ -113,18 +114,18 @@ function profileFromAuthUser(
 export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
 
-  // ── Step 1: Read session from core cookie (no network call) ───────────────
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+  // ── Step 1: Read user from local claims (fast, signature-validated) ──────
+  const { data, error: authError } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   if (user) {
     // Optimization: Check for profile data in user_metadata first (JWT claims)
-    const meta = user.user_metadata ?? {};
+    const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
     if (meta.display_name && meta.account_type) {
       return {
-        id: user.id,
+        id: user.sub as string,
         display_name: meta.display_name as string,
-        email: user.email ?? "",
+        email: user.email as string,
         account_type: meta.account_type as AccountType,
         avatar_path: (meta.avatar_path as string) ?? null,
         username: (meta.username as string) ?? null,
@@ -135,11 +136,11 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
     const { data: profile, error: dbError } = await supabase
       .from("profiles")
       .select("id, display_name, email, account_type, avatar_path, username")
-      .eq("id", user.id)
+      .eq("id", user.sub)
       .single();
 
     if (dbError || !profile) {
-      return profileFromAuthUser(user);
+      return profileFromAuthUser(user as any);
     }
 
     return profile as UserProfile;

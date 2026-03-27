@@ -787,13 +787,12 @@ export async function saveDraftAction(
   questions: LocalQuestion[]
 ): Promise<void> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: authData } = await supabase.auth.getClaims()
+  const user = authData?.claims
 
   if (!user) throw new Error("Not authenticated")
 
-  await saveTestToDb(testId, user.id, settings, questions, "draft")
+  await saveTestToDb(testId, user.sub as string, settings, questions, "draft")
   revalidatePath("/~/tests")
 }
 
@@ -806,13 +805,12 @@ export async function publishTestAction(
   if (questions.length === 0) throw new Error("Add at least one question.")
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: authData } = await supabase.auth.getClaims()
+  const user = authData?.claims
 
   if (!user) throw new Error("Not authenticated")
 
-  await saveTestToDb(testId, user.id, settings, questions, "published")
+  await saveTestToDb(testId, user.sub as string, settings, questions, "published")
   revalidatePath("/~/tests")
   redirect(`/~/tests/${testId}`)
 }

@@ -75,7 +75,8 @@ function ChangePasswordContent() {
   useEffect(() => {
     const checkSession = async () => {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getClaims();
+      const user = data?.claims;
 
       if (user && isRecoveryMode) {
         setPageState("password-form");
