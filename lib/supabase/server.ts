@@ -10,8 +10,9 @@ import type { Database } from "@/types/supabase";
  *
  * autoRefreshToken and persistSession are disabled here intentionally.
  * Token refresh happens exactly once per request in middleware (proxy.ts)
- * via getUser(). Allowing server components to also auto-refresh would cause
- * concurrent refresh storms (409 errors) under load.
+ * via getSession(). To avoid "Auth flooding" and 504 errors, middleware
+ * trusts the cookie session; actual account status re-validation (getUser) 
+ * should only be performed once per request by a Server Component or Action.
  */
 export const createClient = cache(async () => {
   const cookieStore = await cookies();

@@ -32,7 +32,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   const { pathname } = request.nextUrl;
 
   // 1. If it's a completely public route (neither protected nor auth),
-  //    we skip the heavy getUser() network call and Supabase client init entirely.
+  //    we skip the authentication session initialization entirely.
   if (!isProtected(pathname) && !isAuthPage(pathname)) {
     return NextResponse.next({ request });
   }
@@ -64,25 +64,13 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   );
 
 
-  // 2. Optimization: Check for prefetch requests.
-  //    Next.js prefetches follow links; we can trust the cookie (getSession)
-  //    for the prefetch to stay fast (~1ms). If the user actually clicks
-  //    the link, the "real" request will trigger getUser() (~50ms) for 
-  //    full security validation. This helps avoid "Auth Storms" (504s).
-  const isPrefetch = request.headers.get("next-router-prefetch") ||
-    request.headers.get("purpose") === "prefetch";
-
-  let user = null;
-
-  if (isPrefetch) {
-    // For prefetches, getSession() reads the JWT but doesn't hit the server.
-    const { data: { session } } = await supabase.auth.getSession();
-    user = session?.user ?? null;
-  } else {
-    // For real requests, getUser() re-validates with the Auth server.
-    const { data: { user: authedUser } } = await supabase.auth.getUser();
-    user = authedUser;
-  }
+  // 2. We use getSession() instead of getUser() to prevent "Auth Storms" (504s)
+  //    that occur when the Auth server is hit on every request under high load.
+  //    While getSession() only trusts the JWT in the cookie, it is significantly
+  //    faster and reliable for middleware routing logic. Hardened security
+  //    checks must continue to use getUser() in Server Components and Actions.
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   // Redirect unauthenticated user trying to reach a protected page → login.
   if (isProtected(pathname) && !user) {

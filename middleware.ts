@@ -7,12 +7,14 @@
 //  2. Redirects unauthenticated visitors away from protected routes.
 //  3. Redirects authenticated visitors away from auth pages (login, sign-up …).
 //
-// ── Why getUser() and not getSession() ───────────────────────────────────────
+// ── Why getSession() instead of getUser() ────────────────────────────────────
 //
-//  getSession() reads the JWT from the cookie and trusts it — a forged cookie
-//  would pass. getUser() re-validates the token against the Supabase Auth
-//  server on every call, which is the correct security posture for middleware.
-//  The latency cost (~10 ms) is acceptable; the alternative is a security hole.
+//  Initially, we used getUser() here to re-validate the token against the 
+//  Supabase Auth server on every quest for maximum security—however, that
+//  pattern results in "Auth request flooding" and 504 Gateway errors under load.
+//  getSession() matches the token against the cookie faster and with zero latency.
+//  We rely on Server Components/Actions to perform the final, hardened 
+//  getUser() check for data consistency and account status security.
 //
 // ── Route rules ───────────────────────────────────────────────────────────────
 //
