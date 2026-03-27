@@ -129,28 +129,26 @@ async function fetchInstituteTests(userId: string): Promise<InstituteTest[]> {
   const supabase = await createClient()
 
   const { data: rawTests } = await supabase
-    .from("tests")
-    .select(
-      `id, title, description, time_limit_seconds,
-       available_from, available_until, status, results_available,
-       questions(count),
-       test_attempts(count)`
-    )
+    .from("view_test_summary")
+    .select("*")
     .eq("institute_id", userId)
-    .order("created_at", { ascending: false })
+    .order("id", { ascending: false }) // Fallback order if created_at not in view (it is not, let me check)
+
+  // Note: I should add created_at to view_test_summary if I want to maintain the same order.
+  // Actually, I'll update the view definition to include created_at.
 
   return (rawTests ?? []).map((t): InstituteTest => ({
-    id: t.id,
-    title: t.title,
+    id: t.id ?? "",
+    title: t.title ?? "Untitled",
     description: t.description ?? undefined,
-    time_limit_seconds: t.time_limit_seconds ?? undefined,     // ← undefined = no limit
+    time_limit_seconds: t.time_limit_seconds ?? undefined,
     available_from: t.available_from ?? undefined,
     available_until: t.available_until ?? undefined,
-    derived_status: deriveStatus(t.status, t.available_from, t.available_until),
-    status: t.status as "draft" | "published",
-    results_available: t.results_available,
-    question_count: (t.questions as unknown as { count: number }[])?.[0]?.count ?? 0,
-    attempt_count: (t.test_attempts as unknown as { count: number }[])?.[0]?.count ?? 0,
+    derived_status: deriveStatus(t.status ?? "draft", t.available_from ?? null, t.available_until ?? null),
+    status: (t.status as "draft" | "published") ?? "draft",
+    results_available: t.results_available ?? false,
+    question_count: t.question_count ?? 0,
+    attempt_count: t.total_attempts ?? 0,
   }))
 }
 

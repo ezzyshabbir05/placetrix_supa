@@ -151,8 +151,6 @@ async function fetchInstituteView(
 
   // 1. Unified Institute View Query
   // Combines core test data, questions, and baseline attempt info.
-  // Note: We still fetch candidate_profiles in a separate step to handle 
-  // the 'IN' filter for batching profiles.
   const { data: raw, error } = await supabase
     .from("tests")
     .select(`
@@ -164,31 +162,18 @@ async function fetchInstituteView(
         options (id, option_text, is_correct, order_index),
         question_tags (tags (id, name))
       ),
-      test_attempts (
-        id, student_id, tab_switch_count, status, score, 
-        total_marks, percentage, time_spent_seconds, 
-        started_at, submitted_at
+      attempts:view_test_results_detailed (
+        attempt_id, student_id, student_name, student_email, branch, passout_year,
+        tab_switch_count, status, score, total_marks, percentage, 
+        time_spent_seconds, started_at, submitted_at
       )
     `)
     .eq("id", testId)
     .eq("institute_id", userId)
+    .order("started_at", { foreignTable: "view_test_results_detailed", ascending: false })
     .single()
 
   if (error || !raw) notFound()
-
-  // 2. Resolve human-readable details for attempts (student names/emails)
-  // We use the already-fetched test_attempts to find unique student IDs.
-  const studentIds = Array.from(new Set((raw.test_attempts ?? []).map((r: any) => r.student_id).filter(Boolean)))
-
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select(`
-      id, display_name, email,
-      candidate:candidate_profiles(course_name, passout_year)
-    `)
-    .in("id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
-
-  const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]))
 
   const questions: InstituteQuestion[] = (raw.questions ?? []).map((q: any) => ({
     id: q.id,
@@ -211,33 +196,29 @@ async function fetchInstituteView(
 
   const fullTotalMarks = questions.reduce((s, q) => s + q.marks, 0)
 
-  const attempts: InstituteAttemptRow[] = (raw.test_attempts ?? [])
-    .filter((a: any): a is any & { id: string; started_at: string } =>
-      a.id != null && a.started_at != null
+  // 2. Map attempts (now much simpler as profiles are pre-joined in the view)
+  const attempts: InstituteAttemptRow[] = (raw.attempts ?? [])
+    .filter((a: any): a is any & { attempt_id: string; started_at: string } =>
+      a.attempt_id != null && a.started_at != null
     )
-    .map((a: any) => {
-      const profile = profileMap.get(a.student_id)
-      return {
-        id: a.id,
-        student_name: profile?.display_name ?? null,
-        student_email: profile?.email ?? null,
-        status: a.status as InstituteAttemptRow["status"],
-        score: a.score ?? null,
-        total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
-        percentage:
-          a.score != null && fullTotalMarks > 0
-            ? Math.round((a.score / fullTotalMarks) * 100)
-            : (a.percentage ?? null),
-        time_spent_seconds: a.time_spent_seconds ?? null,
-        started_at: a.started_at,
-        submitted_at: a.submitted_at ?? null,
-        tab_switch_count: a.tab_switch_count ?? null,
-        branch: profile?.candidate?.course_name ?? null,
-        passout_year: profile?.candidate?.passout_year ?? null,
-      }
-    })
-    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
-
+    .map((a: any) => ({
+      id: a.attempt_id,
+      student_name: a.student_name,
+      student_email: a.student_email,
+      status: a.status as InstituteAttemptRow["status"],
+      score: a.score ?? null,
+      total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
+      percentage:
+        a.score != null && fullTotalMarks > 0
+          ? Math.round((a.score / fullTotalMarks) * 100)
+          : (a.percentage ?? null),
+      time_spent_seconds: a.time_spent_seconds ?? null,
+      started_at: a.started_at,
+      submitted_at: a.submitted_at ?? null,
+      tab_switch_count: a.tab_switch_count ?? null,
+      branch: a.branch,
+      passout_year: a.passout_year,
+    }))
 
   return {
     id: raw.id,
@@ -254,6 +235,8 @@ async function fetchInstituteView(
     attempts,
   }
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 
 

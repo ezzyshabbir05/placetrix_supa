@@ -113,10 +113,12 @@ function profileFromAuthUser(
 export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
 
-  // ── Step 1: Read session from cookie (validated by Supabase) ──────────────
-  // Use getUser() instead of getSession() as it re-validates the user with
-  // the Supabase Auth server, providing better security.
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  // ── Step 1: Read session from core cookie (no network call) ───────────────
+  // We use getSession() instead of getUser() for general page rendering
+  // (Sidebar, Layout, etc.) to prevent "Auth Request Flooding" (504s).
+  // The middleware has already verified the session integrity.
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   if (user) {
     const { data: profile, error: dbError } = await supabase
@@ -133,15 +135,15 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
     return profile as UserProfile;
   }
 
-  // ── Step 2 & 3: Handle auth errors ────────────────────────────────────────
+  // ── Step 2 & 3: Handle definitive revocation (e.g. 401) ─────────────────
   if (authError instanceof AuthApiError) {
     if (isDefinitiveRevocation(authError)) {
       await supabase.auth.signOut({ scope: "local" });
       redirect("/auth/login");
     }
-    // Transient/ambiguous error — fall through to local JWT.
+    // Transient/ambiguous error — fall through to local JWT claims.
   }
 
-  // ── Step 4: Offline / no session — try local JWT claims ───────────────────
+  // ── Step 4: Offline / local-only — try local JWT claims ──────────────────
   return profileFromClaims(supabase);
 });
