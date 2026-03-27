@@ -1,18 +1,18 @@
-import { redirect }      from "next/navigation";
-import { AuthApiError }  from "@supabase/supabase-js";
-import { createClient }  from "@/lib/supabase/server";
-import { cache }         from "react";
+import { redirect } from "next/navigation";
+import { AuthApiError } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+import { cache } from "react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type AccountType = "candidate" | "institute" | "admin" | "recruiter";
 
 export interface UserProfile {
-  id:           string;
+  id: string;
   display_name: string;
-  email:        string;
-  avatar_path:  string | null;
-  username:     string | null;
+  email: string;
+  avatar_path: string | null;
+  username: string | null;
   account_type: AccountType;
 }
 
@@ -58,14 +58,14 @@ async function profileFromClaims(
   };
 
   return {
-    id:           sub,
-    email:        email ?? "",
+    id: sub,
+    email: email ?? "",
     display_name: (meta.full_name as string)
-                ?? (meta.name     as string)
-                ?? email
-                ?? "User",
-    avatar_path:  (meta.avatar_url as string) ?? null,
-    username:     null,           // not in standard JWT claims
+      ?? (meta.name as string)
+      ?? email
+      ?? "User",
+    avatar_path: (meta.avatar_url as string) ?? null,
+    username: null,           // not in standard JWT claims
     account_type: "candidate",    // safe offline default
   };
 }
@@ -81,14 +81,14 @@ function profileFromAuthUser(
 ): UserProfile {
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   return {
-    id:           user.id,
-    email:        user.email ?? "",
+    id: user.id,
+    email: user.email ?? "",
     display_name: (meta.full_name as string)
-                ?? (meta.name     as string)
-                ?? user.email
-                ?? "User",
-    avatar_path:  (meta.avatar_url as string) ?? null,
-    username:     null,
+      ?? (meta.name as string)
+      ?? user.email
+      ?? "User",
+    avatar_path: (meta.avatar_url as string) ?? null,
+    username: null,
     account_type: "candidate",
   };
 }
@@ -114,13 +114,24 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
 
   // ── Step 1: Read session from core cookie (no network call) ───────────────
-  // We use getSession() instead of getUser() for general page rendering
-  // (Sidebar, Layout, etc.) to prevent "Auth Request Flooding" (504s).
-  // The middleware has already verified the session integrity.
   const { data: { session }, error: authError } = await supabase.auth.getSession();
   const user = session?.user ?? null;
 
   if (user) {
+    // Optimization: Check for profile data in user_metadata first (JWT claims)
+    const meta = user.user_metadata ?? {};
+    if (meta.display_name && meta.account_type) {
+      return {
+        id: user.id,
+        display_name: meta.display_name as string,
+        email: user.email ?? "",
+        account_type: meta.account_type as AccountType,
+        avatar_path: (meta.avatar_path as string) ?? null,
+        username: (meta.username as string) ?? null,
+      };
+    }
+
+    // Fallback: If metadata is absent or stale, fetch from DB
     const { data: profile, error: dbError } = await supabase
       .from("profiles")
       .select("id, display_name, email, account_type, avatar_path, username")
@@ -128,7 +139,6 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
       .single();
 
     if (dbError || !profile) {
-      // DB unreachable (cold-start, network blip) — degrade gracefully.
       return profileFromAuthUser(user);
     }
 
@@ -141,9 +151,9 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
       await supabase.auth.signOut({ scope: "local" });
       redirect("/auth/login");
     }
-    // Transient/ambiguous error — fall through to local JWT claims.
   }
 
   // ── Step 4: Offline / local-only — try local JWT claims ──────────────────
   return profileFromClaims(supabase);
 });
+
