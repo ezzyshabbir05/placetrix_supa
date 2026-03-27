@@ -61,11 +61,22 @@ const teamMembers = [
     }
   },
   {
+    image: 'https://ahrlqwqbbremngaeftjs.supabase.co/storage/v1/object/public/team-images/Shital.jpeg',
+    alt: 'Shital Jaykar',
+    name: 'Shital Jaykar',
+    role: 'Marketing Team',
+    description: 'Creative marketing professional focused on audience engagement and brand awareness.',
+    socialLinks: {
+      instagram: 'https://instagram.com/mainly.shital',
+      linkedin: 'https://linkedin.com/in/shital-jaykar-067294386/'
+    }
+  },
+  {
     image: 'https://ahrlqwqbbremngaeftjs.supabase.co/storage/v1/object/public/team-images/Abhishek.jpeg',
     alt: 'Abhishek Patil',
     name: 'Abhishek Patil',
     role: 'UI/UX Lead',
-    description: 'Passionate about creating user-centric designs and intuitive digital experiences.',
+    description: 'Passionate about creating modern user-centric designs and intuitive digital experiences.',
     socialLinks: {
       github: 'https://github.com/webdevabhi-1612',
       instagram: 'https://instagram.com/abhishekfins',
@@ -95,17 +106,6 @@ const teamMembers = [
       github: 'https://github.com/HuzefaSabir',
       instagram: 'https://instagram.com/huzefasabir_',
       linkedin: 'https://linkedin.com/in/huzefasabir/'
-    }
-  },
-  {
-    image: 'https://ahrlqwqbbremngaeftjs.supabase.co/storage/v1/object/public/team-images/Shital.jpeg',
-    alt: 'Shital Jaykar',
-    name: 'Shital Jaykar',
-    role: 'Marketing Team',
-    description: 'Creative marketing professional focused on audience engagement and brand awareness.',
-    socialLinks: {
-      instagram: 'https://instagram.com/mainly.shital',
-      linkedin: 'https://linkedin.com/in/shital-jaykar-067294386/'
     }
   },
   {
