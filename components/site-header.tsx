@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -89,7 +89,7 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
     const hiddenCrumbs = isCollapsed ? crumbs.slice(1, -1) : []
 
     return (
-        <header className="flex h-[calc(var(--spacing)*10)] shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
+        <header className="flex h-10 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
             <div className="flex w-full min-w-0 items-center gap-1 px-4 lg:gap-2 lg:px-6">
                 <SidebarTrigger className="-ml-1 md:hidden" onClick={onManualToggle} />
                 <Separator
@@ -104,13 +104,13 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
                             {/* ── First crumb (always visible) ── */}
                             <BreadcrumbItem>
                                 {crumbs.length === 1 ? (
-                                    <BreadcrumbPage className="max-w-[8rem] truncate" title={firstCrumb.label}>
+                                    <BreadcrumbPage className="max-w-32 truncate" title={firstCrumb.label}>
                                         {firstCrumb.label}
                                     </BreadcrumbPage>
                                 ) : (
                                     <Link
                                         href={firstCrumb.href}
-                                        className="max-w-[8rem] truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
+                                        className="max-w-32 truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
                                         title={firstCrumb.label}
                                     >
                                         {firstCrumb.label}
@@ -144,18 +144,18 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
 
                             {/* ── Middle crumbs (non-collapsed) ── */}
                             {!isCollapsed && crumbs.slice(1, -1).map((crumb) => (
-                                <>
-                                    <BreadcrumbSeparator key={`sep-${crumb.href}`} />
-                                    <BreadcrumbItem key={crumb.href}>
+                                <React.Fragment key={`group-${crumb.href}`}>
+                                    <BreadcrumbSeparator />
+                                    <BreadcrumbItem>
                                         <Link
                                             href={crumb.href}
-                                            className="max-w-[8rem] truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
+                                            className="max-w-32 truncate text-sm text-muted-foreground transition-colors hover:text-foreground"
                                             title={crumb.label}
                                         >
                                             {crumb.label}
                                         </Link>
                                     </BreadcrumbItem>
-                                </>
+                                </React.Fragment>
                             ))}
 
                             {/* ── Last crumb (always visible when >1 crumbs) ── */}
@@ -163,7 +163,7 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
                                 <>
                                     <BreadcrumbSeparator />
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="max-w-[12rem] truncate" title={lastCrumb.label}>
+                                        <BreadcrumbPage className="max-w-48 truncate" title={lastCrumb.label}>
                                             {lastCrumb.label}
                                         </BreadcrumbPage>
                                     </BreadcrumbItem>

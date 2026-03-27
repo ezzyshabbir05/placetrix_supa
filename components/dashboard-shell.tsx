@@ -1,13 +1,9 @@
 "use client"
 
 import * as React from "react"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-  useSidebar,
-} from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider, useSidebar } from "@/components/ui/sidebar"
 import { SiteHeader } from "@/components/site-header"
+import { usePathname } from "next/navigation"
 
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -70,6 +66,15 @@ export function DashboardShell({
   children: React.ReactNode
 }) {
   const [open, setOpen] = React.useState(false)
+  const pathname = usePathname()
+  const insetRef = React.useRef<HTMLElement>(null)
+
+  // Reset scroll on navigation
+  React.useEffect(() => {
+    if (insetRef.current) {
+      insetRef.current.scrollTo(0, 0)
+    }
+  }, [pathname])
 
   const manualModeRef   = React.useRef(false)
   const hoverOpenedRef  = React.useRef(false)
@@ -171,7 +176,7 @@ export function DashboardShell({
         {sidebar}
 
         {/* ✅ flex flex-col added so flex-1 children respond correctly */}
-        <SidebarInset className="h-svh overflow-y-auto flex flex-col">
+        <SidebarInset ref={insetRef} className="h-svh overflow-y-auto flex flex-col">
           <div className="sticky top-0 z-10 w-full bg-background border-b">
             <SiteHeader onManualToggle={onManualToggle} />
           </div>
