@@ -1,5 +1,5 @@
 import { UnderDevelopment } from "@/components/under-development";
 
-export default function EventsPage() {
+export default function HelpPage() {
   return <UnderDevelopment />;
 }
