@@ -577,6 +577,7 @@ async function saveTestToDb(
       explanation: q.explanation?.trim() || null,
       tag_names: q.tag_names,
       options: q.options.map((opt) => ({
+        id: opt._key,
         option_text: opt.option_text,
         is_correct: opt.is_correct,
       })),
