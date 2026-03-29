@@ -156,30 +156,17 @@ export async function submitAttemptAction(
   attemptId: string,
   timeSpentSeconds: number
 ): Promise<void> {
-  const { supabase, user } = await getSupabaseForAction()
+  const { supabase } = await getSupabaseForAction()
 
-  // 1. Grade the attempt first via self-guarding RPC.
-  const { error: gradeError } = await supabase.rpc("grade_attempt", {
+  // Use the refined v2 RPC which scores AND updates time in one atomic step.
+  const { data: result, error } = await (supabase as any).rpc("grade_attempt_v2", {
     p_attempt_id: attemptId,
+    p_final_time_spent: timeSpentSeconds
   })
-  if (gradeError) throw new Error(gradeError.message)
 
-  // 2. Perform final metadata updates + resolve test_id in parallel.
-  const [{ data: attemptData }] = await Promise.all([
-    supabase
-      .from("test_attempts")
-      .select("test_id")
-      .eq("id", attemptId)
-      .eq("student_id", user.sub)
-      .single(),
-    supabase
-      .from("test_attempts")
-      .update({ time_spent_seconds: timeSpentSeconds })
-      .eq("id", attemptId)
-      .eq("student_id", user.sub)
-  ])
+  if (error || !result) throw new Error(error?.message || "Failed to submit")
 
-  redirect(attemptData?.test_id ? `/~/tests/${attemptData.test_id}` : "/~/tests")
+  redirect(result.test_id ? `/~/tests/${result.test_id}` : "/~/tests")
 }
 
 // ─── Record Violation ──────────────────────────────────────────────────────────
