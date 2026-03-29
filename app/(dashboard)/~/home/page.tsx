@@ -12,9 +12,32 @@ import {
   Users,
   ListCheck,
   PenLine,
-  BarChart3,
 } from "lucide-react";
-import { deriveStatus } from "@/app/(dashboard)/~/tests/_types";
+
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface CandidateStatsResponse {
+  profile: any;
+  stats: {
+    total_tests: number;
+    live_tests: number;
+    upcoming_tests: number;
+    completed_tests: number;
+  };
+}
+
+interface InstituteStatsResponse {
+  profile: any;
+  stats: {
+    total_tests: number;
+    live_tests: number;
+    upcoming_tests: number;
+    past_tests: number;
+    draft_tests: number;
+    total_attempts: number;
+  };
+}
 
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -83,14 +106,16 @@ export default async function HomePage() {
 
   // ── Candidate ──────────────────────────────────────────────────────────────
   if (profile.account_type === "candidate") {
-    const { data: cp } = await supabase
-      .from("candidate_profiles")
-      .select("profile_complete, profile_updated, first_name, last_name, phone_number, date_of_birth, gender, institute_id, course_name, passout_year, ssc_percentage")
-      .eq("profile_id", profile.id)
-      .maybeSingle();
+    const { data } = await supabase.rpc("get_candidate_home_stats", {
+      p_profile_id: profile.id,
+    });
 
-    const isComplete   = cp?.profile_complete === true;
-    const hasBeenSaved = cp?.profile_updated  === true;
+    const candidateData = data as unknown as CandidateStatsResponse;
+    const cp = candidateData?.profile;
+    const stats = candidateData?.stats;
+
+    const isComplete = cp?.profile_complete === true;
+    const hasBeenSaved = cp?.profile_updated === true;
     const profileReady = isComplete && hasBeenSaved;
 
     const profileSubtitle = !cp
@@ -98,51 +123,6 @@ export default async function HomePage() {
       : !hasBeenSaved
       ? "Your profile has been started but not saved yet."
       : "A few required fields are still missing.";
-
-    // ── Fetch test stats (Optimized) ───────────────────────────────
-    let totalTests    = 0;
-    let liveTests     = 0;
-    let upcomingTests = 0;
-    let completedTests = 0;
-
-    if (cp?.institute_id) {
-      const nowIso = new Date().toISOString();
-
-      // Parallelize count queries for performance
-      const [allRes, liveRes, upcomingRes, attemptsRes] = await Promise.all([
-        supabase
-          .from("tests")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "published")
-          .eq("institute_id", cp.institute_id),
-
-        supabase
-          .from("tests")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "published")
-          .eq("institute_id", cp.institute_id)
-          .or(`available_from.is.null,available_from.lte.${nowIso}`)
-          .or(`available_until.is.null,available_until.gte.${nowIso}`),
-
-        supabase
-          .from("tests")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "published")
-          .eq("institute_id", cp.institute_id)
-          .gt("available_from", nowIso),
-
-        supabase
-          .from("test_attempts")
-          .select("*", { count: "exact", head: true })
-          .eq("student_id", profile.id)
-          .eq("status", "submitted")
-      ]);
-
-      totalTests     = allRes.count ?? 0;
-      liveTests      = liveRes.count ?? 0;
-      upcomingTests  = upcomingRes.count ?? 0;
-      completedTests = attemptsRes.count ?? 0;
-    }
 
     return (
       <div className="min-h-screen w-full">
@@ -156,7 +136,6 @@ export default async function HomePage() {
         </div>
 
         <div className="px-4 py-6 md:px-8 md:py-8 space-y-6">
-
           {/* ── Profile banner ───────────────────────────────────────────── */}
           {!profileReady && (
             <div className="rounded-lg border bg-card p-4 flex items-start justify-between gap-4">
@@ -174,32 +153,32 @@ export default async function HomePage() {
           )}
 
           {/* ── Test Stats ───────────────────────────────────────────────── */}
-          {cp?.institute_id && (
+          {cp?.institute_id && stats && (
             <div className="space-y-3">
               <SectionHeader title="Tests Overview" href="/~/tests" />
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <StatCard
                   icon={<BookOpen className="h-4 w-4" />}
                   label="Assigned"
-                  value={totalTests}
+                  value={stats.total_tests}
                 />
                 <StatCard
                   icon={<PlayCircle className="h-4 w-4" />}
                   label="Live Now"
-                  value={liveTests}
-                  accent={liveTests > 0 ? "green" : "muted"}
+                  value={stats.live_tests}
+                  accent={stats.live_tests > 0 ? "green" : "muted"}
                 />
                 <StatCard
                   icon={<CalendarClock className="h-4 w-4" />}
                   label="Upcoming"
-                  value={upcomingTests}
-                  accent={upcomingTests > 0 ? "amber" : "muted"}
+                  value={stats.upcoming_tests}
+                  accent={stats.upcoming_tests > 0 ? "amber" : "muted"}
                 />
                 <StatCard
                   icon={<CheckCircle2 className="h-4 w-4" />}
                   label="Completed"
-                  value={completedTests}
-                  accent={completedTests > 0 ? "blue" : "muted"}
+                  value={stats.completed_tests}
+                  accent={stats.completed_tests > 0 ? "blue" : "muted"}
                 />
               </div>
             </div>
@@ -222,7 +201,6 @@ export default async function HomePage() {
               </Link>
             </div>
           )}
-
         </div>
       </div>
     );
@@ -230,14 +208,16 @@ export default async function HomePage() {
 
   // ── Institute ──────────────────────────────────────────────────────────────
   if (profile.account_type === "institute") {
-    const { data: ip } = await supabase
-      .from("institute_profiles")
-      .select("profile_complete, profile_updated, institute_name, affiliation, address, city, state, phone_number, email, principal_name")
-      .eq("profile_id", profile.id)
-      .maybeSingle();
+    const { data } = await supabase.rpc("get_institute_home_stats", {
+      p_profile_id: profile.id,
+    });
 
-    const isComplete   = ip?.profile_complete === true;
-    const hasBeenSaved = ip?.profile_updated  === true;
+    const instituteData = data as unknown as InstituteStatsResponse;
+    const ip = instituteData?.profile;
+    const stats = instituteData?.stats;
+
+    const isComplete = ip?.profile_complete === true;
+    const hasBeenSaved = ip?.profile_updated === true;
     const profileReady = isComplete && hasBeenSaved;
 
     const profileSubtitle = !ip
@@ -245,25 +225,6 @@ export default async function HomePage() {
       : !hasBeenSaved
       ? "Your profile has been started but not saved yet."
       : "A few required fields are still missing.";
-
-    // ── Fetch test stats (Optimized) ───────────────────────────────
-    const nowIso = new Date().toISOString();
-
-    const [allRes, liveRes, upcomingRes, pastRes, draftRes, attemptsRes] = await Promise.all([
-      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id),
-      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "published").or(`available_from.is.null,available_from.lte.${nowIso}`).or(`available_until.is.null,available_until.gte.${nowIso}`),
-      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "published").gt("available_from", nowIso),
-      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "published").lt("available_until", nowIso),
-      supabase.from("tests").select("*", { count: "exact", head: true }).eq("institute_id", profile.id).eq("status", "draft"),
-      supabase.from("test_attempts").select("id, tests!inner(institute_id)", { count: "exact", head: true }).eq("tests.institute_id", profile.id)
-    ]);
-
-    const totalTests     = allRes.count ?? 0;
-    const liveTests      = liveRes.count ?? 0;
-    const upcomingTests  = upcomingRes.count ?? 0;
-    const pastTests      = pastRes.count ?? 0;
-    const draftTests     = draftRes.count ?? 0;
-    const totalAttempts  = attemptsRes.count ?? 0;
 
     return (
       <div className="min-h-screen w-full">
@@ -277,7 +238,6 @@ export default async function HomePage() {
         </div>
 
         <div className="px-4 py-6 md:px-8 md:py-8 space-y-6">
-
           {/* ── Profile banner ───────────────────────────────────────────── */}
           {!profileReady && (
             <div className="rounded-lg border bg-card p-4 flex items-start justify-between gap-4">
@@ -295,45 +255,46 @@ export default async function HomePage() {
           )}
 
           {/* ── Test Stats ───────────────────────────────────────────────── */}
-          <div className="space-y-3">
-            <SectionHeader title="Tests Overview" href="/~/tests" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <StatCard
-                icon={<ListCheck className="h-4 w-4" />}
-                label="Total Tests"
-                value={totalTests}
-              />
-              <StatCard
-                icon={<PlayCircle className="h-4 w-4" />}
-                label="Live"
-                value={liveTests}
-                accent={liveTests > 0 ? "green" : "muted"}
-              />
-              <StatCard
-                icon={<CalendarClock className="h-4 w-4" />}
-                label="Upcoming"
-                value={upcomingTests}
-                accent={upcomingTests > 0 ? "amber" : "muted"}
-              />
-              <StatCard
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label="Past"
-                value={pastTests}
-              />
-              <StatCard
-                icon={<PenLine className="h-4 w-4" />}
-                label="Drafts"
-                value={draftTests}
-              />
-              <StatCard
-                icon={<Users className="h-4 w-4" />}
-                label="Attempts"
-                value={totalAttempts}
-                accent={totalAttempts > 0 ? "blue" : "muted"}
-              />
+          {stats && (
+            <div className="space-y-3">
+              <SectionHeader title="Tests Overview" href="/~/tests" />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <StatCard
+                  icon={<ListCheck className="h-4 w-4" />}
+                  label="Total Tests"
+                  value={stats.total_tests}
+                />
+                <StatCard
+                  icon={<PlayCircle className="h-4 w-4" />}
+                  label="Live"
+                  value={stats.live_tests}
+                  accent={stats.live_tests > 0 ? "green" : "muted"}
+                />
+                <StatCard
+                  icon={<CalendarClock className="h-4 w-4" />}
+                  label="Upcoming"
+                  value={stats.upcoming_tests}
+                  accent={stats.upcoming_tests > 0 ? "amber" : "muted"}
+                />
+                <StatCard
+                  icon={<CheckCircle2 className="h-4 w-4" />}
+                  label="Past"
+                  value={stats.past_tests}
+                />
+                <StatCard
+                  icon={<PenLine className="h-4 w-4" />}
+                  label="Drafts"
+                  value={stats.draft_tests}
+                />
+                <StatCard
+                  icon={<Users className="h-4 w-4" />}
+                  label="Attempts"
+                  value={stats.total_attempts}
+                  accent={stats.total_attempts > 0 ? "blue" : "muted"}
+                />
+              </div>
             </div>
-          </div>
-
+          )}
         </div>
       </div>
     );

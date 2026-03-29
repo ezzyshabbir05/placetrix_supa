@@ -910,7 +910,20 @@ export type Database = {
         Args: { p_user_id: string; p_username: string }
         Returns: boolean
       }
+      get_candidate_home_stats: {
+        Args: { p_profile_id: string }
+        Returns: Json
+      }
+      get_institute_home_stats: {
+        Args: { p_profile_id: string }
+        Returns: Json
+      }
       grade_attempt: { Args: { p_attempt_id: string }; Returns: undefined }
+      grade_attempt_v2: {
+        Args: { p_attempt_id: string; p_final_time_spent: number }
+        Returns: Json
+      }
+      init_test_attempt: { Args: { p_test_id: string }; Returns: Json }
       revoke_session: { Args: { p_session_id: string }; Returns: undefined }
       revoke_sessions_batch: {
         Args: { p_session_ids: string[] }
