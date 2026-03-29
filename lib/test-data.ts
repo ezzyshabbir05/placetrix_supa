@@ -8,8 +8,8 @@ import type { AttemptQuestion } from "@/app/(fullscreen)/~/tests/[testId]/attemp
  */
 export async function getCachedTestQuestions(testId: string): Promise<AttemptQuestion[]> {
   "use cache"
-  cacheLife("minutes") // Sets TTL to approximately 1 minute
-  
+  cacheLife("seconds") // Sets TTL to approximately 1 minute
+
   const supabase = await createClient()
   const { data: rawQuestions, error: qError } = await supabase
     .from("questions")

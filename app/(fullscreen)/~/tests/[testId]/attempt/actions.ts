@@ -18,7 +18,7 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
   if (!user) throw new Error("Unauthorized")
 
   // Parallelize: check profile, test details, and active attempt in one block.
-  const [profileRes, testRes, existingRes] = await Promise.all([
+  const [profileRes, testRes, existingRes, completedRes] = await Promise.all([
     supabase
       .from("candidate_profiles")
       .select("institute_id, profile_complete, profile_updated")
@@ -37,7 +37,13 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
       .eq("status", "in_progress")
       .order("created_at", { ascending: false })
       .limit(1)
-      .maybeSingle()
+      .maybeSingle(),
+    supabase
+      .from("test_attempts")
+      .select("*", { count: "exact", head: true })
+      .eq("test_id", testId)
+      .eq("student_id", user.sub)
+      .in("status", ["submitted", "auto_submitted"])
   ])
 
   const candidateProfile = profileRes.data
@@ -61,14 +67,9 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
     }
   }
 
-  const { count: completedCount } = await supabase
-    .from("test_attempts")
-    .select("*", { count: "exact", head: true })
-    .eq("test_id", testId)
-    .eq("student_id", user.sub)
-    .in("status", ["submitted", "auto_submitted"])
+  const completedCount = completedRes.count ?? 0
 
-  if ((completedCount ?? 0) >= test.max_attempts) {
+  if (completedCount >= test.max_attempts) {
     throw new Error("Max attempts reached")
   }
 
