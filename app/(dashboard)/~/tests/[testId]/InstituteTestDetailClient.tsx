@@ -111,17 +111,17 @@ function StatsBar({ test, liveAttempts }: { test: InstituteTestDetail; liveAttem
 
   const avgPct =
     submitted.length > 0
-      ? Math.round(
+      ? (
         submitted.reduce(
           (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
           0
         ) / submitted.length
-      )
+      ).toFixed(2)
       : null
 
   const completionPct =
     liveAttempts.length > 0
-      ? Math.round((submitted.length / liveAttempts.length) * 100)
+      ? ((submitted.length / liveAttempts.length) * 100).toFixed(2)
       : 0
 
   return (
@@ -397,12 +397,12 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
 
   const avgPct =
     submitted.length > 0
-      ? Math.round(
+      ? (
         submitted.reduce(
           (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
           0
         ) / submitted.length
-      )
+      ).toFixed(2)
       : null
 
   type SortColumn = "student_name" | "education" | "status" | "score" | "time" | "violations" | "submitted"
@@ -1067,7 +1067,7 @@ export function InstituteTestDetailClient({
           total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
           percentage:
             a.score != null && fullTotalMarks > 0
-              ? Math.round((a.score / fullTotalMarks) * 100)
+              ? ((a.score / fullTotalMarks) * 100)
               : (a.percentage ?? null),
           time_spent_seconds: a.time_spent_seconds ?? null,
           started_at: a.started_at,

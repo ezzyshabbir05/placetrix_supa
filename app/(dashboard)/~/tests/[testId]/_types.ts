@@ -13,13 +13,13 @@ type Views<T extends keyof Database["public"]["Views"]> =
   Database["public"]["Views"][T]["Row"]
 
 // Raw row types — use these if you ever need to pass plain DB rows around
-export type TestRow        = Tables<"tests">
-export type QuestionRow    = Tables<"questions">
-export type OptionRow      = Tables<"options">
-export type TagRow         = Tables<"tags">
-export type AttemptRow     = Tables<"test_attempts">
-export type AnswerRow      = Tables<"attempt_answers">
-export type AttemptDetail  = Views<"attempt_details">   // the view
+export type TestRow = Tables<"tests">
+export type QuestionRow = Tables<"questions">
+export type OptionRow = Tables<"options">
+export type TagRow = Tables<"tags">
+export type AttemptRow = Tables<"test_attempts">
+export type AnswerRow = Tables<"attempt_answers">
+export type AttemptDetail = Views<"attempt_details">   // the view
 
 
 
@@ -164,8 +164,8 @@ export function resolvePct(
   score: number | null | undefined,
   total: number | null | undefined
 ): number {
-  if (pct != null) return Math.round(pct)
+  if (pct != null) return pct
   if (score != null && total != null && total > 0)
-    return Math.round((score / total) * 100)
+    return (score / total) * 100
   return 0
 }

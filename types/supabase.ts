@@ -7,10 +7,53 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.4"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  pgbouncer: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      get_auth: {
+        Args: { p_usename: string }
+        Returns: {
+          password: string
+          username: string
+        }[]
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -52,35 +95,30 @@ export type Database = {
           {
             foreignKeyName: "attempt_answers_attempt_id_fkey"
             columns: ["attempt_id"]
-            isOneToOne: false
             referencedRelation: "attempt_details"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attempt_answers_attempt_id_fkey"
             columns: ["attempt_id"]
-            isOneToOne: false
             referencedRelation: "test_attempts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attempt_answers_attempt_id_fkey"
             columns: ["attempt_id"]
-            isOneToOne: false
             referencedRelation: "view_test_results_detailed"
             referencedColumns: ["attempt_id"]
           },
           {
             foreignKeyName: "attempt_answers_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
             referencedRelation: "questions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attempt_answers_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
             referencedRelation: "view_question_analysis"
             referencedColumns: ["question_id"]
           },
@@ -229,7 +267,6 @@ export type Database = {
           {
             foreignKeyName: "candidate_profiles_profile_id_fkey"
             columns: ["profile_id"]
-            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -315,7 +352,6 @@ export type Database = {
           {
             foreignKeyName: "institute_profiles_profile_id_fkey"
             columns: ["profile_id"]
-            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -350,14 +386,12 @@ export type Database = {
           {
             foreignKeyName: "options_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
             referencedRelation: "questions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "options_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
             referencedRelation: "view_question_analysis"
             referencedColumns: ["question_id"]
           },
@@ -419,28 +453,24 @@ export type Database = {
           {
             foreignKeyName: "question_tags_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
             referencedRelation: "questions"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "question_tags_question_id_fkey"
             columns: ["question_id"]
-            isOneToOne: false
             referencedRelation: "view_question_analysis"
             referencedColumns: ["question_id"]
           },
           {
             foreignKeyName: "question_tags_tag_id_fkey"
             columns: ["tag_id"]
-            isOneToOne: false
             referencedRelation: "tag_performance"
             referencedColumns: ["tag_id"]
           },
           {
             foreignKeyName: "question_tags_tag_id_fkey"
             columns: ["tag_id"]
-            isOneToOne: false
             referencedRelation: "tags"
             referencedColumns: ["id"]
           },
@@ -490,14 +520,12 @@ export type Database = {
           {
             foreignKeyName: "questions_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "tests"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "questions_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "view_test_summary"
             referencedColumns: ["id"]
           },
@@ -586,21 +614,18 @@ export type Database = {
           {
             foreignKeyName: "test_attempts_student_id_fkey"
             columns: ["student_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "tests"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "view_test_summary"
             referencedColumns: ["id"]
           },
@@ -668,7 +693,6 @@ export type Database = {
           {
             foreignKeyName: "tests_institute_id_fkey"
             columns: ["institute_id"]
-            isOneToOne: false
             referencedRelation: "institute_profiles"
             referencedColumns: ["profile_id"]
           },
@@ -709,7 +733,6 @@ export type Database = {
           {
             foreignKeyName: "user_sessions_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -739,21 +762,18 @@ export type Database = {
           {
             foreignKeyName: "test_attempts_student_id_fkey"
             columns: ["student_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "tests"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "view_test_summary"
             referencedColumns: ["id"]
           },
@@ -773,21 +793,18 @@ export type Database = {
           {
             foreignKeyName: "test_attempts_student_id_fkey"
             columns: ["student_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "tests"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "view_test_summary"
             referencedColumns: ["id"]
           },
@@ -808,14 +825,12 @@ export type Database = {
           {
             foreignKeyName: "questions_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "tests"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "questions_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "view_test_summary"
             referencedColumns: ["id"]
           },
@@ -845,21 +860,18 @@ export type Database = {
           {
             foreignKeyName: "test_attempts_student_id_fkey"
             columns: ["student_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "tests"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_attempts_test_id_fkey"
             columns: ["test_id"]
-            isOneToOne: false
             referencedRelation: "view_test_summary"
             referencedColumns: ["id"]
           },
@@ -887,7 +899,6 @@ export type Database = {
           {
             foreignKeyName: "tests_institute_id_fkey"
             columns: ["institute_id"]
-            isOneToOne: false
             referencedRelation: "institute_profiles"
             referencedColumns: ["profile_id"]
           },
@@ -901,12 +912,25 @@ export type Database = {
       }
       grade_attempt: { Args: { p_attempt_id: string }; Returns: undefined }
       revoke_session: { Args: { p_session_id: string }; Returns: undefined }
+      revoke_sessions_batch: {
+        Args: { p_session_ids: string[] }
+        Returns: undefined
+      }
       save_answer: {
         Args: {
           p_attempt_id: string
           p_question_id: string
           p_selected_option_ids: string[]
           p_time_spent_seconds?: number
+        }
+        Returns: undefined
+      }
+      save_test_v2: {
+        Args: {
+          p_questions: Json[]
+          p_settings: Json
+          p_status: string
+          p_test_id: string
         }
         Returns: undefined
       }
@@ -925,135 +949,3 @@ export type Database = {
     }
   }
 }
-
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
-
-export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
-
-export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
-
-export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
-
-export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      attempt_status: [
-        "in_progress",
-        "submitted",
-        "abandoned",
-        "auto_submitted",
-      ],
-      question_type: ["single_correct", "multiple_correct", "true_false"],
-      test_status: ["draft", "published", "archived"],
-    },
-  },
-} as const

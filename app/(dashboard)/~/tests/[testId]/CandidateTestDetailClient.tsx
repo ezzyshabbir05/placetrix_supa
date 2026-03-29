@@ -444,7 +444,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
                     Score
                   </p>
                   <p className={cn("mt-1 text-4xl font-bold tabular-nums tracking-tight", pctColorClass)}>
-                    {pct}%
+                    {pct.toFixed(2)}%
                   </p>
                   {attempt?.score != null && attempt?.total_marks != null && (
                     <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">

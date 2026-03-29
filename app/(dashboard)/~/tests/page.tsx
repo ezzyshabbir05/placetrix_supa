@@ -48,7 +48,7 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
 
   const testIds = rawTests.map((t) => t.id)
 
-  // 3. Fetch this candidate's latest attempt per test
+  // 5. Fetch candidate's latest attempts per test
   const { data: rawAttempts } = await supabase
     .from("test_attempts")
     .select("test_id, status, submitted_at, score, total_marks, percentage")
@@ -56,11 +56,12 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
     .in("test_id", testIds)
     .order("created_at", { ascending: false })
 
-  // 4. Build a raw attempt map (score only — total_marks will be overridden below)
+  // 4. Build a raw attempt map
   const rawAttemptMap: Record<string, {
     status: "in_progress" | "submitted"
     submitted_at?: string
     score?: number
+    total_marks?: number
     percentage?: number
   }> = {}
   for (const a of rawAttempts ?? []) {
@@ -69,39 +70,23 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
       status: a.status as "in_progress" | "submitted",
       submitted_at: a.submitted_at ?? undefined,
       score: a.score ?? undefined,
+      total_marks: a.total_marks ?? undefined,
       percentage: a.percentage ?? undefined,
     }
-  }
-
-  // 5. Fetch all questions' marks for these tests in one query
-  const { data: rawQuestions } = await supabase
-    .from("questions")
-    .select("test_id, marks")
-    .in("test_id", testIds)
-
-  const totalMarksMap: Record<string, number> = {}
-  for (const q of rawQuestions ?? []) {
-    totalMarksMap[q.test_id] = (totalMarksMap[q.test_id] ?? 0) + (q.marks ?? 0)
   }
 
   // 6. Shape into CandidateTest[]
   return rawTests.map((t): CandidateTest => {
     const raw = rawAttemptMap[t.id]
-    const fullTotalMarks = totalMarksMap[t.id] ?? 0
 
     let attempt: CandidateTestAttempt | undefined
     if (raw) {
-      const correctedPct =
-        raw.score != null && fullTotalMarks > 0
-          ? Math.round((raw.score / fullTotalMarks) * 100)
-          : raw.percentage
-
       attempt = {
         status: raw.status,
         submitted_at: raw.submitted_at,
         score: raw.score,
-        total_marks: fullTotalMarks > 0 ? fullTotalMarks : undefined,
-        percentage: correctedPct,
+        total_marks: raw.total_marks,
+        percentage: raw.percentage,
       }
     }
 

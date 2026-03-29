@@ -72,8 +72,6 @@ async function fetchCandidateView(
     notFound()
   }
 
-  const allQuestionsTotalMarks = (raw.questions ?? []).reduce((sum: number, q: any) => sum + (q.marks ?? 0), 0)
-
   const test: CandidateTestDetail = {
     id: raw.id,
     title: raw.title,
@@ -95,8 +93,8 @@ async function fetchCandidateView(
     status: rawAttempt.status as "in_progress" | "submitted",
     submitted_at: rawAttempt.submitted_at ?? null,
     score: rawAttempt.score ?? null,
-    total_marks: allQuestionsTotalMarks > 0 ? allQuestionsTotalMarks : (rawAttempt.total_marks ?? null),
-    percentage: rawAttempt.score != null && allQuestionsTotalMarks > 0 ? Math.round((rawAttempt.score / allQuestionsTotalMarks) * 100) : (rawAttempt.percentage ?? null),
+    total_marks: rawAttempt.total_marks ?? null,
+    percentage: rawAttempt.percentage ?? null,
     time_spent_seconds: rawAttempt.time_spent_seconds ?? null,
     tab_switch_count: rawAttempt.tab_switch_count ?? null,
   }
@@ -194,9 +192,7 @@ async function fetchInstituteView(
       .flat(),
   }))
 
-  const fullTotalMarks = questions.reduce((s, q) => s + q.marks, 0)
-
-  // 2. Map attempts (now much simpler as profiles are pre-joined in the view)
+  // 2. Map attempts
   const attempts: InstituteAttemptRow[] = (raw.attempts ?? [])
     .filter((a: any): a is any & { attempt_id: string; started_at: string } =>
       a.attempt_id != null && a.started_at != null
@@ -207,11 +203,8 @@ async function fetchInstituteView(
       student_email: a.student_email,
       status: a.status as InstituteAttemptRow["status"],
       score: a.score ?? null,
-      total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
-      percentage:
-        a.score != null && fullTotalMarks > 0
-          ? Math.round((a.score / fullTotalMarks) * 100)
-          : (a.percentage ?? null),
+      total_marks: a.total_marks ?? null,
+      percentage: a.percentage ?? null,
       time_spent_seconds: a.time_spent_seconds ?? null,
       started_at: a.started_at,
       submitted_at: a.submitted_at ?? null,

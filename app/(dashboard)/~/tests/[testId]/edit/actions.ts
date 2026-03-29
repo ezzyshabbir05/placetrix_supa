@@ -557,20 +557,9 @@ async function saveTestToDb(
 ): Promise<void> {
   const supabase = await createClient()
 
-  const { data: existing } = await supabase
-    .from("tests")
-    .select("institute_id")
-    .eq("id", testId)
-    .maybeSingle()
-
-  if (existing && existing.institute_id !== userId) {
-    throw new Error("Access denied.")
-  }
-
-  const { error: testError } = await supabase.from("tests").upsert(
-    {
-      id: testId,
-      institute_id: userId,
+  const { error } = await supabase.rpc("save_test_v2", {
+    p_test_id: testId,
+    p_settings: {
       title: settings.title.trim(),
       description: settings.description.trim() || null,
       instructions: settings.instructions.trim() || null,
@@ -579,147 +568,24 @@ async function saveTestToDb(
         : null,
       available_from: settings.available_from || null,
       available_until: settings.available_until || null,
-      status,
     },
-    { onConflict: "id" }
-  )
-
-  if (testError) {
-    throw new Error("Failed to save test: " + testError.message)
-  }
-
-  const { data: existingRows } = await supabase
-    .from("questions")
-    .select("id")
-    .eq("test_id", testId)
-
-  const existingIds = new Set((existingRows ?? []).map((r) => r.id as string))
-  const incomingIds = new Set(questions.map((q) => q.id))
-
-  const removedIds = [...existingIds].filter((id) => !incomingIds.has(id))
-
-  if (removedIds.length > 0) {
-    const { error: delError } = await supabase
-      .from("questions")
-      .delete()
-      .in("id", removedIds)
-
-    if (delError) {
-      throw new Error("Failed to delete removed questions: " + delError.message)
-    }
-  }
-
-  if (questions.length === 0) return
-
-  const { data: upsertedQuestions, error: qError } = await supabase
-    .from("questions")
-    .upsert(
-      questions.map((q, i) => ({
-        id: q.id,
-        test_id: testId,
-        question_text: q.question_text,
-        question_type: q.question_type,
-        marks: q.marks,
-        order_index: i + 1,
-        explanation: q.explanation?.trim() || null,
-      })),
-      { onConflict: "id" }
-    )
-    .select("id, order_index")
-
-  if (qError || !upsertedQuestions) {
-    throw new Error("Failed to upsert questions: " + (qError?.message ?? "unknown"))
-  }
-
-  const questionIds = upsertedQuestions.map((q) => q.id)
-
-  const { error: delOptError } = await supabase
-    .from("options")
-    .delete()
-    .in("question_id", questionIds)
-
-  if (delOptError) {
-    throw new Error("Failed to clear options: " + delOptError.message)
-  }
-
-  const optionsPayload: any[] = []
-
-  for (const dbQ of upsertedQuestions) {
-    const localQ = questions[dbQ.order_index - 1]
-    if (!localQ) continue
-
-    localQ.options.forEach((opt, oi) => {
-      optionsPayload.push({
-        question_id: dbQ.id,
+    p_questions: questions.map((q) => ({
+      id: q.id,
+      question_text: q.question_text,
+      question_type: q.question_type,
+      marks: q.marks,
+      explanation: q.explanation?.trim() || null,
+      tag_names: q.tag_names,
+      options: q.options.map((opt) => ({
         option_text: opt.option_text,
         is_correct: opt.is_correct,
-        order_index: oi + 1,
-      })
-    })
-  }
+      })),
+    })),
+    p_status: status,
+  })
 
-  if (optionsPayload.length > 0) {
-    const { error: optError } = await supabase.from("options").insert(optionsPayload)
-    if (optError) {
-      throw new Error("Failed to insert options: " + optError.message)
-    }
-  }
-
-  const { error: delQtError } = await supabase
-    .from("question_tags")
-    .delete()
-    .in("question_id", questionIds)
-
-  if (delQtError) {
-    throw new Error("Failed to clear question tags: " + delQtError.message)
-  }
-
-  const allTagNames = [
-    ...new Set(
-      questions.flatMap((q) => q.tag_names.map((t) => t.trim()).filter(Boolean))
-    ),
-  ]
-
-  if (allTagNames.length > 0) {
-    await supabase
-      .from("tags")
-      .upsert(allTagNames.map((name) => ({ name })), { onConflict: "name" })
-
-    const { data: tagRecords } = await supabase
-      .from("tags")
-      .select("id, name")
-      .in("name", allTagNames)
-
-    const tagMap: Record<string, string> = Object.fromEntries(
-      (tagRecords ?? []).map((t) => [t.name, t.id])
-    )
-
-    const questionTagsPayload: any[] = []
-
-    for (const dbQ of upsertedQuestions) {
-      const localQ = questions[dbQ.order_index - 1]
-      if (!localQ) continue
-
-      for (const tagName of localQ.tag_names) {
-        const tagId = tagMap[tagName.trim()]
-        if (tagId) {
-          questionTagsPayload.push({
-            question_id: dbQ.id,
-            tag_id: tagId,
-          })
-        }
-      }
-    }
-
-    if (questionTagsPayload.length > 0) {
-      const { error: qtError } = await supabase
-        .from("question_tags")
-        .insert(questionTagsPayload)
-
-      if (qtError) {
-        throw new Error("Failed to link tags: " + qtError.message)
-      }
-    }
+  if (error) {
+    throw new Error("Failed to save test: " + error.message)
   }
 }
 

@@ -507,19 +507,18 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     const others = sessions.filter((s) => s.id !== currentSessionId)
     if (!others.length) { toast.info("No other active sessions."); return }
     setRevokingAll(true)
-    let ok = 0, fail = 0
-    for (const s of others) {
-      try {
-        const { error } = await supabase.rpc("revoke_session", { p_session_id: s.id })
-        if (error) throw error
-        ok++
-        setSessions((prev) => prev.filter((x) => x.id !== s.id))
-      } catch { fail++ }
+    try {
+      const ids = others.map((s) => s.id)
+      const { error } = await supabase.rpc("revoke_sessions_batch", { p_session_ids: ids })
+      if (error) throw error
+
+      setSessions((prev) => prev.filter((s) => s.id === currentSessionId))
+      toast.success(`${ids.length} session${ids.length !== 1 ? "s" : ""} revoked.`)
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to revoke sessions.")
+    } finally {
+      setRevokingAll(false)
     }
-    setRevokingAll(false)
-    fail === 0
-      ? toast.success(`${ok} session${ok !== 1 ? "s" : ""} revoked.`)
-      : toast.warning(`${ok} revoked, ${fail} failed.`)
   }
 
   const otherSessionCount = sessions.filter((s) => s.id !== currentSessionId).length

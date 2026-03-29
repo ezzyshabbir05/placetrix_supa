@@ -167,7 +167,7 @@ function TestCard({ test }: { test: CandidateTest }) {
                 {test.attempt.score}/{test.attempt.total_marks}
               </span>{" "}
               <span className="text-xs font-normal text-muted-foreground">
-                ({test.attempt.percentage.toFixed(1)}%)
+                ({test.attempt.percentage.toFixed(2)}%)
               </span>
             </p>
           ) : (
