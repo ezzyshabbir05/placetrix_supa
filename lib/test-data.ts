@@ -1,14 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
-import { cacheLife } from "next/cache"
 import type { AttemptQuestion } from "@/app/(fullscreen)/~/tests/[testId]/attempt/_types"
 
 /**
- * Fetches the questions for a test in a separate, cached block.
- * Uses the Next.js 15+ "use cache" directive to reduce DB load.
+ * Fetches the questions for a test.
  */
-export async function getCachedTestQuestions(testId: string): Promise<AttemptQuestion[]> {
-  "use cache"
-  cacheLife("seconds") // Sets TTL to approximately 1 minute
+export async function getTestQuestions(testId: string): Promise<AttemptQuestion[]> {
 
   const supabase = await createClient()
   const { data: rawQuestions, error: qError } = await supabase

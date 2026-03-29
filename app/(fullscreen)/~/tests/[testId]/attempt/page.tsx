@@ -6,7 +6,7 @@ import { notFound, redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AttemptClient } from "./AttemptClient"
 import { saveAnswerAction, submitAttemptAction, recordViolationAction, startAttemptAction } from "./actions"
-import { getCachedTestQuestions } from "@/lib/test-data"
+import { getTestQuestions } from "@/lib/test-data"
 import type { AttemptQuestion, AttemptTest, AttemptInfo, SavedAnswer } from "./_types"
 
 export default async function AttemptPage({
@@ -56,9 +56,8 @@ export default async function AttemptPage({
     savedAnswers = initResult.saved_answers ?? []
   }
 
-  // ── 3. Fetch questions (Uses 'use cache') ────────────────────────────────────
-  // This reduces load during spikes as the DB is only queried once per test.
-  let questions = await getCachedTestQuestions(testId)
+  // ── 3. Fetch questions ──────────────────────────────────────────────────────
+  let questions = await getTestQuestions(testId)
 
   // Apply test-level shuffles (server-side for consistency in the current session)
   // (We fetch the shuffle flags from the 'init_test_attempt' result if needed, 
