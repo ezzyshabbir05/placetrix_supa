@@ -19,8 +19,7 @@ interface Props {
   questions: LocalQuestion[]
   setQuestions: React.Dispatch<React.SetStateAction<LocalQuestion[]>>
   availableTags: { id: string; name: string }[]
-  generateQuestionsAction: (input: AiGenerateForm) => Promise<GenerateQuestionsResult> // ← updated
-  disabled?: boolean
+  generateQuestionsAction: (input: AiGenerateForm) => Promise<GenerateQuestionsResult>
 }
 
 
@@ -29,7 +28,6 @@ export function QuestionsPanel({
   setQuestions,
   availableTags,
   generateQuestionsAction,
-  disabled,
 }: Props) {
   const [questionSheetOpen, setQuestionSheetOpen] = useState(false)
   const [aiSheetOpen, setAiSheetOpen] = useState(false)
@@ -110,7 +108,7 @@ export function QuestionsPanel({
 
   return (
     <>
-      <Card className={disabled ? "pointer-events-none opacity-50" : undefined}>
+      <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-0.5">
@@ -122,26 +120,20 @@ export function QuestionsPanel({
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>
-                {disabled
-                  ? "Save settings first to unlock questions."
-                  : "Add, edit, or reorder questions."}
-              </CardDescription>
+              <CardDescription>Add, edit, or reorder questions.</CardDescription>
             </div>
 
-            {!disabled && (
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => setAiSheetOpen(true)}>
-                  <Sparkles className="mr-1.5 size-4" /> AI Generate
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setImportSheetOpen(true)}>
-                  <Upload className="mr-1.5 size-4" /> Import
-                </Button>
-                <Button size="sm" onClick={openAdd}>
-                  <PlusCircle className="mr-1.5 size-4" /> Add Question
-                </Button>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => setAiSheetOpen(true)}>
+                <Sparkles className="mr-1.5 size-4" /> AI Generate
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setImportSheetOpen(true)}>
+                <Upload className="mr-1.5 size-4" /> Import
+              </Button>
+              <Button size="sm" onClick={openAdd}>
+                <PlusCircle className="mr-1.5 size-4" /> Add Question
+              </Button>
+            </div>
           </div>
         </CardHeader>
 

@@ -4,7 +4,7 @@ import { useState, useCallback } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Loader2, Save, Send } from "lucide-react"
-import { SettingsForm as SettingsFormComponent } from "./SettingsForm"
+import { SettingsForm as SettingsFormComponent, normalizeDefaults, toUTCISOString } from "./SettingsForm"
 import { QuestionsPanel } from "./QuestionsPanel"
 import type {
   SettingsForm,
@@ -12,14 +12,14 @@ import type {
   QuestionForm,
   AiGenerateForm,
   InitialTestData,
-  GenerateQuestionsResult, // ← add this
+  GenerateQuestionsResult,
 } from "../actions"
 
 interface Props {
   testId?: string
   initialData?: InitialTestData
   availableTags: { id: string; name: string }[]
-  generateQuestionsAction: (input: AiGenerateForm) => Promise<GenerateQuestionsResult> // ← updated
+  generateQuestionsAction: (input: AiGenerateForm) => Promise<GenerateQuestionsResult>
   onSaveDraft: (id: string, settings: SettingsForm, questions: LocalQuestion[]) => Promise<void>
   onPublish: (id: string, settings: SettingsForm, questions: LocalQuestion[]) => Promise<void>
 }
@@ -31,6 +31,15 @@ const EMPTY_SETTINGS: SettingsForm = {
   time_limit_minutes: "",
   available_from: "",
   available_until: "",
+}
+
+/** Convert local datetime-local values to UTC ISO strings for DB storage */
+function settingsForDb(settings: SettingsForm): SettingsForm {
+  return {
+    ...settings,
+    available_from: toUTCISOString(settings.available_from),
+    available_until: toUTCISOString(settings.available_until),
+  }
 }
 
 export function CreateTestClient({
@@ -46,65 +55,60 @@ export function CreateTestClient({
   // Stable ID: use prop when editing, generate once when creating
   const [testId] = useState<string>(() => propTestId ?? crypto.randomUUID())
 
-  const [settings, setSettings] = useState<SettingsForm>(
-    initialData?.settings ?? EMPTY_SETTINGS
+  // Settings state lives here so both SettingsForm and the header buttons
+  // always see the latest values. Dates are kept in local "YYYY-MM-DDTHH:mm"
+  // format for the inputs; they are converted to UTC just before saving.
+  const [settings, setSettings] = useState<SettingsForm>(() =>
+    normalizeDefaults(initialData?.settings ?? EMPTY_SETTINGS)
   )
   const [questions, setQuestions] = useState<LocalQuestion[]>(
     initialData?.questions ?? []
   )
 
-  // Settings panel is considered "saved" immediately when editing
-  const [settingsSaved, setSettingsSaved] = useState(isEditMode)
-
   const [isSaving, setIsSaving] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
 
-  // ── Settings save ───────────────────────────────────────────────────────────
-  const handleSettingsSave = useCallback(
-    async (newSettings: SettingsForm) => {
-      if (!newSettings.title.trim()) {
-        toast.error("Title is required to save.")
-        return
-      }
-      setIsSaving(true)
-      try {
-        await onSaveDraft(testId, newSettings, questions)
-        setSettings(newSettings)
-        setSettingsSaved(true)
-        toast.success("Settings saved.")
-      } catch (err: any) {
-        toast.error(err?.message ?? "Failed to save settings.")
-      } finally {
-        setIsSaving(false)
-      }
-    },
-    [testId, questions, onSaveDraft]
-  )
+  // Validation helpers
+  const titleValid = settings.title.trim().length > 0
+  const dateRangeValid =
+    !settings.available_from ||
+    !settings.available_until ||
+    settings.available_from < settings.available_until
+
+  const canSave = titleValid && dateRangeValid
 
   // ── Draft save ──────────────────────────────────────────────────────────────
   const handleSaveDraft = useCallback(async () => {
+    if (!canSave) {
+      if (!titleValid) toast.error("Title is required to save.")
+      return
+    }
     setIsSaving(true)
     try {
-      await onSaveDraft(testId, settings, questions)
+      await onSaveDraft(testId, settingsForDb(settings), questions)
       toast.success("Draft saved.")
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to save draft.")
     } finally {
       setIsSaving(false)
     }
-  }, [testId, settings, questions, onSaveDraft])
+  }, [testId, settings, questions, onSaveDraft, canSave, titleValid])
 
   // ── Publish ─────────────────────────────────────────────────────────────────
   const handlePublish = useCallback(async () => {
+    if (!canSave) {
+      if (!titleValid) toast.error("Title is required to publish.")
+      return
+    }
     setIsPublishing(true)
     try {
-      await onPublish(testId, settings, questions)
+      await onPublish(testId, settingsForDb(settings), questions)
       // redirect happens server-side; component unmounts
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to publish.")
       setIsPublishing(false)
     }
-  }, [testId, settings, questions, onPublish])
+  }, [testId, settings, questions, onPublish, canSave, titleValid])
 
   return (
     <div className="min-h-screen w-full">
@@ -127,7 +131,7 @@ export function CreateTestClient({
             <Button
               variant="outline"
               size="sm"
-              disabled={isSaving || !settingsSaved}
+              disabled={isSaving || !canSave}
               onClick={handleSaveDraft}
             >
               {isSaving ? (
@@ -140,7 +144,7 @@ export function CreateTestClient({
 
             <Button
               size="sm"
-              disabled={isPublishing || !settingsSaved}
+              disabled={isPublishing || !canSave}
               onClick={handlePublish}
             >
               {isPublishing ? (
@@ -155,9 +159,8 @@ export function CreateTestClient({
 
         {/* ── Settings ── */}
         <SettingsFormComponent
-          defaultValues={settings}
-          isSaving={isSaving}
-          onSave={handleSettingsSave}
+          values={settings}
+          onChange={setSettings}
         />
 
         {/* ── Questions ── */}
@@ -166,7 +169,6 @@ export function CreateTestClient({
           setQuestions={setQuestions}
           availableTags={availableTags}
           generateQuestionsAction={generateQuestionsAction}
-          disabled={!settingsSaved}
         />
 
       </div>

@@ -1,19 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
+import { useCallback } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertCircle, Loader2 } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import type { SettingsForm } from "../actions"
 
 
 interface Props {
-  defaultValues: SettingsForm
-  isSaving: boolean
-  onSave: (values: SettingsForm) => Promise<void>
+  values: SettingsForm
+  onChange: (values: SettingsForm) => void
 }
 
 
@@ -25,7 +23,7 @@ interface Props {
  * expressed in the user's LOCAL timezone (e.g. IST → shows 10:00 not 04:30).
  * If already in datetime-local format it is returned as-is (safe for re-runs).
  */
-function toLocalDateTimeInput(isoString: string): string {
+export function toLocalDateTimeInput(isoString: string): string {
   if (!isoString) return ""
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(isoString)) return isoString
   const d = new Date(isoString)
@@ -39,14 +37,14 @@ function toLocalDateTimeInput(isoString: string): string {
  * Converts the "YYYY-MM-DDTHH:mm" value from <input type="datetime-local">
  * (which browsers interpret as LOCAL time) back to a UTC ISO string for DB storage.
  */
-function toUTCISOString(localDT: string): string {
+export function toUTCISOString(localDT: string): string {
   if (!localDT) return ""
   const d = new Date(localDT) // no-TZ string → parsed as local time by browsers
   if (isNaN(d.getTime())) return ""
   return d.toISOString()
 }
 
-function normalizeDefaults(values: SettingsForm): SettingsForm {
+export function normalizeDefaults(values: SettingsForm): SettingsForm {
   return {
     ...values,
     available_from: toLocalDateTimeInput(values.available_from),
@@ -57,35 +55,19 @@ function normalizeDefaults(values: SettingsForm): SettingsForm {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
-  // Keep datetime fields in LOCAL "YYYY-MM-DDTHH:mm" format for the inputs.
-  // Incoming defaultValues carry UTC ISO strings from DB, so normalise on init.
-  const [form, setForm] = useState<SettingsForm>(() => normalizeDefaults(defaultValues))
-
-  // Sync when parent resets defaultValues (e.g. after a successful save that
-  // returns fresh UTC timestamps from the server).
-  useEffect(() => {
-    setForm(normalizeDefaults(defaultValues))
-  }, [defaultValues])
-
-  const set = (key: keyof SettingsForm) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => setForm((f) => ({ ...f, [key]: e.target.value }))
+export function SettingsForm({ values, onChange }: Props) {
+  const set = useCallback(
+    (key: keyof SettingsForm) =>
+      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        onChange({ ...values, [key]: e.target.value }),
+    [values, onChange]
+  )
 
   // Lexicographic comparison on "YYYY-MM-DDTHH:mm" local strings is correct.
   const dateRangeInvalid =
-    !!form.available_from &&
-    !!form.available_until &&
-    form.available_from >= form.available_until
-
-  // Convert local datetime values back to UTC ISO strings before saving to DB.
-  const handleSave = () => {
-    onSave({
-      ...form,
-      available_from: toUTCISOString(form.available_from),
-      available_until: toUTCISOString(form.available_until),
-    })
-  }
+    !!values.available_from &&
+    !!values.available_until &&
+    values.available_from >= values.available_until
 
   return (
     <Card>
@@ -100,7 +82,7 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
           <Input
             id="title"
             placeholder="e.g. JavaScript Fundamentals"
-            value={form.title}
+            value={values.title}
             onChange={set("title")}
           />
         </div>
@@ -111,7 +93,7 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
             id="description"
             placeholder="Optional short description shown to candidates"
             className="min-h-[4rem] resize-none"
-            value={form.description}
+            value={values.description}
             onChange={set("description")}
           />
         </div>
@@ -122,7 +104,7 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
             id="instructions"
             placeholder="Rules or instructions candidates will read before starting"
             className="min-h-[5rem] resize-none"
-            value={form.instructions}
+            value={values.instructions}
             onChange={set("instructions")}
           />
         </div>
@@ -135,7 +117,7 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
             min={1}
             className="w-40"
             placeholder="e.g. 60"
-            value={form.time_limit_minutes}
+            value={values.time_limit_minutes}
             onChange={set("time_limit_minutes")}
           />
         </div>
@@ -147,7 +129,7 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
               <Input
                 id="available_from"
                 type="datetime-local"
-                value={form.available_from}
+                value={values.available_from}
                 onChange={set("available_from")}
               />
             </div>
@@ -156,7 +138,7 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
               <Input
                 id="available_until"
                 type="datetime-local"
-                value={form.available_until}
+                value={values.available_until}
                 onChange={set("available_until")}
               />
             </div>
@@ -168,17 +150,6 @@ export function SettingsForm({ defaultValues, isSaving, onSave }: Props) {
               &quot;Available Until&quot; must be after &quot;Available From&quot;.
             </p>
           )}
-        </div>
-
-        <div className="pt-1">
-          <Button
-            size="sm"
-            disabled={isSaving || !form.title.trim() || dateRangeInvalid}
-            onClick={handleSave}
-          >
-            {isSaving && <Loader2 className="mr-2 size-4 animate-spin" />}
-            Save Settings
-          </Button>
         </div>
 
       </CardContent>
