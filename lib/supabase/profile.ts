@@ -115,8 +115,16 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
 
   // ── Step 1: Read user from local claims (fast, signature-validated) ──────
-  const { data, error: authError } = await supabase.auth.getClaims();
-  const user = data?.claims ?? null;
+  const { data: claimsData, error: authError } = await supabase.auth.getClaims();
+  let user = claimsData?.claims ?? null;
+
+  // Fallback: If claims are missing/expired, try a full session refresh via getUser()
+  if (!user) {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      user = { ...authUser, sub: authUser.id } as any;
+    }
+  }
 
   if (user) {
     // Optimization: Check for profile data in user_metadata first (JWT claims)

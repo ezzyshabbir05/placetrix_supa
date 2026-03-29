@@ -64,12 +64,21 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   );
 
 
-  // 2. We use getClaims() instead of getSession() or getUser().
-  //    Initially getSession() was used for speed, but getClaims() is safer
-  //    as it validates the JWT signature locally without a network hit.
-  //    This prevents "Auth request flooding" (504s) while maintaining security.
-  const { data } = await supabase.auth.getClaims();
-  const user = data?.claims ?? null;
+  // 2. We use getClaims() as a fast-path cache.
+  //    It validates the JWT signature locally without a network hit.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  let user = claimsData?.claims ?? null;
+
+  // 3. Fallback: If claims are missing or expired (user is null),
+  //    we MUST attempt a session refresh via getUser().
+  //    This prevents unnecessary logouts when the token simply expires.
+  if (!user && (isProtected(pathname) || isAuthPage(pathname))) {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      // Refresh succeeded! Proceed with updated credentials.
+      user = { ...authUser, sub: authUser.id } as any;
+    }
+  }
 
   // Redirect unauthenticated user trying to reach a protected page → login.
   if (isProtected(pathname) && !user) {
