@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { cacheLife } from "next/cache"
 import type { AttemptQuestion } from "@/app/(fullscreen)/~/tests/[testId]/attempt/_types"
 
 /**
@@ -7,10 +8,7 @@ import type { AttemptQuestion } from "@/app/(fullscreen)/~/tests/[testId]/attemp
  */
 export async function getCachedTestQuestions(testId: string): Promise<AttemptQuestion[]> {
   "use cache"
-  
-  // Tag this cache entry so it can be revalidated when the test is edited.
-  // Note: we can't easily use revalidateTag in a simplified setup but 
-  // the 'use cache' directive handles basic TTL or manual revalidation.
+  cacheLife("minutes") // Sets TTL to approximately 1 minute
   
   const supabase = await createClient()
   const { data: rawQuestions, error: qError } = await supabase
