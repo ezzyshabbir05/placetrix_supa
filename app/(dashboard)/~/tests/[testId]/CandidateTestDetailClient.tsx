@@ -4,7 +4,7 @@
 // app/~/tests/[id]/CandidateTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { type ReactNode, useMemo } from "react"
+import { type ReactNode } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -41,35 +41,6 @@ import type {
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
 
 
-// ─── Seeded PRNG (mulberry32) ─────────────────────────────────────────────────
-// Must match the implementation in the attempt page so results show the same
-// question / option order the candidate saw while taking the test.
-
-function mulberry32(seed: number) {
-  return function () {
-    let t = (seed += 0x6d2b79f5)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-function seedFromUUID(uuid: string): number {
-  let hash = 0
-  for (let i = 0; i < uuid.length; i++) {
-    hash = (Math.imul(31, hash) + uuid.charCodeAt(i)) | 0
-  }
-  return hash >>> 0
-}
-
-function seededShuffle<T>(arr: readonly T[], rng: () => number): T[] {
-  const out = [...arr]
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-    ;[out[i], out[j]] = [out[j], out[i]]
-  }
-  return out
-}
 
 // ─── Meta Item ────────────────────────────────────────────────────────────────
 
@@ -409,27 +380,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
 
   // ── Results view ────────────────────────────────────────────────────────────
 
-  // Apply the same seeded shuffle the candidate saw during the test.
-  const displayAnswers = useMemo(() => {
-    if (!attempt) return []
-    let answers = attempt.answers
-
-    const shuffleSeed = seedFromUUID(attempt.id)
-
-    if (test.shuffle_questions) {
-      const rng = mulberry32(shuffleSeed)
-      answers = seededShuffle(answers, rng)
-    }
-
-    if (test.shuffle_options) {
-      answers = answers.map((a) => {
-        const rng = mulberry32(shuffleSeed ^ seedFromUUID(a.question_id))
-        return { ...a, options: seededShuffle(a.options, rng) }
-      })
-    }
-
-    return answers
-  }, [attempt, test.shuffle_questions, test.shuffle_options])
+  const displayAnswers = attempt?.answers ?? []
 
   const correctCount = displayAnswers.filter((a) => a.is_correct === true).length
   const incorrectCount = displayAnswers.filter((a) => a.is_correct === false).length
