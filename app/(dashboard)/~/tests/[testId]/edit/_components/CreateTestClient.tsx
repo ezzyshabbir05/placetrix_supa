@@ -31,6 +31,9 @@ const EMPTY_SETTINGS: SettingsForm = {
   time_limit_minutes: "",
   available_from: "",
   available_until: "",
+  shuffle_questions: true,
+  shuffle_options: true,
+  strict_mode: true,
 }
 
 /** Convert local datetime-local values to UTC ISO strings for DB storage */

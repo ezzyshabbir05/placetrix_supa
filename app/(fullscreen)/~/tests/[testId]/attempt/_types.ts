@@ -9,6 +9,9 @@ export interface AttemptTest {
   instructions: string | null
   time_limit_seconds: number | null
   available_until: string | null
+  strict_mode: boolean
+  shuffle_questions: boolean
+  shuffle_options: boolean
 }
 
 export interface AttemptQuestion {

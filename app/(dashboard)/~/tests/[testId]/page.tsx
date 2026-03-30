@@ -43,6 +43,7 @@ async function fetchCandidateView(
       .select(`
         id, title, description, instructions, time_limit_seconds, 
         available_from, available_until, results_available, status, institute_id,
+        shuffle_questions, shuffle_options,
         institute:institute_profiles(institute_name),
         questions (
           id, question_text, marks, explanation, order_index,
@@ -81,6 +82,8 @@ async function fetchCandidateView(
     available_from: raw.available_from ?? null,
     available_until: raw.available_until ?? null,
     results_available: raw.results_available,
+    shuffle_questions: raw.shuffle_questions,
+    shuffle_options: raw.shuffle_options,
     institute_name: (raw.institute as any)?.institute_name ?? null,
     questions: (raw.questions ?? []).map((q: any) => ({ marks: q.marks })),
   }

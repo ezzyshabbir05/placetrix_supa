@@ -13,6 +13,9 @@ export type SettingsForm = {
   time_limit_minutes: string
   available_from: string
   available_until: string
+  shuffle_questions: boolean
+  shuffle_options: boolean
+  strict_mode: boolean
 }
 
 export type OptionForm = {
@@ -80,6 +83,9 @@ async function saveTestToDb(
         : null,
       available_from: settings.available_from || null,
       available_until: settings.available_until || null,
+      shuffle_questions: settings.shuffle_questions,
+      shuffle_options: settings.shuffle_options,
+      strict_mode: settings.strict_mode,
     },
     p_questions: questions.map((q) => ({
       id: q.id,
@@ -113,6 +119,7 @@ export async function loadTestAction(
     .select(`
       title, description, instructions,
       time_limit_seconds, available_from, available_until, status,
+      shuffle_questions, shuffle_options, strict_mode,
       questions (
         id, question_text, question_type, marks, order_index, explanation,
         options ( id, option_text, is_correct, order_index ),
@@ -135,6 +142,9 @@ export async function loadTestAction(
         : "",
       available_from: test.available_from ?? "",
       available_until: test.available_until ?? "",
+      shuffle_questions: test.shuffle_questions ?? false,
+      shuffle_options: test.shuffle_options ?? false,
+      strict_mode: test.strict_mode ?? false,
     },
     status: test.status as "draft" | "published",
     questions: (test.questions ?? [])

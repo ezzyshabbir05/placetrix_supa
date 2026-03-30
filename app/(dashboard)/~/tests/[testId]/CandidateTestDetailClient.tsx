@@ -4,7 +4,7 @@
 // app/~/tests/[id]/CandidateTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { ReactNode } from "react"
+import { type ReactNode, useMemo } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -40,6 +40,36 @@ import type {
 } from "./_types"
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
 
+
+// ─── Seeded PRNG (mulberry32) ─────────────────────────────────────────────────
+// Must match the implementation in the attempt page so results show the same
+// question / option order the candidate saw while taking the test.
+
+function mulberry32(seed: number) {
+  return function () {
+    let t = (seed += 0x6d2b79f5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function seedFromUUID(uuid: string): number {
+  let hash = 0
+  for (let i = 0; i < uuid.length; i++) {
+    hash = (Math.imul(31, hash) + uuid.charCodeAt(i)) | 0
+  }
+  return hash >>> 0
+}
+
+function seededShuffle<T>(arr: readonly T[], rng: () => number): T[] {
+  const out = [...arr]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
 
 // ─── Meta Item ────────────────────────────────────────────────────────────────
 
@@ -178,10 +208,7 @@ function QuestionReviewItem({
       <AccordionContent className="px-4 pb-4 pt-0">
         <Separator className="mb-3" />
         <div className="space-y-2.5">
-          {(answer.options ?? [])
-            .slice()
-            .sort((a, b) => a.order_index - b.order_index)
-            .map((opt) => (
+          {(answer.options ?? []).map((opt) => (
               <OptionItem
                 key={opt.id}
                 opt={opt}
@@ -382,9 +409,31 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
 
   // ── Results view ────────────────────────────────────────────────────────────
 
-  const correctCount = attempt?.answers.filter((a) => a.is_correct === true).length ?? 0
-  const incorrectCount = attempt?.answers.filter((a) => a.is_correct === false).length ?? 0
-  const skippedCount = attempt?.answers.filter((a) => (a.selected_option_ids ?? []).length === 0).length ?? 0
+  // Apply the same seeded shuffle the candidate saw during the test.
+  const displayAnswers = useMemo(() => {
+    if (!attempt) return []
+    let answers = attempt.answers
+
+    const shuffleSeed = seedFromUUID(attempt.id)
+
+    if (test.shuffle_questions) {
+      const rng = mulberry32(shuffleSeed)
+      answers = seededShuffle(answers, rng)
+    }
+
+    if (test.shuffle_options) {
+      answers = answers.map((a) => {
+        const rng = mulberry32(shuffleSeed ^ seedFromUUID(a.question_id))
+        return { ...a, options: seededShuffle(a.options, rng) }
+      })
+    }
+
+    return answers
+  }, [attempt, test.shuffle_questions, test.shuffle_options])
+
+  const correctCount = displayAnswers.filter((a) => a.is_correct === true).length
+  const incorrectCount = displayAnswers.filter((a) => a.is_correct === false).length
+  const skippedCount = displayAnswers.filter((a) => (a.selected_option_ids ?? []).length === 0).length
 
   const pctColorClass =
     pct >= 75
@@ -500,12 +549,12 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
             </div>
 
             {/* ── Question Review ──────────────────────────────────────────── */}
-            {attempt && attempt.answers.length > 0 && (
+            {attempt && displayAnswers.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">{attempt.answers.length}</span>{" "}
-                    question{attempt.answers.length !== 1 ? "s" : ""}
+                    <span className="font-medium text-foreground">{displayAnswers.length}</span>{" "}
+                    question{displayAnswers.length !== 1 ? "s" : ""}
                   </p>
                   <Badge variant="outline" className="gap-1 text-xs">
                     <BookOpen className="h-3 w-3" />
@@ -513,7 +562,7 @@ export function CandidateTestDetailClient({ test, attempt }: Props) {
                   </Badge>
                 </div>
                 <Accordion type="multiple" className="space-y-2">
-                  {attempt.answers.map((a, i) => (
+                  {displayAnswers.map((a, i) => (
                     <QuestionReviewItem key={a.question_id} answer={a} index={i} />
                   ))}
                 </Accordion>

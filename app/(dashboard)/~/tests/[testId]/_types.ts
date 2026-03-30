@@ -65,6 +65,8 @@ export interface CandidateTestDetail
     | "available_from"
     | "available_until"
     | "results_available"
+    | "shuffle_questions"
+    | "shuffle_options"
   > {
   institute_name: string | null
   /** Lightweight list — only marks needed for the pre-test totals display */

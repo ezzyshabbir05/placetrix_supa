@@ -2,12 +2,46 @@
 // app/(fullscreen)/~/tests/[testId]/attempt/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { notFound, redirect } from "next/navigation"
+import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AttemptClient } from "./AttemptClient"
 import { saveAnswerAction, submitAttemptAction, recordViolationAction, startAttemptAction } from "./actions"
 import { getTestQuestions } from "@/lib/test-data"
 import type { AttemptQuestion, AttemptTest, AttemptInfo, SavedAnswer } from "./_types"
+
+
+// ── Seeded PRNG (mulberry32) ──────────────────────────────────────────────────
+// Produces a deterministic sequence from a 32-bit seed so that question /
+// option order is identical across page reloads for the same attempt.
+
+function mulberry32(seed: number) {
+  return function () {
+    let t = (seed += 0x6d2b79f5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Derive a 32-bit integer from a UUID string. */
+function seedFromUUID(uuid: string): number {
+  let hash = 0
+  for (let i = 0; i < uuid.length; i++) {
+    hash = (Math.imul(31, hash) + uuid.charCodeAt(i)) | 0
+  }
+  return hash >>> 0
+}
+
+/** Fisher-Yates shuffle using a seeded RNG — returns a new array. */
+function seededShuffle<T>(arr: readonly T[], rng: () => number): T[] {
+  const out = [...arr]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 
 export default async function AttemptPage({
   params,
@@ -22,7 +56,6 @@ export default async function AttemptPage({
   if (!authData?.claims) redirect("/auth/login")
 
   // ── 1. Consolidated Initialization (RPC) ────────────────────────────────────
-  // Handles profile, test status, resume flow, and attempt counting in one DB call.
   const { data: initResult, error: initError } = await (supabase as any).rpc("init_test_attempt", {
      p_test_id: testId
   }) as { data: any, error: any }
@@ -31,15 +64,11 @@ export default async function AttemptPage({
     throw new Error("Failed to initialize test: " + (initError?.message ?? "unknown"))
   }
 
-  // Handle specific RPC responses
   if (initResult.error) {
-    // If profile is incomplete, redirect there.
     if (initResult.error === "Profile incomplete") redirect("/~/settings")
-    // For other errors (test not available, invalid institute), redirect back to tests list.
     redirect("/~/tests")
   }
 
-  // Handle expired resume flows (the RPC grades and returns 'expired')
   if (initResult.status === "expired") {
     redirect(`/~/tests/${testId}`)
   }
@@ -56,36 +85,42 @@ export default async function AttemptPage({
     savedAnswers = initResult.saved_answers ?? []
   }
 
-  // ── 3. Fetch questions ──────────────────────────────────────────────────────
-  let questions = await getTestQuestions(testId)
+  // ── 3. Fetch questions + test details in parallel ───────────────────────────
+  const [questions, testDetailRes] = await Promise.all([
+    getTestQuestions(testId),
+    supabase
+      .from("tests")
+      .select("title, description, instructions, time_limit_seconds, available_until, shuffle_questions, shuffle_options, strict_mode")
+      .eq("id", testId)
+      .single(),
+  ])
 
-  // Apply test-level shuffles (server-side for consistency in the current session)
-  // (We fetch the shuffle flags from the 'init_test_attempt' result if needed, 
-  // but for simplicity we assume the client knows them or we're fine with default)
-  
-  // Note: shuffle_questions and shuffle_options were previously fetched from tests.
-  // I need to ensure the test header data is available if shuffling is needed.
-  // Actually, I'll fetch test header details as well if needed, or update RPC.
-  // My RPC currently doesn't return shuffle flags. Let me update the RPC or re-fetch test details.
+  const testDetail = testDetailRes.data
 
-  // Let's re-fetch just the test details in parallel with questions.
-  const { data: testDetail } = await supabase
-    .from("tests")
-    .select("shuffle_questions, shuffle_options, title, description, instructions, time_limit_seconds, available_until")
-    .eq("id", testId)
-    .single()
+  // ── 4. Apply deterministic shuffle ──────────────────────────────────────────
+  // Use the attempt ID as seed so resume always shows the same order.
+  // For new attempts (no attemptInfo yet) we use a random seed — the order will
+  // be "locked in" once startAttemptAction creates the attempt (page re-renders).
+  let displayQuestions: AttemptQuestion[] = questions
+
+  const shuffleSeed = attemptInfo
+    ? seedFromUUID(attemptInfo.id)
+    : Math.floor(Math.random() * 0xffffffff)
 
   if (testDetail?.shuffle_questions) {
-    questions = [...questions].sort(() => Math.random() - 0.5)
-  }
-  if (testDetail?.shuffle_options) {
-    questions = questions.map((q) => ({
-      ...q,
-      options: [...q.options].sort(() => Math.random() - 0.5),
-    }))
+    const rng = mulberry32(shuffleSeed)
+    displayQuestions = seededShuffle(displayQuestions, rng)
   }
 
-  // ── 4. Build client-safe test object ───────────────────────────────────────────
+  if (testDetail?.shuffle_options) {
+    // Use a separate RNG branch per question so option order is independent
+    displayQuestions = displayQuestions.map((q) => {
+      const rng = mulberry32(shuffleSeed ^ seedFromUUID(q.id))
+      return { ...q, options: seededShuffle(q.options, rng) }
+    })
+  }
+
+  // ── 5. Build client-safe test object ────────────────────────────────────────
   const testForClient: AttemptTest = {
     id: testId,
     title: testDetail?.title || "Test",
@@ -93,12 +128,15 @@ export default async function AttemptPage({
     instructions: testDetail?.instructions ?? null,
     time_limit_seconds: testDetail?.time_limit_seconds ?? null,
     available_until: testDetail?.available_until ?? null,
+    strict_mode: testDetail?.strict_mode ?? false,
+    shuffle_questions: testDetail?.shuffle_questions ?? false,
+    shuffle_options: testDetail?.shuffle_options ?? false,
   }
 
   return (
     <AttemptClient
       test={testForClient}
-      questions={questions}
+      questions={displayQuestions}
       attemptInfo={attemptInfo}
       savedAnswers={savedAnswers}
       onStartAttempt={startAttemptAction.bind(null, testId)}

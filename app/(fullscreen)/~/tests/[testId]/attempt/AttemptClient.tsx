@@ -42,6 +42,7 @@ import {
     Maximize,
     EyeOff,
     Flag,
+    Shuffle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AttemptTest, AttemptQuestion, AttemptInfo, SavedAnswer } from "./_types"
@@ -49,7 +50,7 @@ import type { AttemptTest, AttemptQuestion, AttemptInfo, SavedAnswer } from "./_
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Number of focus-loss violations before the test is auto-submitted.
+// Number of focus-loss violations before the test is auto-submitted (strict mode only).
 const MAX_VIOLATIONS = 6
 
 
@@ -510,13 +511,34 @@ function IntroScreen({
                     </div>
                     <div className="flex items-start gap-2">
                         <EyeOff className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <p>
-                            <strong>Anti-cheat is active.</strong> Do not switch tabs, minimize the
-                            browser, or open other applications. Violations are recorded. After{" "}
-                            <strong>{MAX_VIOLATIONS} violations</strong>, your test will be
-                            automatically submitted.
-                        </p>
+                        {test.strict_mode ? (
+                            <p>
+                                <strong>Strict mode is enabled.</strong> Do not switch tabs, minimize the
+                                browser, or open other applications. After{" "}
+                                <strong>{MAX_VIOLATIONS} violations</strong>, your test will be
+                                automatically submitted.
+                            </p>
+                        ) : (
+                            <p>
+                                <strong>Anti-cheat is active.</strong> Do not switch tabs, minimize the
+                                browser, or open other applications. Violations are recorded and
+                                visible to your instructor.
+                            </p>
+                        )}
                     </div>
+                    {(test.shuffle_questions || test.shuffle_options) && (
+                        <div className="flex items-start gap-2">
+                            <Shuffle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <p>
+                                {test.shuffle_questions && test.shuffle_options
+                                    ? "Questions and answer options are displayed in a randomised order."
+                                    : test.shuffle_questions
+                                        ? "Questions are displayed in a randomised order."
+                                        : "Answer options are displayed in a randomised order."}
+                                {" "}Each candidate may see a different sequence.
+                            </p>
+                        </div>
+                    )}
                     {hasTimer && (
                         <div className="flex items-start gap-2">
                             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -733,8 +755,8 @@ export function AttemptClient({
                 ).catch(() => { /* never throw */ })
             }
 
-            // Auto-submit once the threshold is crossed.
-            if (currentCount >= MAX_VIOLATIONS && !autoSubmitted.current) {
+            // Auto-submit once the threshold is crossed (strict mode only).
+            if (test.strict_mode && currentCount >= MAX_VIOLATIONS && !autoSubmitted.current) {
                 autoSubmitted.current = true
                 // Defer so state updates above are flushed before submission starts.
                 setTimeout(() => handleSubmitRef.current?.(true), 0)
@@ -1125,10 +1147,12 @@ export function AttemptClient({
                                 <div className="flex items-start gap-2.5 rounded-xl border border-destructive bg-destructive/10 p-4">
                                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                                     <p className="text-sm text-destructive">
-                                        Violation #{focusLostCount} of {MAX_VIOLATIONS} recorded.{" "}
-                                        {focusLostCount >= MAX_VIOLATIONS
-                                            ? "Your test is being submitted now."
-                                            : `${MAX_VIOLATIONS - focusLostCount} remaining before automatic submission.`}
+                                        Violation #{focusLostCount}{test.strict_mode ? <> of {MAX_VIOLATIONS}</> : null} recorded.{" "}
+                                        {test.strict_mode
+                                            ? focusLostCount >= MAX_VIOLATIONS
+                                                ? "Your test is being submitted now."
+                                                : `${MAX_VIOLATIONS - focusLostCount} remaining before automatic submission.`
+                                            : "This incident has been logged and will be visible to your instructor."}
                                     </p>
                                 </div>
                             </div>
