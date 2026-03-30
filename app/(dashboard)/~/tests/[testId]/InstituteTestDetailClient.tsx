@@ -4,7 +4,7 @@
 // app/~/tests/[id]/InstituteTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useCallback, useEffect, useRef, type ReactNode } from "react"
+import React, { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -20,6 +20,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,10 +82,25 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Search,
+  Filter,
+  X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
+
+
+// ─── useDebounce ──────────────────────────────────────────────────────────────
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState<T>(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
 
 
 // ─── Action State Hook ────────────────────────────────────────────────────────
@@ -104,10 +132,9 @@ function useActionState() {
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
 
-function StatsBar({ test, liveAttempts }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[] }) {
+function StatsBar({ test, liveAttempts, totalMarks }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[]; totalMarks: number }) {
   const submitted = liveAttempts.filter((a) => a.status === "submitted")
   const inProgress = liveAttempts.filter((a) => a.status === "in_progress")
-  const totalMarks = test.questions.reduce((s, q) => s + q.marks, 0)
 
   const avgPct =
     submitted.length > 0
@@ -156,7 +183,7 @@ function StatsBar({ test, liveAttempts }: { test: InstituteTestDetail; liveAttem
           </div>
           <p className="text-2xl font-bold tabular-nums">{submitted.length}</p>
           <p className="text-xs text-muted-foreground">
-            {test.attempts.length > 0 ? `${completionPct}% completion` : "No attempts yet"}
+            {liveAttempts.length > 0 ? `${completionPct}% completion` : "No attempts yet"}
           </p>
         </CardContent>
       </Card>
@@ -356,7 +383,9 @@ function QuestionsTab({ questions }: { questions: InstituteQuestion[] }) {
 
 // ─── Attempt Score ────────────────────────────────────────────────────────────
 
-function AttemptScore({
+// React.memo: only re-renders when attempt data or scoresVisible changes.
+// Without this, toggling scoresVisible re-renders every single row.
+const AttemptScore = React.memo(function AttemptScore({
   attempt,
   scoresVisible,
 }: {
@@ -382,94 +411,292 @@ function AttemptScore({
       )}
     </div>
   )
+})
+
+
+// ─── Sortable Table Head ─────────────────────────────────────────────────────
+
+type SortColumn = "student_name" | "education" | "status" | "score" | "time" | "violations" | "submitted"
+
+function SortableHead({
+  label,
+  col,
+  align = "left",
+  sortCol,
+  sortDir,
+  onSort,
+}: {
+  label: ReactNode
+  col: SortColumn
+  align?: "left" | "center" | "right"
+  sortCol: SortColumn
+  sortDir: "asc" | "desc"
+  onSort: (col: SortColumn) => void
+}) {
+  return (
+    <TableHead
+      className={cn(
+        "text-xs font-semibold select-none cursor-pointer hover:bg-muted/60 transition-colors",
+        align === "right" && "text-right",
+        align === "center" && "text-center"
+      )}
+      onClick={() => onSort(col)}
+    >
+      <div className={cn("flex items-center gap-1.5", align === "right" && "justify-end", align === "center" && "justify-center")}>
+        {label}
+        {sortCol === col ? (
+          sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-20" />
+        )}
+      </div>
+    </TableHead>
+  )
 }
+
+
+// ─── Memoized Row Components ──────────────────────────────────────────────────
+
+// Isolated behind React.memo so a sort/filter change that produces the same
+// row data won't re-render that individual row at all.
+
+const MobileAttemptRow = React.memo(function MobileAttemptRow({
+  attempt,
+  scoresVisible,
+}: {
+  attempt: InstituteAttemptRow
+  scoresVisible: boolean
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium leading-tight">
+          {attempt.student_name ?? "Unknown"}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground leading-tight mt-0.5">
+          {attempt.student_email ?? formatDateTime(attempt.started_at)}
+          {(attempt.branch || attempt.passout_year) && (
+            <>
+              <span className="mx-1.5 opacity-50">•</span>
+              {attempt.branch || "—"} {attempt.passout_year ? `('${attempt.passout_year.toString().slice(-2)})` : ""}
+            </>
+          )}
+        </p>
+      </div>
+      <div className="flex items-center gap-2.5 shrink-0">
+        <div className="text-right">
+          <AttemptScore attempt={attempt} scoresVisible={scoresVisible} />
+          <p className="text-[10px] tabular-nums text-muted-foreground leading-tight">
+            {formatSeconds(attempt.time_spent_seconds)}
+          </p>
+          {attempt.tab_switch_count != null && attempt.tab_switch_count > 0 && (
+            <span className="text-[10px] text-muted-foreground mt-0.5 block leading-tight">
+              {attempt.tab_switch_count} viol.
+            </span>
+          )}
+        </div>
+        <span
+          className={cn(
+            "text-xs shrink-0 text-right w-[68px]",
+            attempt.status === "submitted" ? "text-foreground font-medium" : "text-muted-foreground text-[11px]"
+          )}
+        >
+          {attempt.status === "submitted" ? "Submitted" : "In Progress"}
+        </span>
+      </div>
+    </div>
+  )
+})
+
+const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
+  attempt,
+  scoresVisible,
+}: {
+  attempt: InstituteAttemptRow
+  scoresVisible: boolean
+}) {
+  return (
+    <TableRow className="hover:bg-muted/20">
+      <TableCell>
+        <p className="truncate text-sm font-medium">{attempt.student_name ?? "Unknown"}</p>
+        {attempt.student_email && (
+          <p className="truncate text-xs text-muted-foreground">{attempt.student_email}</p>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm">{attempt.branch || "—"}</span>
+          <span className="text-xs text-muted-foreground">{attempt.passout_year || "—"}</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <span
+          className={cn(
+            "text-sm whitespace-nowrap",
+            attempt.status === "submitted" ? "text-foreground" : "text-muted-foreground"
+          )}
+        >
+          {attempt.status === "submitted" ? "Submitted" : "In Progress"}
+        </span>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex justify-end">
+          <AttemptScore attempt={attempt} scoresVisible={scoresVisible} />
+        </div>
+      </TableCell>
+      <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+        {formatSeconds(attempt.time_spent_seconds)}
+      </TableCell>
+      <TableCell className="text-center text-sm tabular-nums text-muted-foreground">
+        {attempt.tab_switch_count != null && attempt.tab_switch_count > 0
+          ? attempt.tab_switch_count
+          : "—"}
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {attempt.submitted_at ? formatDateTime(attempt.submitted_at) : "—"}
+      </TableCell>
+    </TableRow>
+  )
+})
 
 
 // ─── Attempts Tab ─────────────────────────────────────────────────────────────
 
-function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[] }) {
+function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[]; totalMarks: number }) {
   const attempts = liveAttempts
   const [scoresVisible, setScoresVisible] = useState(false)
 
-  const submitted = attempts.filter((a) => a.status === "submitted")
-  const inProgress = attempts.filter((a) => a.status === "in_progress")
-  const totalMarks = test.questions.reduce((s, q) => s + q.marks, 0)
+  // ── Filters ─────────────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "submitted" | "in_progress">("all")
+  const [branchFilter, setBranchFilter] = useState("all")
+  const [scoreFilter, setScoreFilter] = useState<"all" | "high" | "mid" | "low">("all")
 
-  const avgPct =
-    submitted.length > 0
-      ? (
-        submitted.reduce(
-          (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
-          0
-        ) / submitted.length
-      ).toFixed(2)
-      : null
+  // Debounce: search string used for filtering lags 200 ms behind what the
+  // user types so the input stays responsive even with 500+ rows.
+  const debouncedSearch = useDebounce(searchQuery, 100)
 
-  type SortColumn = "student_name" | "education" | "status" | "score" | "time" | "violations" | "submitted"
-  type SortDirection = "asc" | "desc"
-  const [sortCol, setSortCol] = useState<SortColumn>("submitted")
-  const [sortDir, setSortDir] = useState<SortDirection>("desc")
+  // ── Memoized derived data ────────────────────────────────────────────────
 
-  const handleSort = (col: SortColumn) => {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc")
-    else { setSortCol(col); setSortDir("desc") }
-  }
+  const submitted = useMemo(
+    () => attempts.filter((a) => a.status === "submitted"),
+    [attempts]
+  )
 
-  const sorted = [...attempts].sort((a, b) => {
-    let diff = 0
-    switch (sortCol) {
-      case "student_name":
-        diff = (a.student_name || "").localeCompare(b.student_name || "")
-        break
-      case "education":
-        diff = (a.branch || "").localeCompare(b.branch || "")
-        if (diff === 0) diff = (a.passout_year || 0) - (b.passout_year || 0)
-        break
-      case "status":
-        diff = a.status.localeCompare(b.status)
-        break
-      case "score": {
-        const scoreA = a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks) : -1
-        const scoreB = b.status === "submitted" ? resolvePct(b.percentage, b.score, b.total_marks) : -1
-        diff = scoreA - scoreB
-        break
+  const inProgress = useMemo(
+    () => attempts.filter((a) => a.status === "in_progress"),
+    [attempts]
+  )
+
+  const avgPct = useMemo(
+    () =>
+      submitted.length > 0
+        ? (
+          submitted.reduce(
+            (acc, a) => acc + resolvePct(a.percentage, a.score, a.total_marks),
+            0
+          ) / submitted.length
+        ).toFixed(2)
+        : null,
+    [submitted]
+  )
+
+  const uniqueBranches = useMemo(
+    () =>
+      Array.from(new Set(attempts.map((a) => a.branch).filter(Boolean))).sort() as string[],
+    [attempts]
+  )
+
+  const activeFilterCount = useMemo(
+    () =>
+      [
+        debouncedSearch.trim() !== "",
+        statusFilter !== "all",
+        branchFilter !== "all",
+        scoreFilter !== "all",
+      ].filter(Boolean).length,
+    [debouncedSearch, statusFilter, branchFilter, scoreFilter]
+  )
+
+  const clearFilters = useCallback(() => {
+    setSearchQuery("")
+    setStatusFilter("all")
+    setBranchFilter("all")
+    setScoreFilter("all")
+  }, [])
+
+  const filtered = useMemo(() => {
+    return attempts.filter((a) => {
+      if (debouncedSearch.trim()) {
+        const q = debouncedSearch.toLowerCase()
+        if (
+          !(a.student_name ?? "").toLowerCase().includes(q) &&
+          !(a.student_email ?? "").toLowerCase().includes(q)
+        )
+          return false
       }
-      case "time":
-        diff = (a.time_spent_seconds || 0) - (b.time_spent_seconds || 0)
-        break
-      case "violations":
-        diff = (a.tab_switch_count || 0) - (b.tab_switch_count || 0)
-        break
-      case "submitted":
-        diff = (a.submitted_at ?? a.started_at).localeCompare(b.submitted_at ?? b.started_at)
-        break
-    }
-    return sortDir === "asc" ? diff : -diff
-  })
+      if (statusFilter !== "all" && a.status !== statusFilter) return false
+      if (branchFilter !== "all" && a.branch !== branchFilter) return false
+      if (scoreFilter !== "all") {
+        if (a.status !== "submitted") return false
+        const pct = resolvePct(a.percentage, a.score, a.total_marks)
+        if (scoreFilter === "high" && pct < 75) return false
+        if (scoreFilter === "mid" && (pct < 50 || pct >= 75)) return false
+        if (scoreFilter === "low" && pct >= 50) return false
+      }
+      return true
+    })
+  }, [attempts, debouncedSearch, statusFilter, branchFilter, scoreFilter])
 
-  const SortableHead = ({ label, col, align = "left" }: { label: ReactNode; col: SortColumn; align?: "left" | "center" | "right" }) => {
-    return (
-      <TableHead
-        className={cn(
-          "text-xs font-semibold select-none cursor-pointer hover:bg-muted/60 transition-colors",
-          align === "right" && "text-right",
-          align === "center" && "text-center"
-        )}
-        onClick={() => handleSort(col)}
-      >
-        <div className={cn("flex items-center gap-1.5", align === "right" && "justify-end", align === "center" && "justify-center")}>
-          {label}
-          {sortCol === col ? (
-            sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-          ) : (
-            <ArrowUpDown className="h-3 w-3 opacity-20" />
-          )}
-        </div>
-      </TableHead>
-    )
-  }
+  const [sortCol, setSortCol] = useState<SortColumn>("submitted")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
-  const handleExportCSV = () => {
+  const handleSort = useCallback((col: SortColumn) => {
+    setSortCol((prev) => {
+      if (prev === col) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+        return prev
+      }
+      setSortDir("desc")
+      return col
+    })
+  }, [])
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let diff = 0
+      switch (sortCol) {
+        case "student_name":
+          diff = (a.student_name || "").localeCompare(b.student_name || "")
+          break
+        case "education":
+          diff = (a.branch || "").localeCompare(b.branch || "")
+          if (diff === 0) diff = (a.passout_year || 0) - (b.passout_year || 0)
+          break
+        case "status":
+          diff = a.status.localeCompare(b.status)
+          break
+        case "score": {
+          const scoreA = a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks) : -1
+          const scoreB = b.status === "submitted" ? resolvePct(b.percentage, b.score, b.total_marks) : -1
+          diff = scoreA - scoreB
+          break
+        }
+        case "time":
+          diff = (a.time_spent_seconds || 0) - (b.time_spent_seconds || 0)
+          break
+        case "violations":
+          diff = (a.tab_switch_count || 0) - (b.tab_switch_count || 0)
+          break
+        case "submitted":
+          diff = (a.submitted_at ?? a.started_at).localeCompare(b.submitted_at ?? b.started_at)
+          break
+      }
+      return sortDir === "asc" ? diff : -diff
+    })
+  }, [filtered, sortCol, sortDir])
+
+  const handleExportCSV = useCallback(() => {
     const headers = [
       "Student Name",
       "Email",
@@ -511,9 +738,10 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }
+    URL.revokeObjectURL(url)
+  }, [sorted, test.title])
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = useCallback(async () => {
     const { default: jsPDF } = await import("jspdf")
     const { default: autoTable } = await import("jspdf-autotable")
 
@@ -554,8 +782,9 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
     doc.text(attemptInfo, 14, currentY)
     currentY += 8
 
-    const tableColumn = ["Student", "Email", "Branch", "Grad", "Status", "Score", "Pct", "Time", "Viol", "Submitted"]
-    const tableRows = sorted.map((a) => [
+    const tableColumn = ["#", "Student", "Email", "Branch", "Grad", "Status", "Score", "Pct", "Time", "Viol", "Submitted"]
+    const tableRows = sorted.map((a, i) => [
+      String(i + 1),
       a.student_name || "Unknown",
       a.student_email || "—",
       a.branch || "—",
@@ -572,36 +801,46 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
       startY: currentY,
       head: [tableColumn],
       body: tableRows,
-      theme: "plain",
+      theme: "grid",
       styles: {
         font: "helvetica",
         fontSize: 7,
-        cellPadding: 3,
-        textColor: [60, 60, 60],
+        cellPadding: 2.5,
+        textColor: [33, 33, 33],
+        lineWidth: 0.2,
+        lineColor: [189, 189, 189],
+        overflow: "linebreak",
       },
       headStyles: {
         fontSize: 7.5,
-        textColor: [20, 20, 20],
+        textColor: [255, 255, 255],
         fontStyle: "bold",
-        fillColor: [252, 252, 252],
-        lineWidth: { bottom: 0.2 },
-        lineColor: [200, 200, 200],
+        fillColor: [55, 86, 35],
+        lineWidth: 0.2,
+        lineColor: [45, 70, 28],
+        halign: "center",
+        valign: "middle",
       },
       bodyStyles: {
-        lineWidth: { bottom: 0.1 },
-        lineColor: [240, 240, 240],
+        lineWidth: 0.2,
+        lineColor: [189, 189, 189],
+        valign: "middle",
+      },
+      alternateRowStyles: {
+        fillColor: [234, 241, 228],
       },
       columnStyles: {
-        0: { cellWidth: 35 }, // Student
-        1: { cellWidth: 50 }, // Email
-        2: { cellWidth: 40 }, // Branch
-        3: { halign: "center", cellWidth: 15 }, // Grad
-        4: { cellWidth: 18 }, // Status
-        5: { halign: "right", cellWidth: 15 }, // Score
-        6: { halign: "right", cellWidth: 12 }, // Pct
-        7: { halign: "right", cellWidth: 20 }, // Time
-        8: { halign: "center", cellWidth: 12 }, // Viol
-        9: { halign: "right" }, // Submitted
+        0: { cellWidth: 12, halign: "center" },
+        1: { cellWidth: 42 },
+        2: { cellWidth: 48 },
+        3: { cellWidth: 35 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { cellWidth: 20 },
+        6: { halign: "right", cellWidth: 18 },
+        7: { halign: "right", cellWidth: 16 },
+        8: { halign: "right", cellWidth: 18 },
+        9: { halign: "center", cellWidth: 12 },
+        10: { halign: "right" },
       },
       didDrawPage: (data) => {
         const currentPage = data.pageNumber
@@ -611,18 +850,13 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
         doc.setTextColor(180, 180, 180)
         doc.text("Generated with Placetrix", 14, pageHeight - 8)
         doc.setFontSize(7)
-        doc.text(
-          `Page ${currentPage}`,
-          pageWidth - 14,
-          pageHeight - 8,
-          { align: "right" }
-        )
+        doc.text(`Page ${currentPage}`, pageWidth - 14, pageHeight - 8, { align: "right" })
       },
     })
 
-    const filename = `${test.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_results.pdf`
-    doc.save(filename)
-  }
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+    doc.save(`${test.id}_${ts}.pdf`)
+  }, [sorted, test, totalMarks, attempts.length, avgPct])
 
   if (attempts.length === 0) {
     return (
@@ -665,6 +899,15 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
               </span>
             </>
           )}
+          {activeFilterCount > 0 && (
+            <>
+              <Separator orientation="vertical" className="h-3.5" />
+              <span className="flex items-center gap-1">
+                <span className="font-semibold tabular-nums">{sorted.length}</span>
+                <span className="text-muted-foreground">of {attempts.length} matching</span>
+              </span>
+            </>
+          )}
         </div>
 
         <DropdownMenu>
@@ -685,6 +928,143 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+
+      {/* ── Filter bar ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-2 rounded-xl border bg-muted/10 p-3">
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Search — input updates instantly; filtering is debounced 200ms */}
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search students by name or email…"
+              className="pl-9 pr-9 h-9 text-xs"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 transition-colors"
+                title="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("h-9 gap-2", activeFilterCount > 0 && "border-primary bg-primary/5 text-primary")}>
+                  <Filter className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <Badge variant="default" className="ml-0.5 h-4 min-w-4 px-1 text-[10px] bg-primary text-primary-foreground">
+                      {activeFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[280px] p-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">General</p>
+                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="submitted">Submitted</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Education</p>
+                    {uniqueBranches.length > 0 ? (
+                      <Select value={branchFilter} onValueChange={setBranchFilter}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="All Branches" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Branches</SelectItem>
+                          {uniqueBranches.map((b) => (
+                            <SelectItem key={b} value={b}>{b}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-[10px] italic text-muted-foreground px-1">No branch data available</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Performance</p>
+                    <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as any)}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All Scores" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Scores</SelectItem>
+                        <SelectItem value="high">High (≥75%)</SelectItem>
+                        <SelectItem value="mid">Mid (50–74%)</SelectItem>
+                        <SelectItem value="low">Low (&lt;50%)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button variant="outline" size="sm" className="w-full" onClick={clearFilters}>
+                    Reset all filters
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Active filter chips */}
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/40 mt-1">
+            <span className="text-[10px] text-muted-foreground mr-1 flex items-center gap-1 font-medium">
+              Active:
+            </span>
+            {/* Show the live searchQuery in the chip, not the debounced value,
+                so the chip updates immediately when the user clears it */}
+            {searchQuery.trim() && (
+              <Badge variant="secondary" className="gap-1 h-5 px-1.5 text-[10px] font-normal rounded-full">
+                "{searchQuery.trim()}"
+                <X className="h-2.5 w-2.5 cursor-pointer hover:text-foreground" onClick={() => setSearchQuery("")} />
+              </Badge>
+            )}
+            {statusFilter !== "all" && (
+              <Badge variant="secondary" className="gap-1 h-5 px-1.5 text-[10px] font-normal rounded-full">
+                {statusFilter === "submitted" ? "Submitted" : "In Progress"}
+                <X className="h-2.5 w-2.5 cursor-pointer hover:text-foreground" onClick={() => setStatusFilter("all")} />
+              </Badge>
+            )}
+            {branchFilter !== "all" && (
+              <Badge variant="secondary" className="gap-1 h-5 px-1.5 text-[10px] font-normal rounded-full">
+                {branchFilter}
+                <X className="h-2.5 w-2.5 cursor-pointer hover:text-foreground" onClick={() => setBranchFilter("all")} />
+              </Badge>
+            )}
+            {scoreFilter !== "all" && (
+              <Badge variant="secondary" className="gap-1 h-5 px-1.5 text-[10px] font-normal rounded-full">
+                {scoreFilter === "high" ? "≥75%" : scoreFilter === "mid" ? "50–74%" : "<50%"}
+                <X className="h-2.5 w-2.5 cursor-pointer hover:text-foreground" onClick={() => setScoreFilter("all")} />
+              </Badge>
+            )}
+            <button
+              onClick={clearFilters}
+              className="ml-auto text-[10px] text-muted-foreground hover:text-primary underline-offset-2 hover:underline transition-colors px-1"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Score visibility banner */}
@@ -734,48 +1114,19 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
 
       {/* Mobile compact list */}
       <div className="rounded-xl border overflow-hidden divide-y md:hidden">
-        {sorted.map((a) => (
-          <div
-            key={a.id}
-            className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium leading-tight">
-                {a.student_name ?? "Unknown"}
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground leading-tight mt-0.5">
-                {a.student_email ?? formatDateTime(a.started_at)}
-                {(a.branch || a.passout_year) && (
-                  <>
-                    <span className="mx-1.5 opacity-50">•</span>
-                    {a.branch || "—"} {a.passout_year ? `('${a.passout_year.toString().slice(-2)})` : ""}
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="flex items-center gap-2.5 shrink-0">
-              <div className="text-right">
-                <AttemptScore attempt={a} scoresVisible={scoresVisible} />
-                <p className="text-[10px] tabular-nums text-muted-foreground leading-tight">
-                  {formatSeconds(a.time_spent_seconds)}
-                </p>
-                {a.tab_switch_count != null && a.tab_switch_count > 0 && (
-                  <span className="text-[10px] text-muted-foreground mt-0.5 block leading-tight">
-                    {a.tab_switch_count} viol.
-                  </span>
-                )}
-              </div>
-              <span
-                className={cn(
-                  "text-xs shrink-0 text-right w-[68px]",
-                  a.status === "submitted" ? "text-foreground font-medium" : "text-muted-foreground text-[11px]"
-                )}
-              >
-                {a.status === "submitted" ? "Submitted" : "In Progress"}
-              </span>
-            </div>
+        {sorted.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+            <Filter className="h-5 w-5 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No results match your filters.</p>
+            <button onClick={clearFilters} className="text-xs underline text-muted-foreground hover:text-foreground">
+              Clear filters
+            </button>
           </div>
-        ))}
+        ) : (
+          sorted.map((a) => (
+            <MobileAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} />
+          ))
+        )}
       </div>
 
       {/* Desktop table */}
@@ -783,60 +1134,33 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <SortableHead label="Student" col="student_name" />
-              <SortableHead label="Education" col="education" />
-              <SortableHead label="Status" col="status" />
-              <SortableHead label="Score" col="score" align="right" />
-              <SortableHead label="Time" col="time" align="right" />
-              <SortableHead label="Violations" col="violations" align="center" />
-              <SortableHead label="Submitted" col="submitted" />
+              <SortableHead label="Student" col="student_name" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <SortableHead label="Education" col="education" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <SortableHead label="Status" col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <SortableHead label="Score" col="score" align="right" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <SortableHead label="Time" col="time" align="right" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <SortableHead label="Violations" col="violations" align="center" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <SortableHead label="Submitted" col="submitted" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((a) => (
-              <TableRow key={a.id} className="hover:bg-muted/20">
-                <TableCell>
-                  <p className="truncate text-sm font-medium">{a.student_name ?? "Unknown"}</p>
-                  {a.student_email && (
-                    <p className="truncate text-xs text-muted-foreground">{a.student_email}</p>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm">{a.branch || "—"}</span>
-                    <span className="text-xs text-muted-foreground">{a.passout_year || "—"}</span>
+            {sorted.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <Filter className="h-5 w-5 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">No results match your filters.</p>
+                    <button onClick={clearFilters} className="text-xs underline text-muted-foreground hover:text-foreground">
+                      Clear filters
+                    </button>
                   </div>
-                </TableCell>
-                <TableCell>
-                  <span
-                    className={cn(
-                      "text-sm whitespace-nowrap",
-                      a.status === "submitted" ? "text-foreground" : "text-muted-foreground"
-                    )}
-                  >
-                    {a.status === "submitted" ? "Submitted" : "In Progress"}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end">
-                    <AttemptScore attempt={a} scoresVisible={scoresVisible} />
-                  </div>
-                </TableCell>
-                <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
-                  {formatSeconds(a.time_spent_seconds)}
-                </TableCell>
-                <TableCell className="text-center text-sm tabular-nums text-muted-foreground">
-                  {a.tab_switch_count != null && a.tab_switch_count > 0 ? (
-                    a.tab_switch_count
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {a.submitted_at ? formatDateTime(a.submitted_at) : "—"}
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              sorted.map((a) => (
+                <DesktopAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} />
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
@@ -1002,84 +1326,49 @@ export function InstituteTestDetailClient({
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("overview")
   const { run, isLoading, anyLoading } = useActionState()
+  const totalMarks = useMemo(() => test.questions.reduce((s, q) => s + q.marks, 0), [test.questions])
 
   // ── Live attempts state ──────────────────────────────────────────────────
   const [liveAttempts, setLiveAttempts] = useState<InstituteAttemptRow[]>(test.attempts)
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null)
 
-  // Re-fetch the full attempts list from the client side
   const refreshAttempts = useCallback(async () => {
     const supabase = createClient()
 
-    // 1. Parallelize initial attempt details and metadata
-    const [detailsRes, infoRes] = await Promise.all([
-      supabase
-        .from("attempt_details")
-        .select(`id, student_name, student_email, status, score, total_marks, percentage, time_spent_seconds, started_at, submitted_at`)
-        .eq("test_id", testId)
-        .order("started_at", { ascending: false }),
-      supabase
-        .from("test_attempts")
-        .select("id, student_id, tab_switch_count")
-        .eq("test_id", testId)
-    ])
+    const { data: raw, error } = await supabase
+      .from("view_test_results_detailed")
+      .select("*")
+      .eq("test_id", testId)
+      .order("started_at", { ascending: false })
 
-    const rawAttempts = detailsRes.data
-    const attemptsInfo = infoRes.data
+    if (error || !raw) return
 
-    // 2. Extract student IDs and fetch profiles in parallel
-    const studentIds = Array.from(
-      new Set((attemptsInfo ?? []).map((r) => r.student_id).filter(Boolean))
-    ) as string[]
-
-    const { data: candidateProfiles } = await supabase
-      .from("candidate_profiles")
-      .select("profile_id, course_name, passout_year")
-      .in("profile_id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"])
-
-    const profileMap = new Map((candidateProfiles ?? []).map((p) => [p.profile_id, p]))
-    const extraInfoMap = new Map(
-      (attemptsInfo ?? []).map((r) => [
-        r.id,
-        {
-          tab_switch_count: r.tab_switch_count,
-          branch: r.student_id ? profileMap.get(r.student_id)?.course_name ?? null : null,
-          passout_year: r.student_id ? profileMap.get(r.student_id)?.passout_year ?? null : null,
-        },
-      ])
-    )
-
-    const fullTotalMarks = test.questions.reduce((s, q) => s + q.marks, 0)
-
-    const freshAttempts: InstituteAttemptRow[] = (rawAttempts ?? [])
+    const freshAttempts: InstituteAttemptRow[] = raw
       .filter(
-        (a): a is typeof a & { id: string; started_at: string } =>
-          a.id != null && a.started_at != null
+        (a): a is any & { attempt_id: string; started_at: string } =>
+          a.attempt_id != null && a.started_at != null
       )
-      .map((a) => {
-        const extra = extraInfoMap.get(a.id)
-        return {
-          id: a.id,
-          student_name: a.student_name ?? null,
-          student_email: a.student_email ?? null,
-          status: a.status as InstituteAttemptRow["status"],
-          score: a.score ?? null,
-          total_marks: fullTotalMarks > 0 ? fullTotalMarks : (a.total_marks ?? null),
-          percentage:
-            a.score != null && fullTotalMarks > 0
-              ? ((a.score / fullTotalMarks) * 100)
-              : (a.percentage ?? null),
-          time_spent_seconds: a.time_spent_seconds ?? null,
-          started_at: a.started_at,
-          submitted_at: a.submitted_at ?? null,
-          tab_switch_count: extra?.tab_switch_count ?? null,
-          branch: extra?.branch ?? null,
-          passout_year: extra?.passout_year ?? null,
-        }
-      })
+      .map((a) => ({
+        id: a.attempt_id,
+        student_name: a.student_name ?? null,
+        student_email: a.student_email ?? null,
+        status: a.status as InstituteAttemptRow["status"],
+        score: a.score ?? null,
+        total_marks: totalMarks > 0 ? totalMarks : (a.total_marks ?? null),
+        percentage:
+          a.score != null && totalMarks > 0
+            ? (a.score / totalMarks) * 100
+            : (a.percentage ?? null),
+        time_spent_seconds: a.time_spent_seconds ?? null,
+        started_at: a.started_at,
+        submitted_at: a.submitted_at ?? null,
+        tab_switch_count: a.tab_switch_count ?? null,
+        branch: a.branch ?? null,
+        passout_year: a.passout_year ?? null,
+      }))
 
     setLiveAttempts(freshAttempts)
-  }, [testId, test.questions])
+  }, [testId, totalMarks])
 
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -1096,8 +1385,7 @@ export function InstituteTestDetailClient({
           filter: `test_id=eq.${testId}`,
         },
         () => {
-          // Debounce the refresh to once every 2 seconds to handle high load
-          if (refreshTimerRef.current) return
+          if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
           refreshTimerRef.current = setTimeout(() => {
             refreshAttempts()
             refreshTimerRef.current = null
@@ -1176,7 +1464,6 @@ export function InstituteTestDetailClient({
 
               <DropdownMenuSeparator />
 
-              {/* Publish toggle */}
               <DropdownMenuItem
                 onClick={() => run("togglePublish", onTogglePublish)}
                 disabled={anyLoading}
@@ -1195,7 +1482,6 @@ export function InstituteTestDetailClient({
                     : "Publish"}
               </DropdownMenuItem>
 
-              {/* Results toggle */}
               <DropdownMenuItem
                 onClick={() => run("toggleResults", onToggleResults)}
                 disabled={anyLoading}
@@ -1216,7 +1502,6 @@ export function InstituteTestDetailClient({
 
               <DropdownMenuSeparator />
 
-              {/* Delete */}
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <DropdownMenuItem
@@ -1265,7 +1550,7 @@ export function InstituteTestDetailClient({
         </div>
 
         {/* ── Stats ───────────────────────────────────────────────────────── */}
-        <StatsBar test={test} liveAttempts={liveAttempts} />
+        <StatsBar test={test} liveAttempts={liveAttempts} totalMarks={totalMarks} />
 
         {/* ── Tabs ────────────────────────────────────────────────────────── */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -1316,7 +1601,7 @@ export function InstituteTestDetailClient({
           </TabsContent>
 
           <TabsContent value="attempts" className="m-0">
-            <AttemptsTab test={test} liveAttempts={liveAttempts} />
+            <AttemptsTab test={test} liveAttempts={liveAttempts} totalMarks={totalMarks} />
           </TabsContent>
         </Tabs>
       </div>

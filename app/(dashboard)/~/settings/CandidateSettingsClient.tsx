@@ -117,6 +117,11 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive mt-1">{message}</p>;
 }
 
+function capitalizeFirstLetterOnly(str: string): string {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
 function formatDate(date: Date): string {
   const d = String(date.getDate()).padStart(2, "0");
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -321,9 +326,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Personal
-  const [firstName, setFirstName] = useState(initialData?.first_name ?? "");
-  const [middleName, setMiddleName] = useState(initialData?.middle_name ?? "");
-  const [lastName, setLastName] = useState(initialData?.last_name ?? "");
+  const [firstName, setFirstName] = useState(capitalizeFirstLetterOnly(initialData?.first_name ?? ""));
+  const [middleName, setMiddleName] = useState(capitalizeFirstLetterOnly(initialData?.middle_name ?? ""));
+  const [lastName, setLastName] = useState(capitalizeFirstLetterOnly(initialData?.last_name ?? ""));
   const [gender, setGender] = useState(
     initialData?.gender ? GENDER_REVERSE[initialData.gender] ?? "" : ""
   );
@@ -422,9 +427,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
     []
   );
 
-  const handleFirstName = markDirty(setFirstName);
-  const handleMiddleName = markDirty(setMiddleName);
-  const handleLastName = markDirty(setLastName);
+  const handleFirstName = (val: string) => markDirty(setFirstName)(capitalizeFirstLetterOnly(val));
+  const handleMiddleName = (val: string) => markDirty(setMiddleName)(capitalizeFirstLetterOnly(val));
+  const handleLastName = (val: string) => markDirty(setLastName)(capitalizeFirstLetterOnly(val));
   const handleGender = markDirty(setGender);
   const handlePhoneNumber = markDirty(setPhoneNumber);
   const handleDateOfBirth = markDirty(setDateOfBirth);
@@ -763,9 +768,9 @@ export function CandidateSettingsClient({ userProfile, initialData }: Props) {
   function handleDiscard() {
     setUsername(userProfile.username ?? "");
     setUsernameStatus("idle");
-    setFirstName(initialData?.first_name ?? "");
-    setMiddleName(initialData?.middle_name ?? "");
-    setLastName(initialData?.last_name ?? "");
+    setFirstName(capitalizeFirstLetterOnly(initialData?.first_name ?? ""));
+    setMiddleName(capitalizeFirstLetterOnly(initialData?.middle_name ?? ""));
+    setLastName(capitalizeFirstLetterOnly(initialData?.last_name ?? ""));
     setGender(initialData?.gender ? GENDER_REVERSE[initialData.gender] ?? "" : "");
     setPhoneNumber(initialData?.phone_number ?? "");
     setDateOfBirth(initialData?.date_of_birth ? parseLocalDate(initialData.date_of_birth) : undefined);
