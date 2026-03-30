@@ -374,7 +374,7 @@ function AttemptScore({
 
   return (
     <div className="flex flex-col">
-      <span className="text-sm font-semibold tabular-nums">{pct}%</span>
+      <span className="text-sm font-semibold tabular-nums">{pct.toFixed(2)}%</span>
       {attempt.score != null && attempt.total_marks != null && (
         <span className="text-xs tabular-nums text-muted-foreground">
           {attempt.score}/{attempt.total_marks}
@@ -493,7 +493,7 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
       a.status === "submitted" ? "Submitted" : "In Progress",
       a.score ?? "—",
       a.total_marks ?? "—",
-      a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks) : "—",
+      a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks).toFixed(2) : "—",
       formatSeconds(a.time_spent_seconds),
       a.tab_switch_count?.toString() ?? "0",
       formatDateTime(a.started_at),
@@ -562,7 +562,7 @@ function AttemptsTab({ test, liveAttempts }: { test: InstituteTestDetail; liveAt
       a.passout_year?.toString() || "—",
       a.status === "submitted" ? "Submitted" : "In Progress",
       a.status === "submitted" ? `${a.score ?? "—"}/${a.total_marks ?? "—"}` : "—",
-      a.status === "submitted" ? `${resolvePct(a.percentage, a.score, a.total_marks)}%` : "—",
+      a.status === "submitted" ? `${resolvePct(a.percentage, a.score, a.total_marks).toFixed(2)}%` : "—",
       formatSeconds(a.time_spent_seconds),
       a.tab_switch_count?.toString() ?? "0",
       a.submitted_at ? formatDateTime(a.submitted_at) : "—",

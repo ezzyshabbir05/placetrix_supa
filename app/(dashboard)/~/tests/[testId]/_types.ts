@@ -168,6 +168,6 @@ export function resolvePct(
 ): number {
   if (pct != null) return pct
   if (score != null && total != null && total > 0)
-    return (score / total) * 100
+    return Math.round(((score / total) * 100) * 100) / 100
   return 0
 }
