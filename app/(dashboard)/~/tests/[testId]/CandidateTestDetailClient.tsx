@@ -4,7 +4,7 @@
 // app/~/tests/[id]/CandidateTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { type ReactNode } from "react"
+import { type ReactNode, useMemo, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -220,20 +220,30 @@ function QuestionReviewItem({
 interface Props {
   test: CandidateTestDetail
   attempt: CandidateAttemptDetail | null
+  serverNow: string
 }
 
-export function CandidateTestDetailClient({ test, attempt }: Props) {
+export function CandidateTestDetailClient({ test, attempt, serverNow }: Props) {
   const isSubmitted = attempt?.status === "submitted"
   const isInProgress = attempt?.status === "in_progress"
 
-  const now = Date.now()
+  // ── Server Time Sync ───────────────────────────────────────────────────────
+  const serverTimeOffset = useMemo(() => {
+    return new Date(serverNow).getTime() - Date.now()
+  }, [serverNow])
+
+  const getNowOnServer = useCallback(() => {
+    return new Date(Date.now() + serverTimeOffset)
+  }, [serverTimeOffset])
+
+  const nowMs = getNowOnServer().getTime()
   const isLive =
-    (!test.available_from || new Date(test.available_from).getTime() <= now) &&
-    (!test.available_until || new Date(test.available_until).getTime() >= now)
+    (!test.available_from || new Date(test.available_from).getTime() <= nowMs) &&
+    (!test.available_until || new Date(test.available_until).getTime() >= nowMs)
   const isExpired =
-    !!test.available_until && new Date(test.available_until).getTime() < now
+    !!test.available_until && new Date(test.available_until).getTime() < nowMs
   const isNotYetOpen =
-    !!test.available_from && new Date(test.available_from).getTime() > now
+    !!test.available_from && new Date(test.available_from).getTime() > nowMs
 
   const totalMarks = test.questions?.reduce((s: number, q: { marks: number }) => s + q.marks, 0) ?? 0
   const questionCount = test.questions?.length ?? 0

@@ -21,6 +21,7 @@ export interface CandidateTest {
   available_from?: string
   available_until?: string           // ← added
   derived_status: DerivedCandidateStatus
+  current_derived_status?: DerivedCandidateStatus
   results_available: boolean
   attempt?: CandidateTestAttempt
 }
@@ -33,6 +34,7 @@ export interface InstituteTest {
   available_from?: string
   available_until?: string
   derived_status: DerivedInstituteStatus
+  current_derived_status?: DerivedInstituteStatus
   status: "draft" | "published"
   results_available: boolean
   question_count: number
@@ -53,11 +55,12 @@ export interface InstituteTest {
 export function deriveStatus(
   dbStatus: string,
   available_from?: string | null,
-  available_until?: string | null
+  available_until?: string | null,
+  nowOverride?: Date
 ): DerivedInstituteStatus {
   if (dbStatus === "draft") return "draft"
 
-  const now   = new Date()
+  const now   = nowOverride ?? new Date()
   const from  = available_from  ? new Date(available_from)  : null
   const until = available_until ? new Date(available_until) : null
 

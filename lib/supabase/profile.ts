@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { AuthApiError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { cache } from "react";
@@ -45,13 +46,13 @@ function isDefinitiveRevocation(error: AuthApiError): boolean {
  * Builds a minimal UserProfile from standard JWT claims — no network call.
  * Used when Supabase Auth is unreachable but a valid local JWT exists.
  */
-async function profileFromClaims(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<UserProfile | null> {
-  const { data } = await supabase.auth.getClaims();
-  if (!data?.claims) return null;
+function profileFromClaims(
+  claimsData: any,
+): UserProfile | null {
+  const claims = claimsData?.claims;
+  if (!claims) return null;
 
-  const { sub, email, user_metadata: meta = {} } = data.claims as {
+  const { sub, email, user_metadata: meta = {} } = claims as {
     sub: string;
     email?: string;
     user_metadata?: Record<string, unknown>;
@@ -65,8 +66,8 @@ async function profileFromClaims(
       ?? email
       ?? "User",
     avatar_path: (meta.avatar_url as string) ?? null,
-    username: null,           // not in standard JWT claims
-    account_type: "candidate",    // safe offline default
+    username: (meta.username as string) ?? null,
+    account_type: (meta.account_type as AccountType) ?? "candidate",
   };
 }
 
@@ -86,11 +87,12 @@ function profileFromAuthUser(
     email: user.email ?? "",
     display_name: (meta.full_name as string)
       ?? (meta.name as string)
+      ?? (meta.display_name as string)
       ?? user.email
       ?? "User",
-    avatar_path: (meta.avatar_url as string) ?? null,
-    username: null,
-    account_type: "candidate",
+    avatar_path: (meta.avatar_url as string) ?? (meta.avatar_path as string) ?? null,
+    username: (meta.username as string) ?? null,
+    account_type: (meta.account_type as AccountType) ?? "candidate",
   };
 }
 
@@ -119,10 +121,18 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   let user = claimsData?.claims ?? null;
 
   // Fallback: If claims are missing/expired, try a full session refresh via getUser()
+  // We only hit the Auth server if there's a reason to believe a session exists (auth cookies present).
   if (!user) {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (authUser) {
-      user = { ...authUser, sub: authUser.id } as any;
+    const cookieStore = await cookies();
+    const hasAuthCookie = cookieStore.getAll().some((c: any) =>
+      c.name.includes("auth-token")
+    );
+
+    if (hasAuthCookie) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        user = { ...authUser, sub: authUser.id } as any;
+      }
     }
   }
 
@@ -158,11 +168,11 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   if (authError instanceof AuthApiError) {
     if (isDefinitiveRevocation(authError)) {
       await supabase.auth.signOut({ scope: "local" });
-      redirect("/auth/login");
+      redirect("/auth/login?revoked=1"); // Added param to help middleware avoid loop
     }
   }
 
-  // ── Step 4: Offline / local-only — try local JWT claims ──────────────────
-  return profileFromClaims(supabase);
+  // ── Step 4: Offline / local-only — return what we have from claims ────────
+  return profileFromClaims(claimsData);
 });
 

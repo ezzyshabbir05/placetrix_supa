@@ -54,6 +54,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
             request.cookies.set(name, value)
           );
           // … and onto the response so the browser receives them.
+          // Note: Creating the response once and reusing it is more efficient.
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -71,13 +72,28 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   // 3. Fallback: If claims are missing or expired (user is null),
   //    we MUST attempt a session refresh via getUser().
-  //    This prevents unnecessary logouts when the token simply expires.
+  //    To avoid unnecessary network hits for truly anonymous visitors,
+  //    we only call getUser() if an auth-related cookie is present.
   if (!user && (isProtected(pathname) || isAuthPage(pathname))) {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (authUser) {
-      // Refresh succeeded! Proceed with updated credentials.
-      user = { ...authUser, sub: authUser.id } as any;
+    const hasAuthCookie = request.cookies.getAll().some((c) =>
+      c.name.includes("auth-token")
+    );
+
+    if (hasAuthCookie) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        // Refresh succeeded! Proceed with updated credentials.
+        user = { ...authUser, sub: authUser.id } as any;
+      }
     }
+  }
+
+  // ── Protection: Prevent Redirect Loops on Revocation ───────────────────────
+  // If we came from a 'revoked=1' redirect, we ignore local JWT claims
+  // and treat the user as unauthenticated.
+  const isRevoked = request.nextUrl.searchParams.get("revoked") === "1";
+  if (isRevoked) {
+    user = null;
   }
 
   // Redirect unauthenticated user trying to reach a protected page → login.
@@ -95,6 +111,15 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     pathname.includes("/auth/confirm");
 
   if (isAuthPage(pathname) && !isFlowRoute && user) {
+    // SECURITY: Before redirecting an "authenticated" user away from an auth page,
+    // we do ONE final server-side check to ensure their session wasn't just revoked.
+    // This solves the 'Redirect Loop' where getClaims() is still valid but the session is dead.
+    const { data: { user: verifiedUser } } = await supabase.auth.getUser();
+    if (!verifiedUser) {
+      // Session is actually revoked! Stop the redirect and let them stay on the login page.
+      return supabaseResponse;
+    }
+
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/~";
     homeUrl.search = ""; // Clear accidental params

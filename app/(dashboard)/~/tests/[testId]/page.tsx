@@ -252,9 +252,11 @@ export default async function TestDetailPage({
   const profile = await getUserProfile()
   if (!profile) redirect("/auth/login")
 
+  const serverNow = new Date().toISOString()
+
   if (profile.account_type === "candidate") {
     const { test, attempt } = await fetchCandidateView(testId, profile.id)
-    return <CandidateTestDetailClient test={test} attempt={attempt} />
+    return <CandidateTestDetailClient test={test} attempt={attempt} serverNow={serverNow} />
   }
 
   if (profile.account_type === "institute") {
@@ -263,6 +265,7 @@ export default async function TestDetailPage({
       <InstituteTestDetailClient
         testId={testId}
         test={test}
+        serverNow={serverNow}
         onToggleResults={toggleResultsAction.bind(null, testId)}
         onTogglePublish={togglePublishAction.bind(null, testId)}
         onDeleteTest={deleteTestAction.bind(null, testId)}

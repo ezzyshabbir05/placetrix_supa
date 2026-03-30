@@ -86,6 +86,7 @@ import {
   Filter,
   X,
 } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
@@ -116,6 +117,8 @@ function useActionState() {
       setActiveAction(key)
       try {
         await fn()
+      } catch (err: any) {
+        toast.error(err?.message || "Operation failed")
       } finally {
         setActiveAction(null)
       }
@@ -133,7 +136,7 @@ function useActionState() {
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
 
 function StatsBar({ test, liveAttempts, totalMarks }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[]; totalMarks: number }) {
-  const submitted = liveAttempts.filter((a) => a.status === "submitted")
+  const submitted = liveAttempts.filter((a) => a.status === "submitted" || a.status === "auto_submitted")
   const inProgress = liveAttempts.filter((a) => a.status === "in_progress")
 
   const avgPct =
@@ -392,7 +395,7 @@ const AttemptScore = React.memo(function AttemptScore({
   attempt: InstituteAttemptRow
   scoresVisible: boolean
 }) {
-  if (attempt.status !== "submitted") {
+  if (attempt.status !== "submitted" && attempt.status !== "auto_submitted") {
     return <span className="text-sm text-muted-foreground">—</span>
   }
   if (!scoresVisible) {
@@ -498,10 +501,10 @@ const MobileAttemptRow = React.memo(function MobileAttemptRow({
         <span
           className={cn(
             "text-xs shrink-0 text-right w-[68px]",
-            attempt.status === "submitted" ? "text-foreground font-medium" : "text-muted-foreground text-[11px]"
+            (attempt.status === "submitted" || attempt.status === "auto_submitted") ? "text-foreground font-medium" : "text-muted-foreground text-[11px]"
           )}
         >
-          {attempt.status === "submitted" ? "Submitted" : "In Progress"}
+          {(attempt.status === "submitted" || attempt.status === "auto_submitted") ? "Submitted" : "In Progress"}
         </span>
       </div>
     </div>
@@ -533,10 +536,10 @@ const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
         <span
           className={cn(
             "text-sm whitespace-nowrap",
-            attempt.status === "submitted" ? "text-foreground" : "text-muted-foreground"
+            (attempt.status === "submitted" || attempt.status === "auto_submitted") ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          {attempt.status === "submitted" ? "Submitted" : "In Progress"}
+          {(attempt.status === "submitted" || attempt.status === "auto_submitted") ? "Submitted" : "In Progress"}
         </span>
       </TableCell>
       <TableCell className="text-right">
@@ -562,7 +565,7 @@ const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
 
 // ─── Attempts Tab ─────────────────────────────────────────────────────────────
 
-function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[]; totalMarks: number }) {
+function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[]; totalMarks: number; serverNow: string; getNowOnServer: () => Date }) {
   const attempts = liveAttempts
   const [scoresVisible, setScoresVisible] = useState(false)
 
@@ -579,7 +582,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
   // ── Memoized derived data ────────────────────────────────────────────────
 
   const submitted = useMemo(
-    () => attempts.filter((a) => a.status === "submitted"),
+    () => attempts.filter((a) => a.status === "submitted" || a.status === "auto_submitted"),
     [attempts]
   )
 
@@ -635,10 +638,16 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
         )
           return false
       }
-      if (statusFilter !== "all" && a.status !== statusFilter) return false
+      if (statusFilter !== "all") {
+        if (statusFilter === "submitted") {
+          if (a.status !== "submitted" && a.status !== "auto_submitted") return false
+        } else if (a.status !== statusFilter) {
+          return false
+        }
+      }
       if (branchFilter !== "all" && a.branch !== branchFilter) return false
       if (scoreFilter !== "all") {
-        if (a.status !== "submitted") return false
+        if (a.status !== "submitted" && a.status !== "auto_submitted") return false
         const pct = resolvePct(a.percentage, a.score, a.total_marks)
         if (scoreFilter === "high" && pct < 75) return false
         if (scoreFilter === "mid" && (pct < 50 || pct >= 75)) return false
@@ -652,15 +661,15 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
   const handleSort = useCallback((col: SortColumn) => {
-    setSortCol((prev) => {
-      if (prev === col) {
-        setSortDir((d) => (d === "asc" ? "desc" : "asc"))
-        return prev
-      }
-      setSortDir("desc")
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortCol(col)
+      const defaultAsc = ["student_name", "education", "status"].includes(col)
+      setSortDir(defaultAsc ? "asc" : "desc")
       return col
-    })
-  }, [])
+    }
+  }, [sortCol])
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -677,8 +686,9 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
           diff = a.status.localeCompare(b.status)
           break
         case "score": {
-          const scoreA = a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks) : -1
-          const scoreB = b.status === "submitted" ? resolvePct(b.percentage, b.score, b.total_marks) : -1
+          const isComp = (s: string) => s === "submitted" || s === "auto_submitted"
+          const scoreA = isComp(a.status) ? resolvePct(a.percentage, a.score, a.total_marks) : -1
+          const scoreB = isComp(b.status) ? resolvePct(b.percentage, b.score, b.total_marks) : -1
           diff = scoreA - scoreB
           break
         }
@@ -688,9 +698,22 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
         case "violations":
           diff = (a.tab_switch_count || 0) - (b.tab_switch_count || 0)
           break
-        case "submitted":
-          diff = (a.submitted_at ?? a.started_at).localeCompare(b.submitted_at ?? b.started_at)
+        case "submitted": {
+          const isCompA = a.status === "submitted" || a.status === "auto_submitted"
+          const isCompB = b.status === "submitted" || b.status === "auto_submitted"
+
+          // Always push In-Progress/Abandoned to the bottom, regardless of sort direction
+          if (isCompA && !isCompB) return -1
+          if (!isCompA && isCompB) return 1
+
+          if (isCompA && isCompB) {
+            diff = (a.submitted_at || "").localeCompare(b.submitted_at || "")
+          } else {
+            // Both are in-progress or mixed
+            diff = a.started_at.localeCompare(b.started_at)
+          }
           break
+        }
       }
       return sortDir === "asc" ? diff : -diff
     })
@@ -717,10 +740,10 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
       a.student_email || "—",
       a.branch || "—",
       a.passout_year?.toString() || "—",
-      a.status === "submitted" ? "Submitted" : "In Progress",
+      (a.status === "submitted" || a.status === "auto_submitted") ? "Submitted" : "In Progress",
       a.score ?? "—",
       a.total_marks ?? "—",
-      a.status === "submitted" ? resolvePct(a.percentage, a.score, a.total_marks).toFixed(2) : "—",
+      (a.status === "submitted" || a.status === "auto_submitted") ? resolvePct(a.percentage, a.score, a.total_marks).toFixed(2) : "—",
       formatSeconds(a.time_spent_seconds),
       a.tab_switch_count?.toString() ?? "0",
       formatDateTime(a.started_at),
@@ -772,7 +795,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
     doc.text(testInfo, 14, currentY)
     currentY += 4.5
 
-    const dateStr = new Date().toLocaleString("en-IN", {
+    const dateStr = getNowOnServer().toLocaleString("en-IN", {
       dateStyle: "medium",
       timeStyle: "short",
     })
@@ -789,9 +812,9 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
       a.student_email || "—",
       a.branch || "—",
       a.passout_year?.toString() || "—",
-      a.status === "submitted" ? "Submitted" : "In Progress",
-      a.status === "submitted" ? `${a.score ?? "—"}/${a.total_marks ?? "—"}` : "—",
-      a.status === "submitted" ? `${resolvePct(a.percentage, a.score, a.total_marks).toFixed(2)}%` : "—",
+      (a.status === "submitted" || a.status === "auto_submitted") ? "Submitted" : "In Progress",
+      (a.status === "submitted" || a.status === "auto_submitted") ? `${a.score ?? "—"}/${a.total_marks ?? "—"}` : "—",
+      (a.status === "submitted" || a.status === "auto_submitted") ? `${resolvePct(a.percentage, a.score, a.total_marks).toFixed(2)}%` : "—",
       formatSeconds(a.time_spent_seconds),
       a.tab_switch_count?.toString() ?? "0",
       a.submitted_at ? formatDateTime(a.submitted_at) : "—",
@@ -854,7 +877,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
       },
     })
 
-    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+    const ts = getNowOnServer().toISOString().replace(/[:.]/g, "-").slice(0, 19)
     doc.save(`${test.id}_${ts}.pdf`)
   }, [sorted, test, totalMarks, attempts.length, avgPct])
 
@@ -976,8 +999,9 @@ function AttemptsTab({ test, liveAttempts, totalMarks }: { test: InstituteTestDe
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="submitted">Submitted</SelectItem>
+                        <SelectItem value="submitted">Submitted & Auto</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="abandoned">Abandoned</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1311,6 +1335,7 @@ function OverviewTab({
 interface Props {
   testId: string
   test: InstituteTestDetail
+  serverNow: string
   onToggleResults?: () => Promise<void>
   onTogglePublish?: () => Promise<void>
   onDeleteTest?: () => Promise<void>
@@ -1319,6 +1344,7 @@ interface Props {
 export function InstituteTestDetailClient({
   testId,
   test,
+  serverNow,
   onToggleResults,
   onTogglePublish,
   onDeleteTest,
@@ -1327,6 +1353,15 @@ export function InstituteTestDetailClient({
   const [activeTab, setActiveTab] = useState("overview")
   const { run, isLoading, anyLoading } = useActionState()
   const totalMarks = useMemo(() => test.questions.reduce((s, q) => s + q.marks, 0), [test.questions])
+
+  // Calculate server time offset
+  const serverTimeOffset = useMemo(() => {
+    return new Date(serverNow).getTime() - Date.now()
+  }, [serverNow])
+
+  const getNowOnServer = useCallback(() => {
+    return new Date(Date.now() + serverTimeOffset)
+  }, [serverTimeOffset])
 
   // ── Live attempts state ──────────────────────────────────────────────────
   const [liveAttempts, setLiveAttempts] = useState<InstituteAttemptRow[]>(test.attempts)
@@ -1530,7 +1565,10 @@ export function InstituteTestDetailClient({
                       disabled={isLoading("deleteTest")}
                       onClick={(e) => {
                         e.preventDefault()
-                        run("deleteTest", onDeleteTest)
+                        run("deleteTest", async () => {
+                          await onDeleteTest?.()
+                          toast.success("Test deleted successfully")
+                        })
                       }}
                     >
                       {isLoading("deleteTest") ? (
@@ -1588,8 +1626,14 @@ export function InstituteTestDetailClient({
           <TabsContent value="overview" className="m-0">
             <OverviewTab
               test={test}
-              onToggleResults={() => run("toggleResults", onToggleResults)}
-              onTogglePublish={() => run("togglePublish", onTogglePublish)}
+              onToggleResults={() => run("toggleResults", async () => {
+                await onToggleResults?.()
+                toast.success(`Results are now ${!test.results_available ? "visible" : "hidden"} to candidates`)
+              })}
+              onTogglePublish={() => run("togglePublish", async () => {
+                await onTogglePublish?.()
+                toast.success(`Test is now ${test.status === "draft" ? "published" : "drafted"}`)
+              })}
               isToggleResultsLoading={isLoading("toggleResults")}
               isTogglePublishLoading={isLoading("togglePublish")}
               anyLoading={anyLoading}
@@ -1601,7 +1645,7 @@ export function InstituteTestDetailClient({
           </TabsContent>
 
           <TabsContent value="attempts" className="m-0">
-            <AttemptsTab test={test} liveAttempts={liveAttempts} totalMarks={totalMarks} />
+            <AttemptsTab test={test} liveAttempts={liveAttempts} totalMarks={totalMarks} serverNow={serverNow} getNowOnServer={getNowOnServer} />
           </TabsContent>
         </Tabs>
       </div>

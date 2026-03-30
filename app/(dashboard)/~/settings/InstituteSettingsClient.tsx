@@ -128,14 +128,6 @@ function parseUserAgent(ua: string | null): ParsedUA {
   return { browser, os, device }
 }
 
-function getSessionIdFromJwt(token: string): string | null {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    return payload.session_id ?? null
-  } catch {
-    return null
-  }
-}
 
 function formatTimeAgo(dateStr: string | null): string {
   if (!dateStr) return "Unknown"
@@ -465,12 +457,11 @@ export function InstituteSettingsClient({ userProfile, initialData }: Props) {
     setSessLoading(true)
     try {
       const { data, error: authError } = await supabase.auth.getClaims()
-      const user = data?.claims
+      const user = data?.claims as any
       if (!user || authError) { setSessions([]); return }
 
-      // We still need the session for the access_token to extract the current session_id
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) setCurrentSessionId(getSessionIdFromJwt(session.access_token))
+      // Use the session_id directly from claims for the 'current' indicator
+      if (user.session_id) setCurrentSessionId(user.session_id)
 
       const { data: sessionData, error } = await supabase
         .from("user_sessions")

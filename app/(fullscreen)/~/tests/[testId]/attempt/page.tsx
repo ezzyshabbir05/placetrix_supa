@@ -37,7 +37,7 @@ function seededShuffle<T>(arr: readonly T[], rng: () => number): T[] {
   const out = [...arr]
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
-    ;[out[i], out[j]] = [out[j], out[i]]
+      ;[out[i], out[j]] = [out[j], out[i]]
   }
   return out
 }
@@ -57,7 +57,7 @@ export default async function AttemptPage({
 
   // ── 1. Consolidated Initialization (RPC) ────────────────────────────────────
   const { data: initResult, error: initError } = await (supabase as any).rpc("init_test_attempt", {
-     p_test_id: testId
+    p_test_id: testId
   }) as { data: any, error: any }
 
   if (initError || !initResult) {
@@ -139,6 +139,7 @@ export default async function AttemptPage({
       questions={displayQuestions}
       attemptInfo={attemptInfo}
       savedAnswers={savedAnswers}
+      serverNow={now.toISOString()}
       onStartAttempt={startAttemptAction.bind(null, testId)}
       onSaveAnswer={saveAnswerAction}
       onSubmit={submitAttemptAction}

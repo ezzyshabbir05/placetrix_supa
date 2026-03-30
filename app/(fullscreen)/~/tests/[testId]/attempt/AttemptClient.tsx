@@ -4,10 +4,11 @@
 // app/~/tests/[testId]/attempt/AttemptClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { toast } from "sonner"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -583,6 +584,7 @@ interface Props {
         timeSpentSeconds?: number
     ) => Promise<void>
     onSubmit?: (attemptId: string, timeSpentSeconds: number) => Promise<void>
+    serverNow: string
     // Called on every detected violation — fire-and-forget, never throws.
     onViolation?: (
         attemptId: string,
@@ -601,6 +603,7 @@ export function AttemptClient({
     onSaveAnswer,
     onSubmit,
     onViolation,
+    serverNow,
 }: Props) {
     const isResuming = savedAnswers.length > 0 && initialAttemptInfo !== null
 
@@ -608,6 +611,15 @@ export function AttemptClient({
 
     const [attemptInfo, setAttemptInfo] = useState<AttemptInfo | null>(initialAttemptInfo)
     const [phase, setPhase] = useState<"intro" | "active">("intro")
+
+    // ── Server Time Sync ───────────────────────────────────────────────────────
+    const serverTimeOffset = useMemo(() => {
+        return new Date(serverNow).getTime() - Date.now()
+    }, [serverNow])
+
+    const getNowOnServer = useCallback(() => {
+        return new Date(Date.now() + serverTimeOffset)
+    }, [serverTimeOffset])
 
     const storagePrefix = initialAttemptInfo ? `pt_attempt_${initialAttemptInfo.id}` : null
 
@@ -724,7 +736,7 @@ export function AttemptClient({
                     attemptInfo.id,
                     "fullscreen_exit",
                     focusLostCountRef.current,
-                    new Date().toISOString()
+                    getNowOnServer().toISOString()
                 ).catch(() => { /* never throw */ })
             } else {
                 setShowFullscreenWarning(false)
@@ -746,13 +758,20 @@ export function AttemptClient({
             setShowFocusWarning(true)
 
             if (attemptInfo) {
-                // Persist violation to the server immediately (fire-and-forget).
-                onViolation?.(
-                    attemptInfo.id,
-                    "focus_loss",
-                    currentCount,
-                    new Date().toISOString()
-                ).catch(() => { /* never throw */ })
+                // Throttled violation recording: only sync to server every 2s
+                // to prevent traffic storms from rapid browser focus events.
+                const now = Date.now()
+                const lastSync = (window as any)._lastViolationSync ?? 0
+                if (now - lastSync > 2000) {
+                    (window as any)._lastViolationSync = now
+                    // Persist violation to the server immediately (fire-and-forget).
+                    onViolation?.(
+                        attemptInfo.id,
+                        "focus_loss",
+                        currentCount,
+                        getNowOnServer().toISOString()
+                    ).catch(() => { /* never throw */ })
+                }
             }
 
             // Auto-submit once the threshold is crossed (strict mode only).
@@ -886,7 +905,9 @@ export function AttemptClient({
             try {
                 await onSaveAnswer(attemptInfo.id, questionId, selectedIds, timeSpentSeconds)
             } catch (err: any) {
-                setSaveError(err?.message ?? "Failed to save answer")
+                const msg = err?.message ?? "Failed to save answer"
+                setSaveError(msg)
+                toast.error(msg)
             } finally {
                 setSavingId(null)
             }
@@ -900,12 +921,13 @@ export function AttemptClient({
     // Ref to hold the debounce timer for answer saving
     const saveDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
-    const flushPendingSave = useCallback((questionId: string) => {
+    const flushPendingSave = useCallback(async (questionId: string) => {
         if (saveDebounceRef.current[questionId]) {
             clearTimeout(saveDebounceRef.current[questionId])
             const pendingAnswers = answers[questionId] ?? []
-            saveAnswer(questionId, pendingAnswers)
+            const promise = saveAnswer(questionId, pendingAnswers)
             delete saveDebounceRef.current[questionId]
+            return promise
         }
     }, [answers, saveAnswer])
 
@@ -929,7 +951,7 @@ export function AttemptClient({
                 if (saveDebounceRef.current[questionId]) {
                     clearTimeout(saveDebounceRef.current[questionId])
                 }
-                
+
                 saveDebounceRef.current[questionId] = setTimeout(() => {
                     saveAnswer(questionId, next)
                     delete saveDebounceRef.current[questionId]
@@ -959,12 +981,12 @@ export function AttemptClient({
             setShowFocusWarning(false)
 
             const timeSpentSeconds = Math.floor(
-                (Date.now() - new Date(attemptInfo.started_at).getTime()) / 1000
+                (getNowOnServer().getTime() - new Date(attemptInfo.started_at).getTime()) / 1000
             )
 
             try {
                 await leaveFullscreen()              // ← exit fullscreen FIRST
-                
+
                 // Clear persistent local state for this attempt
                 const prefix = `pt_attempt_${attemptInfo.id}`
                 localStorage.removeItem(`${prefix}_idx`)
@@ -973,7 +995,9 @@ export function AttemptClient({
                 await onSubmit?.(attemptInfo.id, timeSpentSeconds)  // ← then redirect
             } catch (err: any) {
                 setIsSubmitting(false)
-                setSubmitError(err?.message ?? "Submission failed. Please try again.")
+                const msg = err?.message ?? "Submission failed. Please try again."
+                setSubmitError(msg)
+                toast.error(msg)
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1031,9 +1055,9 @@ export function AttemptClient({
 
 
     // ── Tracking Offline and Question Pacing ───────────────────────────────────
-    
+
     const [isOffline, setIsOffline] = useState(false)
-    const timeTrackingRef = useRef<{ id: string; enteredAt: number }>({ id: "", enteredAt: 0 })
+    const timeTrackingRef = useRef<{ id: string; enteredAtServerTime: number }>({ id: "", enteredAtServerTime: 0 })
 
     useEffect(() => {
         setIsOffline(!navigator.onLine)
@@ -1050,41 +1074,49 @@ export function AttemptClient({
     useEffect(() => {
         if (phase !== "active" || !currentQuestion || isSubmittingRef.current) return
 
-        const now = window.performance.now()
+        const nowServerTime = getNowOnServer().getTime()
         const track = timeTrackingRef.current
 
         // If we switched away from a previous question:
-        // 1. Flush any pending debounced save for the old question.
-        // 2. Save the accumulated time.
-        if (track.id && track.id !== currentQuestion.id && track.enteredAt > 0) {
-            flushPendingSave(track.id)
-            const elapsed = Math.max(0, Math.floor((now - track.enteredAt) / 1000))
-            if (elapsed > 0 && attemptInfo) {
-                const prevSelections = answers[track.id] ?? []
-                // Note: flushPendingSave already handles the saveAnswer call for content,
-                // but we still want to report the elapsed time.
-                onSaveAnswer?.(attemptInfo.id, track.id, prevSelections, elapsed).catch(() => {})
+        // Combined synchronization:
+        // 1. If there's a pending debounced content save, flush it now with the elapsed time.
+        // 2. Otherwise, only report the elapsed time if it exceeds a 3-second "skimming" threshold.
+        // This significantly reduces server traffic when users click through questions quickly.
+        if (track.id && track.id !== currentQuestion.id && track.enteredAtServerTime > 0) {
+            const elapsed = Math.max(0, Math.floor((nowServerTime - track.enteredAtServerTime) / 1000))
+
+            if (saveDebounceRef.current[track.id]) {
+                // Flush pending content + new time in ONE atomic request
+                clearTimeout(saveDebounceRef.current[track.id])
+                delete saveDebounceRef.current[track.id]
+                const finalAnswers = answers[track.id] ?? []
+                saveAnswer(track.id, finalAnswers, elapsed)
+            } else if (elapsed >= 3 && attemptInfo) {
+                // No pending content change, but significant time spent
+                const currentSelections = answers[track.id] ?? []
+                onSaveAnswer?.(attemptInfo.id, track.id, currentSelections, elapsed).catch(() => { })
             }
         }
 
         // Only explicitly reset tracker if we are indeed looking at a new/different question
         if (track.id !== currentQuestion.id) {
-            timeTrackingRef.current = { id: currentQuestion.id, enteredAt: now }
+            timeTrackingRef.current = { id: currentQuestion.id, enteredAtServerTime: nowServerTime }
         }
-    }, [currentIndex, currentQuestion, phase, attemptInfo, answers, onSaveAnswer, flushPendingSave])
+    }, [currentIndex, currentQuestion, phase, attemptInfo, answers, onSaveAnswer, saveAnswer])
 
     // Override handleSubmit for final time pacing sync and flush
     const finalHandleSubmit = useCallback(async (auto = false) => {
         const finalTrack = timeTrackingRef.current
-        if (finalTrack.enteredAt > 0 && finalTrack.id && attemptInfo) {
-            flushPendingSave(finalTrack.id)
-            const finalElapsed = Math.max(0, Math.floor((window.performance.now() - finalTrack.enteredAt) / 1000))
-            if (finalElapsed > 0) {
-               onSaveAnswer?.(attemptInfo.id, finalTrack.id, answers[finalTrack.id] ?? [], finalElapsed).catch(()=>{})
-            }
+        if (finalTrack.enteredAtServerTime > 0 && finalTrack.id && attemptInfo) {
+            const finalElapsed = Math.max(0, Math.floor((getNowOnServer().getTime() - finalTrack.enteredAtServerTime) / 1000))
+            const finalAnswers = answers[finalTrack.id] ?? []
+
+            // Consolidated final sync: content + time in ONE request before grading the test.
+            // This prevents race conditions and redundant function invocations on completion.
+            await saveAnswer(finalTrack.id, finalAnswers, finalElapsed)
         }
         await handleSubmit(auto)
-    }, [handleSubmit, attemptInfo, answers, onSaveAnswer, flushPendingSave])
+    }, [handleSubmit, attemptInfo, answers, saveAnswer, getNowOnServer])
 
 
     useEffect(() => {
@@ -1111,7 +1143,7 @@ export function AttemptClient({
                             setFocusLostCount(info.tab_switch_count)
                             focusLostCountRef.current = info.tab_switch_count
                         } catch (err: any) {
-                            alert(err?.message || "Failed to start test")
+                            toast.error(err?.message || "Failed to start test")
                             setIsStarting(false)
                             return
                         }

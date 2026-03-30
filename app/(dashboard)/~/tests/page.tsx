@@ -19,7 +19,7 @@ export const metadata = {
 
 // ─── Candidate data ───────────────────────────────────────────────────────────
 
-async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
+async function fetchCandidateTests(userId: string, now: string): Promise<CandidateTest[]> {
   const supabase = await createClient()
 
   // 1. Resolve the candidate's institute
@@ -100,7 +100,8 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
       derived_status: deriveStatus(
         "published",
         t.available_from,
-        t.available_until
+        t.available_until,
+        new Date(now)
       ) as CandidateTest["derived_status"],
       results_available: t.results_available,
       attempt,
@@ -110,7 +111,7 @@ async function fetchCandidateTests(userId: string): Promise<CandidateTest[]> {
 
 // ─── Institute data ───────────────────────────────────────────────────────────
 
-async function fetchInstituteTests(userId: string): Promise<InstituteTest[]> {
+async function fetchInstituteTests(userId: string, now: string): Promise<InstituteTest[]> {
   const supabase = await createClient()
 
   const { data: rawTests } = await supabase
@@ -129,7 +130,7 @@ async function fetchInstituteTests(userId: string): Promise<InstituteTest[]> {
     time_limit_seconds: t.time_limit_seconds ?? undefined,
     available_from: t.available_from ?? undefined,
     available_until: t.available_until ?? undefined,
-    derived_status: deriveStatus(t.status ?? "draft", t.available_from ?? null, t.available_until ?? null),
+    derived_status: deriveStatus(t.status ?? "draft", t.available_from ?? null, t.available_until ?? null, new Date(now)),
     status: (t.status as "draft" | "published") ?? "draft",
     results_available: t.results_available ?? false,
     question_count: t.question_count ?? 0,
@@ -143,14 +144,16 @@ export default async function TestsPage() {
   const profile = await getUserProfile()
   if (!profile) return null
 
+  const nowStr = new Date().toISOString()
+
   if (profile.account_type === "candidate") {
-    const tests = await fetchCandidateTests(profile.id)
-    return <CandidateTestsClient tests={tests} />
+    const tests = await fetchCandidateTests(profile.id, nowStr)
+    return <CandidateTestsClient tests={tests} serverNow={nowStr} />
   }
 
   if (profile.account_type === "institute") {
-    const tests = await fetchInstituteTests(profile.id)
-    return <InstituteTestsClient tests={tests} />
+    const tests = await fetchInstituteTests(profile.id, nowStr)
+    return <InstituteTestsClient tests={tests} serverNow={nowStr} />
   }
 
   redirect("/~/tests")

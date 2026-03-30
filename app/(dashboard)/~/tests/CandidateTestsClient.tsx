@@ -4,7 +4,7 @@
 // app/~/tests/CandidateTestsClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CandidateTest, DerivedCandidateStatus } from "./_types"
+import { deriveStatus } from "./_types"
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -219,17 +220,42 @@ function EmptyState({ label }: { label: string }) {
 
 interface Props {
   tests: CandidateTest[]
+  serverNow: string
 }
 
-export function CandidateTestsClient({ tests }: Props) {
+export function CandidateTestsClient({ tests, serverNow }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("live")
+
+  // ── Server Time Sync ───────────────────────────────────────────────────────
+  const serverTimeOffset = useMemo(() => {
+    return new Date(serverNow).getTime() - Date.now()
+  }, [serverNow])
+
+  const getNowOnServer = useCallback(() => {
+    return new Date(Date.now() + serverTimeOffset)
+  }, [serverTimeOffset])
+
+  const [now, setNow] = useState(getNowOnServer())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(getNowOnServer()), 10000) // update every 10s
+    return () => clearInterval(id)
+  }, [getNowOnServer])
 
   // A submitted test always goes to "past", regardless of the time-window status.
   const isSubmitted = (t: CandidateTest) => t.attempt?.status === "submitted"
 
-  const live = tests.filter((t) => t.derived_status === "live" && !isSubmitted(t))
-  const upcoming = tests.filter((t) => t.derived_status === "upcoming" && !isSubmitted(t))
-  const past = tests.filter((t) => t.derived_status === "past" || isSubmitted(t))
+  // Dynamically re-derive status matching the server logic but on the client with synced time
+  const enrichedTests = useMemo(() => {
+    return tests.map(t => ({
+      ...t,
+      current_derived_status: deriveStatus("published", t.available_from, t.available_until, now) as DerivedCandidateStatus
+    }))
+  }, [tests, now])
+
+  const live = enrichedTests.filter((t) => t.current_derived_status === "live" && !isSubmitted(t))
+  const upcoming = enrichedTests.filter((t) => t.current_derived_status === "upcoming" && !isSubmitted(t))
+  const past = enrichedTests.filter((t) => t.current_derived_status === "past" || isSubmitted(t))
 
   const tabConfig: TabConfig[] = [
     { value: "live", label: "Live", icon: <PlayCircle className="h-3.5 w-3.5" />, count: live.length },
@@ -287,7 +313,12 @@ export function CandidateTestsClient({ tests }: Props) {
                 <EmptyState label={label.toLowerCase()} />
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {tabTests[value].map((t) => <TestCard key={t.id} test={t} />)}
+                  {tabTests[value].map((t) => (
+                    <TestCard 
+                      key={t.id} 
+                      test={{...t, derived_status: t.current_derived_status as DerivedCandidateStatus}} 
+                    />
+                  ))}
                 </div>
               )}
             </TabsContent>

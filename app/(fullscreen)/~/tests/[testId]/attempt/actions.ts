@@ -26,7 +26,7 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
       .maybeSingle(),
     supabase
       .from("tests")
-      .select("status, institute_id, time_limit_seconds, max_attempts")
+      .select("status, institute_id, time_limit_seconds, max_attempts, available_from, available_until")
       .eq("id", testId)
       .single(),
     supabase
@@ -65,6 +65,15 @@ export async function startAttemptAction(testId: string): Promise<AttemptInfo> {
       expires_at: existingAttempt.expires_at,
       tab_switch_count: existingAttempt.tab_switch_count ?? 0
     }
+  }
+
+  // Strictly check window for NEW attempts
+  const now = new Date()
+  if (test.available_from && new Date(test.available_from) > now) {
+    throw new Error("Test is not yet open")
+  }
+  if (test.available_until && new Date(test.available_until) < now) {
+    throw new Error("Test has closed")
   }
 
   const completedCount = completedRes.count ?? 0

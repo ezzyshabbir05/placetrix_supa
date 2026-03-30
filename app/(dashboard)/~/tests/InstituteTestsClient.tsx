@@ -4,7 +4,7 @@
 // app/~/tests/InstituteTestsClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { InstituteTest, DerivedInstituteStatus } from "./_types"
+import { deriveStatus } from "./_types"
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -249,16 +250,41 @@ function EmptyState({ isFiltered, onCreate }: { isFiltered: boolean; onCreate: (
 
 interface Props {
   tests: InstituteTest[]
+  serverNow: string
 }
 
-export function InstituteTestsClient({ tests }: Props) {
+export function InstituteTestsClient({ tests, serverNow }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("all")
   const router = useRouter()
 
-  const live     = tests.filter((t) => t.derived_status === "live")
-  const upcoming = tests.filter((t) => t.derived_status === "upcoming")
-  const past     = tests.filter((t) => t.derived_status === "past")
-  const drafts   = tests.filter((t) => t.derived_status === "draft")
+  // ── Server Time Sync ───────────────────────────────────────────────────────
+  const serverTimeOffset = useMemo(() => {
+    return new Date(serverNow).getTime() - Date.now()
+  }, [serverNow])
+
+  const getNowOnServer = useCallback(() => {
+    return new Date(Date.now() + serverTimeOffset)
+  }, [serverTimeOffset])
+
+  const [now, setNow] = useState(getNowOnServer())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(getNowOnServer()), 10000) // update every 10s
+    return () => clearInterval(id)
+  }, [getNowOnServer])
+
+  // Dynamically re-derive status matching the server logic but on the client with synced time
+  const enrichedTests = useMemo(() => {
+    return tests.map(t => ({
+      ...t,
+      current_derived_status: deriveStatus(t.status, t.available_from, t.available_until, now) as DerivedInstituteStatus
+    }))
+  }, [tests, now])
+
+  const live     = enrichedTests.filter((t) => t.current_derived_status === "live")
+  const upcoming = enrichedTests.filter((t) => t.current_derived_status === "upcoming")
+  const past     = enrichedTests.filter((t) => t.current_derived_status === "past")
+  const drafts   = enrichedTests.filter((t) => t.current_derived_status === "draft")
 
   const tabConfig: TabConfig[] = [
     { value: "all",      label: "All",      icon: <LayoutList    className="h-3.5 w-3.5" />, count: tests.length    },
@@ -332,7 +358,12 @@ export function InstituteTestsClient({ tests }: Props) {
                 <EmptyState isFiltered={value !== "all"} onCreate={handleCreate} />
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {tabTests[value].map((t) => <TestCard key={t.id} test={t} />)}
+                  {tabTests[value].map((t) => (
+                    <TestCard 
+                      key={t.id} 
+                      test={{...t, derived_status: t.current_derived_status as DerivedInstituteStatus}} 
+                    />
+                  ))}
                 </div>
               )}
             </TabsContent>

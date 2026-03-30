@@ -34,12 +34,11 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Run on every route EXCEPT:
-     *   - _next/static  — compiled assets
-     *   - _next/image   — image optimisation
-     *   - favicon.ico
-     *   - static files  — svg, png, jpg, jpeg, gif, webp
+     * Only run middleware for:
+     *   - Protected app routes ( /~/* )
+     *   - Authentication routes ( /auth/* )
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    '/~/:path*',
+    '/auth/:path*',
   ],
 };
