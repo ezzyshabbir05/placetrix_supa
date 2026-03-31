@@ -97,15 +97,17 @@ export default async function AttemptPage({
 
   const testDetail = testDetailRes.data
 
+  const user = authData.claims
+
   // ── 4. Apply deterministic shuffle ──────────────────────────────────────────
   // Use the attempt ID as seed so resume always shows the same order.
-  // For new attempts (no attemptInfo yet) we use a random seed — the order will
-  // be "locked in" once startAttemptAction creates the attempt (page re-renders).
+  // For new attempts (no attemptInfo yet) we use a stable seed based on the user
+  // and test ID so the order doesn't change on page reloads.
   let displayQuestions: AttemptQuestion[] = questions
 
   const shuffleSeed = attemptInfo
     ? seedFromUUID(attemptInfo.id)
-    : Math.floor(Math.random() * 0xffffffff)
+    : seedFromUUID(`${user.sub}_${testId}`)
 
   if (testDetail?.shuffle_questions) {
     const rng = mulberry32(shuffleSeed)

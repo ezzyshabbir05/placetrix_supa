@@ -374,7 +374,13 @@ Ensure all questions are entirely distinct and not reused from any prior generat
     if (!raw) throw new Error("Empty response from AI.")
 
     const text = stripCodeFences(raw)
-    const parsed = JSON.parse(text)
+    let parsed: any
+    try {
+      parsed = JSON.parse(text)
+    } catch (parseErr) {
+      console.error("[generateQuestionsAction] Failed to parse AI JSON:", text)
+      throw new Error("The AI returned an invalid format. Retrying with another model...")
+    }
 
     const rawList: any[] = Array.isArray(parsed)
       ? parsed
