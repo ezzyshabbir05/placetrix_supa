@@ -421,7 +421,7 @@ const AttemptScore = React.memo(function AttemptScore({
 
 // ─── Sortable Table Head ─────────────────────────────────────────────────────
 
-type SortColumn = "student_name" | "education" | "status" | "score" | "time" | "violations" | "submitted"
+type SortColumn = "student_name" | "education" | "status" | "score" | "time" | "violations" | "started" | "submitted"
 
 function SortableHead({
   label,
@@ -474,51 +474,95 @@ const MobileAttemptRow = React.memo(function MobileAttemptRow({
   scoresVisible: boolean
   testId: string
 }) {
+  const isCompleted = attempt.status === "submitted" || attempt.status === "auto_submitted"
+
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium leading-tight">
-          {attempt.student_name ?? "Unknown"}
-        </p>
-        <p className="truncate text-[11px] text-muted-foreground leading-tight mt-0.5">
-          {attempt.student_email ?? formatDateTime(attempt.started_at)}
-          {(attempt.branch || attempt.passout_year) && (
-            <>
-              <span className="mx-1.5 opacity-50">•</span>
-              {attempt.branch || "—"} {attempt.passout_year ? `('${attempt.passout_year.toString().slice(-2)})` : ""}
-            </>
-          )}
-        </p>
-      </div>
-      <div className="flex items-center gap-2.5 shrink-0">
-        <div className="text-right">
-          <AttemptScore attempt={attempt} scoresVisible={scoresVisible} />
-          <p className="text-[10px] tabular-nums text-muted-foreground leading-tight">
-            {formatSeconds(attempt.time_spent_seconds)}
-          </p>
-          {attempt.tab_switch_count != null && attempt.tab_switch_count > 0 && (
-            <span className="text-[10px] text-muted-foreground mt-0.5 block leading-tight">
-              {attempt.tab_switch_count} viol.
-            </span>
-          )}
+    <AccordionItem value={attempt.id} className="border-none">
+      <AccordionTrigger className="px-4 py-4 hover:bg-muted/5 hover:no-underline data-[state=open]:bg-muted/10 transition-all">
+        <div className="flex items-center justify-between w-full pr-6 text-left">
+          <div className="min-w-0 flex-1 gap-1.5 flex flex-col">
+            <p className="truncate text-sm font-semibold text-foreground leading-none">
+              {attempt.student_name ?? "Unknown"}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span
+                className={cn(
+                  "text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider border",
+                  isCompleted
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200/50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                    : "bg-amber-50 text-amber-700 border-amber-200/50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"
+                )}
+              >
+                {isCompleted ? "Submitted" : "In Progress"}
+              </span>
+              {attempt.tab_switch_count != null && attempt.tab_switch_count > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200/50 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 flex items-center gap-0.5">
+                  <AlertCircle className="h-2.5 w-2.5" />
+                  {attempt.tab_switch_count}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 text-right pr-1">
+            <AttemptScore attempt={attempt} scoresVisible={scoresVisible} />
+          </div>
         </div>
-        <span
-          className={cn(
-            "text-xs shrink-0 text-right w-[68px]",
-            (attempt.status === "submitted" || attempt.status === "auto_submitted") ? "text-foreground font-medium" : "text-muted-foreground text-[11px]"
-          )}
-        >
-          {(attempt.status === "submitted" || attempt.status === "auto_submitted") ? "Submitted" : "In Progress"}
-        </span>
-        <Button asChild size="icon" variant="ghost" className="h-8 w-8 shrink-0">
-          <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
-        </Button>
-      </div>
-    </div>
+      </AccordionTrigger>
+      <AccordionContent className="px-4 pb-5 pt-0">
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-muted/20 divide-y divide-border/60 overflow-hidden">
+            <div className="px-3.5 py-2.5 flex items-baseline justify-between gap-4">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">Email</span>
+              <span className="text-xs font-medium text-foreground truncate text-right">{attempt.student_email || "—"}</span>
+            </div>
+
+            <div className="px-3.5 py-2.5 flex items-baseline justify-between gap-4">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">Education</span>
+              <span className="text-xs font-medium text-foreground text-right">
+                {attempt.branch || "—"} {attempt.passout_year ? `('${attempt.passout_year.toString().slice(-2)})` : ""}
+              </span>
+            </div>
+
+            <div className="px-3.5 py-2.5 flex items-baseline justify-between gap-4">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">Time Spent</span>
+              <span className="text-xs font-mono font-medium text-foreground text-right">{formatSeconds(attempt.time_spent_seconds)}</span>
+            </div>
+
+            <div className="px-3.5 py-2.5 flex items-baseline justify-between gap-4">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">Violations</span>
+              <span className={cn("text-xs font-bold text-right", (attempt.tab_switch_count ?? 0) > 0 ? "text-red-600" : "text-foreground")}>
+                {attempt.tab_switch_count ?? 0} Tab Switch{(attempt.tab_switch_count ?? 0) !== 1 ? "es" : ""}
+              </span>
+            </div>
+
+            <div className="px-3.5 py-2.5 flex items-baseline justify-between gap-4">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">Started At</span>
+              <span className="text-xs font-medium text-foreground text-right">{formatDateTime(attempt.started_at)}</span>
+            </div>
+
+            {attempt.submitted_at && (
+              <div className="px-3.5 py-2.5 flex items-baseline justify-between gap-4">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">Submitted At</span>
+                <span className="text-xs font-medium text-foreground text-right">{formatDateTime(attempt.submitted_at)}</span>
+              </div>
+            )}
+          </div>
+
+
+          <Button asChild size="lg" className="w-full font-bold gap-2 text-sm shadow-md">
+            <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
+              <Eye className="h-4.5 w-4.5" />
+              View Full Detailed Result
+              <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-50" />
+            </Link>
+          </Button>
+        </div>
+      </AccordionContent>
+    </AccordionItem>
   )
 })
+
+
 
 const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
   attempt,
@@ -566,7 +610,10 @@ const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
           ? attempt.tab_switch_count
           : "—"}
       </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
+      <TableCell className="text-xs text-muted-foreground tabular-nums">
+        {formatDateTime(attempt.started_at)}
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground tabular-nums">
         {attempt.submitted_at ? formatDateTime(attempt.submitted_at) : "—"}
       </TableCell>
       <TableCell className="text-right">
@@ -684,7 +731,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
       setSortDir((d) => (d === "asc" ? "desc" : "asc"))
     } else {
       setSortCol(col)
-      const defaultAsc = ["student_name", "education", "status"].includes(col)
+      const defaultAsc = ["student_name", "education", "status", "started", "submitted"].includes(col)
       setSortDir(defaultAsc ? "asc" : "desc")
       return col
     }
@@ -716,6 +763,9 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
           break
         case "violations":
           diff = (a.tab_switch_count || 0) - (b.tab_switch_count || 0)
+          break
+        case "started":
+          diff = a.started_at.localeCompare(b.started_at)
           break
         case "submitted": {
           const isCompA = a.status === "submitted" || a.status === "auto_submitted"
@@ -999,9 +1049,9 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
           <div className="flex items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className={cn("h-9 gap-2", activeFilterCount > 0 && "border-primary bg-primary/5 text-primary")}>
+                <Button variant="outline" className={cn("gap-2 w-full", activeFilterCount > 0 && "border-primary bg-primary/5 text-primary")}>
                   <Filter className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Filters</span>
+                  <span className="inline">Filters</span>
                   {activeFilterCount > 0 && (
                     <Badge variant="default" className="ml-0.5 h-4 min-w-4 px-1 text-[10px] bg-primary text-primary-foreground">
                       {activeFilterCount}
@@ -1150,28 +1200,37 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
               <DropdownMenuItem onClick={() => handleSort("student_name")}>Name {sortCol === "student_name" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleSort("score")}>Score {sortCol === "score" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleSort("time")}>Time spent {sortCol === "time" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSort("submitted")}>Date submitted {sortCol === "submitted" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("started")}>Started at {sortCol === "started" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("submitted")}>Submitted at {sortCol === "submitted" && (sortDir === "asc" ? "↑" : "↓")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
       {/* Mobile compact list */}
-      <div className="rounded-xl border overflow-hidden divide-y md:hidden">
+      <div className="rounded-xl border overflow-hidden md:hidden">
         {sorted.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-            <Filter className="h-5 w-5 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No results match your filters.</p>
-            <button onClick={clearFilters} className="text-xs underline text-muted-foreground hover:text-foreground">
-              Clear filters
-            </button>
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center bg-muted/5">
+            <Filter className="h-6 w-6 text-muted-foreground/50" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">No results match filters</p>
+              <button
+                onClick={clearFilters}
+                className="text-xs text-primary hover:underline font-medium"
+              >
+                Clear all filters
+              </button>
+            </div>
           </div>
         ) : (
-          sorted.map((a) => (
-            <MobileAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} />
-          ))
+          <Accordion type="single" collapsible className="divide-y divide-border/60">
+            {sorted.map((a) => (
+              <MobileAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} />
+            ))}
+          </Accordion>
         )}
       </div>
+
 
       {/* Desktop table */}
       <div className="hidden overflow-hidden rounded-xl border md:block">
@@ -1184,6 +1243,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
               <SortableHead label="Score" col="score" align="right" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
               <SortableHead label="Time" col="time" align="right" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
               <SortableHead label="Violations" col="violations" align="center" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <SortableHead label="Started" col="started" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
               <SortableHead label="Submitted" col="submitted" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
               <TableHead />
             </TableRow>

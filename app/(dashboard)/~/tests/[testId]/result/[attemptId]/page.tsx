@@ -47,10 +47,14 @@ async function fetchResultData(
 
   if (error || !raw) notFound()
 
-  // 2. Security Check
+  // 2. Security Check & Eligibility
   if (accountType === "candidate") {
-    // Candidates can only see their own attempts
+    // 1. Candidates can only see their own attempts
     if (raw.test_attempts[0].student_id !== userId) {
+      notFound()
+    }
+    // 2. Candidates can only see results for PUBLISHED tests
+    if (raw.status !== "published") {
       notFound()
     }
   } else {
@@ -69,6 +73,7 @@ async function fetchResultData(
     time_limit_seconds: raw.time_limit_seconds ?? null,
     available_from: raw.available_from ?? null,
     available_until: raw.available_until ?? null,
+    status: raw.status as any,
     results_available: raw.results_available,
     shuffle_questions: raw.shuffle_questions,
     shuffle_options: raw.shuffle_options,
@@ -141,11 +146,14 @@ export default async function TestResultPage({
     profile.account_type as "candidate" | "institute"
   )
 
+  const serverNow = new Date().toISOString()
+
   return (
     <TestResultClient
       test={test}
       attempt={attempt}
       accountType={profile.account_type as "candidate" | "institute"}
+      serverNow={serverNow}
     />
   )
 }

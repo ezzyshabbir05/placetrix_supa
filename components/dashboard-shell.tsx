@@ -177,7 +177,7 @@ export function DashboardShell({
 
         {/* ✅ flex flex-col added so flex-1 children respond correctly */}
         <SidebarInset ref={insetRef} className="h-svh overflow-y-auto flex flex-col">
-          <div className="sticky top-0 w-full bg-background border-b">
+          <div className="sticky z-9 top-0 w-full bg-background border-b">
             <SiteHeader onManualToggle={onManualToggle} />
           </div>
 

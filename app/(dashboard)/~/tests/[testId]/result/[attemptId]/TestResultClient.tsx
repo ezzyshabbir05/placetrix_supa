@@ -4,7 +4,7 @@
 // app/~/tests/[testId]/result/[attemptId]/TestResultClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { type ReactNode } from "react"
+import { type ReactNode, useMemo, useCallback } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -225,9 +225,28 @@ interface Props {
   test: CandidateTestDetail
   attempt: CandidateAttemptDetail
   accountType: "candidate" | "institute"
+  serverNow: string
 }
 
-export function TestResultClient({ test, attempt, accountType }: Props) {
+export function TestResultClient({ test, attempt, accountType, serverNow }: Props) {
+  // ── Server Time Sync ───────────────────────────────────────────────────────
+  const serverTimeOffset = useMemo(() => {
+    return new Date(serverNow).getTime() - Date.now()
+  }, [serverNow])
+
+  const getNowOnServer = useCallback(() => {
+    return new Date(Date.now() + serverTimeOffset)
+  }, [serverTimeOffset])
+
+  const nowMs = getNowOnServer().getTime()
+  const isLive =
+    (!test.available_from || new Date(test.available_from).getTime() <= nowMs) &&
+    (!test.available_until || new Date(test.available_until).getTime() >= nowMs)
+  const isExpired =
+    !!test.available_until && new Date(test.available_until).getTime() < nowMs
+  const isNotYetOpen =
+    !!test.available_from && new Date(test.available_from).getTime() > nowMs
+
   const pct = resolvePct(attempt.percentage, attempt.score, attempt.total_marks)
   const displayAnswers = attempt.answers ?? []
 
@@ -253,9 +272,29 @@ export function TestResultClient({ test, attempt, accountType }: Props) {
               {test.institute_name}
             </p>
           )}
-          <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
-            {test.title}
-          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
+              {test.title}
+            </h1>
+            {isExpired && (
+              <Badge variant="secondary" className="h-5 gap-1 border bg-muted/30 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                <CalendarX className="h-3 w-3" />
+                Closed
+              </Badge>
+            )}
+            {isLive && (
+              <Badge variant="secondary" className="h-5 gap-1 border border-emerald-200/50 bg-emerald-50 px-2 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+                <Clock className="h-3 w-3" />
+                Live
+              </Badge>
+            )}
+            {isNotYetOpen && (
+              <Badge variant="secondary" className="h-5 gap-1 border border-amber-200/50 bg-amber-50 px-2 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+                <CalendarClock className="h-3 w-3" />
+                Upcoming
+              </Badge>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
             {attempt.student_name && (
               <span className="font-medium text-foreground">

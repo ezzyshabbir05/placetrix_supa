@@ -69,6 +69,7 @@ export interface CandidateTestDetail
     | "shuffle_questions"
     | "shuffle_options"
   > {
+  status: "draft" | "published" | "archived" | null
   institute_name: string | null
   /** Lightweight list — only marks needed for the pre-test totals display */
   questions: Pick<QuestionRow, "marks">[]
