@@ -942,7 +942,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
         doc.setFontSize(6)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(180, 180, 180)
-        doc.text("Generated with Placetrix", 14, pageHeight - 8)
+        doc.text("Generated using Placetrix", 14, pageHeight - 8)
         doc.setFontSize(7)
         doc.text(`Page ${currentPage}`, pageWidth - 14, pageHeight - 8, { align: "right" })
       },

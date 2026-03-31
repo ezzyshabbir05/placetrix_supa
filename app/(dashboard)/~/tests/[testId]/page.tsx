@@ -85,6 +85,7 @@ async function fetchCandidateView(
     shuffle_questions: raw.shuffle_questions,
     shuffle_options: raw.shuffle_options,
     institute_name: (raw.institute as any)?.institute_name ?? null,
+    status: raw.status as any,
     questions: (raw.questions ?? []).map((q: any) => ({ marks: q.marks })),
   }
 
