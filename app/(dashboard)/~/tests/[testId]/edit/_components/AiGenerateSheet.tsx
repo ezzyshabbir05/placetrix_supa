@@ -434,7 +434,7 @@ export function AiGenerateSheet({
                       {q.question_type === "single_correct" ? "Single" : "Multiple"}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {q.marks} mark{q.marks !== "1" ? "s" : ""}
+                      {q.marks} mark{q.marks !== 1 ? "s" : ""}
                     </span>
                     {q.tag_names.map((tag) => (
                       <Badge

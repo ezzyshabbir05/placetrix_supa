@@ -38,7 +38,7 @@ const makeOptions = (): OptionForm[] =>
 const EMPTY_FORM: QuestionForm = {
   question_text: "",
   question_type: "single_correct",
-  marks: "1",
+  marks: 1,
   explanation: "",
   options: makeOptions(),
   tag_names: [],
@@ -240,7 +240,7 @@ export function QuestionSheet({
     if (!form.options.some((o) => o.is_correct)) e.push("Mark at least one correct answer.")
     if (form.question_type === "single_correct" && form.options.filter((o) => o.is_correct).length > 1)
       e.push("Single-answer type can only have one correct option.")
-    const m = parseFloat(form.marks)
+    const m = Number(form.marks)
     if (isNaN(m) || m <= 0) e.push("Marks must be a positive number.")
     return e
   }
@@ -320,7 +320,7 @@ export function QuestionSheet({
                 min="0.5"
                 step="0.5"
                 value={form.marks}
-                onChange={(e) => set("marks", e.target.value)}
+                onChange={(e) => set("marks", parseFloat(e.target.value) || 0)}
                 className="text-sm"
               />
             </div>

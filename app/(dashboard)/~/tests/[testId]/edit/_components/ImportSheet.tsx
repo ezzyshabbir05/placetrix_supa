@@ -72,7 +72,7 @@ function validateItem(item: any, idx: number): PreviewQuestion {
     return {
       question_text: String(item?.question_text || `Question ${idx + 1}`),
       question_type: "single_correct",
-      marks: "1", explanation: "", options: [], tag_names: [],
+      marks: 1, explanation: "", options: [], tag_names: [],
       _selected: false, _previewId: crypto.randomUUID(), _errors: errors, _warnings: [],
     }
   }
@@ -110,7 +110,7 @@ function validateItem(item: any, idx: number): PreviewQuestion {
   return {
     question_text: String(item.question_text).trim(),
     question_type: qType,
-    marks: String(finalMarks),
+    marks: finalMarks,
     explanation: String(item?.explanation ?? ""),
     tag_names: Array.isArray(item?.tag_names) ? item.tag_names.map(String) : [],
     options,
