@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation"
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
-const HOVER_OPEN_DELAY  = 90   // ms
+const HOVER_OPEN_DELAY = 90   // ms
 const HOVER_CLOSE_DELAY = 140  // ms
 
 
@@ -27,8 +27,8 @@ interface SidebarHoverContextValue {
 }
 
 export const SidebarHoverContext = React.createContext<SidebarHoverContextValue>({
-  onUserMenuOpenChange: () => {},
-  hoverProps: { onPointerEnter: () => {}, onPointerLeave: () => {} },
+  onUserMenuOpenChange: () => { },
+  hoverProps: { onPointerEnter: () => { }, onPointerLeave: () => { } },
 })
 
 export function useSidebarHoverContext() {
@@ -76,11 +76,11 @@ export function DashboardShell({
     }
   }, [pathname])
 
-  const manualModeRef   = React.useRef(false)
-  const hoverOpenedRef  = React.useRef(false)
+  const manualModeRef = React.useRef(false)
+  const hoverOpenedRef = React.useRef(false)
   const suspendHoverRef = React.useRef(false)
-  const intentTimerRef  = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const lastIntentRef   = React.useRef<"open" | "close" | null>(null)
+  const intentTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastIntentRef = React.useRef<"open" | "close" | null>(null)
 
   const setOpenRef = React.useRef(setOpen)
   React.useEffect(() => { setOpenRef.current = setOpen }, [setOpen])
@@ -177,7 +177,7 @@ export function DashboardShell({
 
         {/* ✅ flex flex-col added so flex-1 children respond correctly */}
         <SidebarInset ref={insetRef} className="h-svh overflow-y-auto flex flex-col">
-          <div className="sticky top-0 z-10 w-full bg-background border-b">
+          <div className="sticky top-0 w-full bg-background border-b">
             <SiteHeader onManualToggle={onManualToggle} />
           </div>
 

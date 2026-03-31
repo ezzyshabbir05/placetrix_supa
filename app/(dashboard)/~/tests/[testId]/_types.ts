@@ -51,6 +51,7 @@ export interface CandidateAttemptDetail
     "id" | "status" | "submitted_at" | "score" | "total_marks" | "percentage" | "time_spent_seconds" | "tab_switch_count"
   > {
   status: "in_progress" | "submitted"   // narrow the DB string union
+  student_name?: string | null
   answers: CandidateAnswerDetail[]
 }
 

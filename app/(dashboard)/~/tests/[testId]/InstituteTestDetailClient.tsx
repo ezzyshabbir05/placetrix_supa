@@ -7,6 +7,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -85,6 +86,7 @@ import {
   Search,
   Filter,
   X,
+  ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -156,30 +158,30 @@ function StatsBar({ test, liveAttempts, totalMarks }: { test: InstituteTestDetai
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Card className="rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-1.5 text-muted-foreground mb-2">
+      <Card className="rounded-xl py-0">
+        <CardContent className="p-4 space-y-1">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <ListChecks className="h-3.5 w-3.5" />
             <p className="text-xs font-medium">Questions</p>
           </div>
           <p className="text-2xl font-bold tabular-nums">{test.questions.length}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{totalMarks} total pts</p>
+          <p className="text-xs text-muted-foreground">{totalMarks} total pts</p>
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-1.5 text-muted-foreground mb-2">
+      <Card className="rounded-xl py-0">
+        <CardContent className="p-4 space-y-1">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <Users className="h-3.5 w-3.5" />
             <p className="text-xs font-medium">Attempts</p>
           </div>
           <p className="text-2xl font-bold tabular-nums">{liveAttempts.length}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{inProgress.length} in progress</p>
+          <p className="text-xs text-muted-foreground">{inProgress.length} in progress</p>
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl">
-        <CardContent className="p-4 space-y-2.5">
+      <Card className="rounded-xl py-0">
+        <CardContent className="p-4 space-y-1">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <CheckCircle2 className="h-3.5 w-3.5" />
             <p className="text-xs font-medium">Submitted</p>
@@ -191,8 +193,8 @@ function StatsBar({ test, liveAttempts, totalMarks }: { test: InstituteTestDetai
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl border">
-        <CardContent className="p-4 space-y-2.5">
+      <Card className="rounded-xl border py-0">
+        <CardContent className="p-4 space-y-1">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <BarChart2 className="h-3.5 w-3.5" />
             <p className="text-xs font-medium">Avg Score</p>
@@ -466,9 +468,11 @@ function SortableHead({
 const MobileAttemptRow = React.memo(function MobileAttemptRow({
   attempt,
   scoresVisible,
+  testId,
 }: {
   attempt: InstituteAttemptRow
   scoresVisible: boolean
+  testId: string
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors">
@@ -506,6 +510,11 @@ const MobileAttemptRow = React.memo(function MobileAttemptRow({
         >
           {(attempt.status === "submitted" || attempt.status === "auto_submitted") ? "Submitted" : "In Progress"}
         </span>
+        <Button asChild size="icon" variant="ghost" className="h-8 w-8 shrink-0">
+          <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
       </div>
     </div>
   )
@@ -514,9 +523,11 @@ const MobileAttemptRow = React.memo(function MobileAttemptRow({
 const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
   attempt,
   scoresVisible,
+  testId,
 }: {
   attempt: InstituteAttemptRow
   scoresVisible: boolean
+  testId: string
 }) {
   return (
     <TableRow className="hover:bg-muted/20">
@@ -557,6 +568,14 @@ const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">
         {attempt.submitted_at ? formatDateTime(attempt.submitted_at) : "—"}
+      </TableCell>
+      <TableCell className="text-right">
+        <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5">
+          <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
+            <Eye className="h-3.5 w-3.5" />
+            <span className="sr-only sm:not-sr-only">View</span>
+          </Link>
+        </Button>
       </TableCell>
     </TableRow>
   )
@@ -995,10 +1014,10 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
                   <div className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">General</p>
                     <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-                      <SelectTrigger className="h-8 text-xs">
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="All Statuses" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
                         <SelectItem value="all">All Statuses</SelectItem>
                         <SelectItem value="submitted">Submitted & Auto</SelectItem>
                         <SelectItem value="in_progress">In Progress</SelectItem>
@@ -1011,10 +1030,10 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Education</p>
                     {uniqueBranches.length > 0 ? (
                       <Select value={branchFilter} onValueChange={setBranchFilter}>
-                        <SelectTrigger className="h-8 text-xs">
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="All Branches" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
                           <SelectItem value="all">All Branches</SelectItem>
                           {uniqueBranches.map((b) => (
                             <SelectItem key={b} value={b}>{b}</SelectItem>
@@ -1029,10 +1048,10 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
                   <div className="space-y-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Performance</p>
                     <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as any)}>
-                      <SelectTrigger className="h-8 text-xs">
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="All Scores" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
                         <SelectItem value="all">All Scores</SelectItem>
                         <SelectItem value="high">High (≥75%)</SelectItem>
                         <SelectItem value="mid">Mid (50–74%)</SelectItem>
@@ -1041,7 +1060,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
                     </Select>
                   </div>
 
-                  <Button variant="outline" size="sm" className="w-full" onClick={clearFilters}>
+                  <Button variant="outline" className="w-full" onClick={clearFilters}>
                     Reset all filters
                   </Button>
                 </div>
@@ -1149,7 +1168,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
           </div>
         ) : (
           sorted.map((a) => (
-            <MobileAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} />
+            <MobileAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} />
           ))
         )}
       </div>
@@ -1166,12 +1185,13 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
               <SortableHead label="Time" col="time" align="right" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
               <SortableHead label="Violations" col="violations" align="center" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
               <SortableHead label="Submitted" col="submitted" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {sorted.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center">
+                <TableCell colSpan={8} className="py-12 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Filter className="h-5 w-5 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">No results match your filters.</p>
@@ -1183,7 +1203,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
               </TableRow>
             ) : (
               sorted.map((a) => (
-                <DesktopAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} />
+                <DesktopAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} />
               ))
             )}
           </TableBody>
@@ -1240,7 +1260,7 @@ function OverviewTab({
   return (
     <div className="space-y-4">
       <Card className="rounded-xl">
-        <CardHeader className="pb-3">
+        <CardHeader>
           <CardTitle className="text-sm">Test Details</CardTitle>
           <CardDescription className="text-xs">Setup, content, and availability.</CardDescription>
         </CardHeader>
@@ -1259,7 +1279,6 @@ function OverviewTab({
               </p>
             </div>
           )}
-          <Separator />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <MetaItem
               icon={<Clock className="h-3.5 w-3.5" />}
@@ -1290,7 +1309,7 @@ function OverviewTab({
       </Card>
 
       <Card className="rounded-xl">
-        <CardHeader className="pb-3">
+        <CardHeader>
           <CardTitle className="text-sm">Controls</CardTitle>
           <CardDescription className="text-xs">Manage visibility and result release.</CardDescription>
         </CardHeader>
@@ -1461,7 +1480,7 @@ export function InstituteTestDetailClient({
                 {test.status === "published" ? "Published" : "Draft"}
               </Badge>
               {test.results_available && (
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="secondary" className="text-xs">
                   Results Live
                 </Badge>
               )}
