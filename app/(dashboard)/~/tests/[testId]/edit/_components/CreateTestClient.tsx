@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
+import { useBreadcrumbLabels } from "@/components/breadcrumb-context"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Loader2, Save, Send } from "lucide-react"
@@ -53,7 +54,19 @@ export function CreateTestClient({
   onSaveDraft,
   onPublish,
 }: Props) {
+  const { setLabel } = useBreadcrumbLabels()
   const isEditMode = propTestId !== undefined
+
+  useEffect(() => {
+    if (isEditMode && initialData?.settings?.title) {
+      const title = initialData.settings.title || "Edit Test"
+      setLabel(`/~/tests/${propTestId}`, title)
+      setLabel(`/~/tests/${propTestId}/edit`, "Settings")
+    } else if (!isEditMode) {
+      setLabel(`/~/tests/new`, "New Test")
+      setLabel(`/~/tests/new/edit`, "Draft")
+    }
+  }, [propTestId, initialData, isEditMode, setLabel])
 
   // Stable ID: use prop when editing, generate once when creating
   const [testId] = useState<string>(() => propTestId ?? crypto.randomUUID())

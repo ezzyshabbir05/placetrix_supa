@@ -4,7 +4,8 @@
 // app/~/tests/[testId]/result/[attemptId]/TestResultClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { type ReactNode, useMemo, useCallback } from "react"
+import { type ReactNode, useMemo, useCallback, useEffect } from "react"
+import { useBreadcrumbLabels } from "@/components/breadcrumb-context"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -229,6 +230,22 @@ interface Props {
 }
 
 export function TestResultClient({ test, attempt, accountType, serverNow }: Props) {
+  const { setLabel } = useBreadcrumbLabels()
+
+  useEffect(() => {
+    // 1. Set label for the test segment (parent)
+    setLabel(`/~/tests/${test.id}`, test.title)
+
+    // 2. Set label for the "result" segment (parent segment but static)
+    setLabel(`/~/tests/${test.id}/result`, "Results")
+
+    // 3. Set label for the specific attempt
+    const attemptLabel = attempt.student_name
+      ? (accountType === "candidate" ? "My Result" : `${attempt.student_name}'s Result`)
+      : "Attempt Result"
+    setLabel(`/~/tests/${test.id}/result/${attempt.id}`, attemptLabel)
+  }, [test.id, test.title, attempt.id, attempt.student_name, accountType, setLabel])
+
   // ── Server Time Sync ───────────────────────────────────────────────────────
   const serverTimeOffset = useMemo(() => {
     return new Date(serverNow).getTime() - Date.now()
@@ -312,7 +329,7 @@ export function TestResultClient({ test, attempt, accountType, serverNow }: Prop
 
         {/* ── Results hidden ──────────────────────────────────────────────── */}
         {!test.results_available && accountType === "candidate" ? (
-          <Card className="rounded-xl">
+          <Card className="rounded-xl p-0">
             <CardContent className="space-y-2.5 p-5">
               <div className="flex items-start gap-2">
                 <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />

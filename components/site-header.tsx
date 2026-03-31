@@ -3,6 +3,7 @@
 import React, { useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
+import { useBreadcrumbLabels } from "@/components/breadcrumb-context"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -41,6 +42,7 @@ const SEGMENT_LABELS: Record<string, string> = {
     notifications: "Notifications",
     settings:      "Settings",
     help:          "Get Help",
+    result:        "Results",
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,12 +59,23 @@ function toLabel(segment: string): string {
 
 function useBreadcrumbs() {
     const pathname = usePathname()
-    const segments = pathname.split("/").filter((s) => s && s !== "~")
+    const { labels } = useBreadcrumbLabels()
+    const allSegments = pathname.split("/").filter((s) => s && s !== "~")
+    
+    const crumbs: { label: string; href: string }[] = []
+    let currentHref = "/~"
 
-    return segments.map((seg, idx) => ({
-        label: toLabel(seg),
-        href: "/~/" + segments.slice(0, idx + 1).join("/"),
-    }))
+    for (const seg of allSegments) {
+        currentHref += "/" + seg
+        if (seg === "result") continue
+
+        crumbs.push({
+            label: labels[currentHref] ?? toLabel(seg),
+            href: currentHref,
+        })
+    }
+
+    return crumbs
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────

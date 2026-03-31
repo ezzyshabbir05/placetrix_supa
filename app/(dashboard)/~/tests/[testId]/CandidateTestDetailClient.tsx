@@ -4,7 +4,8 @@
 // app/~/tests/[id]/CandidateTestDetailClient.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { type ReactNode, useMemo, useCallback } from "react"
+import { type ReactNode, useMemo, useCallback, useEffect } from "react"
+import { useBreadcrumbLabels } from "@/components/breadcrumb-context"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -225,6 +226,12 @@ interface Props {
 }
 
 export function CandidateTestDetailClient({ test, attempt, serverNow }: Props) {
+  const { setLabel } = useBreadcrumbLabels()
+
+  useEffect(() => {
+    setLabel(`/~/tests/${test.id}`, test.title)
+  }, [test.id, test.title, setLabel])
+
   const isSubmitted = attempt?.status === "submitted"
   const isInProgress = attempt?.status === "in_progress"
 
@@ -419,7 +426,7 @@ export function CandidateTestDetailClient({ test, attempt, serverNow }: Props) {
           )}
         </div>
 
-        <Card className="rounded-xl overflow-hidden border">
+        <Card className="rounded-xl overflow-hidden border py-0">
           <CardContent className="p-0">
             <div className="p-5 space-y-4">
               <div className="flex items-start justify-between gap-4">
@@ -460,17 +467,17 @@ export function CandidateTestDetailClient({ test, attempt, serverNow }: Props) {
                   </div>
                 </div>
               )}
-            </div>
 
-            {test.results_available && (
-              <div className="border-t bg-muted/10 p-3">
-                <Button asChild variant="default">
-                  <Link href={`/~/tests/${test.id}/result/${attempt?.id}`}>
-                    View Detailed Report
-                  </Link>
-                </Button>
-              </div>
-            )}
+              {test.results_available && (
+                <div className="pt-2">
+                  <Button asChild variant="default" className="w-full sm:w-auto">
+                    <Link href={`/~/tests/${test.id}/result/${attempt?.id}`}>
+                      View Detailed Report
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

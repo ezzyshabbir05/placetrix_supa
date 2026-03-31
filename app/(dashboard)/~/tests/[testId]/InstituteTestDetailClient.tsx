@@ -89,6 +89,7 @@ import {
   ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useBreadcrumbLabels } from "@/components/breadcrumb-context"
 import { cn } from "@/lib/utils"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
@@ -1432,6 +1433,12 @@ export function InstituteTestDetailClient({
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("overview")
   const { run, isLoading, anyLoading } = useActionState()
+  const { setLabel } = useBreadcrumbLabels()
+
+  useEffect(() => {
+    setLabel(`/~/tests/${testId}`, test.title)
+  }, [testId, test.title, setLabel])
+
   const totalMarks = useMemo(() => test.questions.reduce((s, q) => s + q.marks, 0), [test.questions])
 
   // Calculate server time offset

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { SidebarInset, SidebarProvider, useSidebar } from "@/components/ui/sidebar"
+import { BreadcrumbProvider } from "@/components/breadcrumb-context"
 import { SiteHeader } from "@/components/site-header"
 import { usePathname } from "next/navigation"
 
@@ -168,31 +169,33 @@ export function DashboardShell({
   )
 
   return (
-    <SidebarHoverContext.Provider value={contextValue}>
-      <SidebarProvider
-        open={open}
-        onOpenChange={setOpen}
-      >
-        {sidebar}
+    <BreadcrumbProvider>
+      <SidebarHoverContext.Provider value={contextValue}>
+        <SidebarProvider
+          open={open}
+          onOpenChange={setOpen}
+        >
+          {sidebar}
 
-        {/* ✅ flex flex-col added so flex-1 children respond correctly */}
-        <SidebarInset ref={insetRef} className="h-svh overflow-y-auto flex flex-col">
-          <div className="sticky z-9 top-0 w-full bg-background border-b">
-            <SiteHeader onManualToggle={onManualToggle} />
-          </div>
+          {/* ✅ flex flex-col added so flex-1 children respond correctly */}
+          <SidebarInset ref={insetRef} className="h-svh overflow-y-auto flex flex-col">
+            <div className="sticky z-9 top-0 w-full bg-background border-b">
+              <SiteHeader onManualToggle={onManualToggle} />
+            </div>
 
-          {/* ✅ min-h-0 prevents flex child from overflowing the parent */}
-          <div className="flex flex-1 flex-col min-h-0">
-            <div className="@container/main flex flex-1 flex-col gap-2">
-              <div className="flex flex-col gap-4 ">
-                {children}
+            {/* ✅ min-h-0 prevents flex child from overflowing the parent */}
+            <div className="flex flex-1 flex-col min-h-0">
+              <div className="@container/main flex flex-1 flex-col gap-2">
+                <div className="flex flex-col gap-4 ">
+                  {children}
+                </div>
               </div>
             </div>
-          </div>
-        </SidebarInset>
+          </SidebarInset>
 
-        <MobileHoverGuard suspendHoverRef={suspendHoverRef} />
-      </SidebarProvider>
-    </SidebarHoverContext.Provider>
+          <MobileHoverGuard suspendHoverRef={suspendHoverRef} />
+        </SidebarProvider>
+      </SidebarHoverContext.Provider>
+    </BreadcrumbProvider>
   )
 }
