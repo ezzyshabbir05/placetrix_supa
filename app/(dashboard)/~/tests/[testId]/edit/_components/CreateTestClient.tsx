@@ -121,6 +121,7 @@ export function CreateTestClient({
       await onPublish(testId, settingsForDb(settings), questions)
       // redirect happens server-side; component unmounts
     } catch (err: any) {
+      if (err?.message === "NEXT_REDIRECT") throw err
       toast.error(err?.message ?? "Failed to publish.")
       setIsPublishing(false)
     }

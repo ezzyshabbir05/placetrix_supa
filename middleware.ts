@@ -24,10 +24,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { updateSession } from "@/lib/supabase/proxy";
-import { type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 // ✅  Next.js requires the export to be named exactly "middleware".
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  // 1. Check for maintenance mode first
+  const isMaintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
+
+  if (isMaintenanceMode) {
+    const { pathname } = request.nextUrl;
+    
+    // Don't intercept the maintenance page itself or static assets
+    if (
+      pathname !== '/maintenance' &&
+      !pathname.startsWith('/_next') &&
+      !pathname.includes('/api/') &&
+      !pathname.includes('.') // for images, icons, etc.
+    ) {
+      // Rewrite allows the URL to stay the same in the browser while showing maintenance content
+      const response = NextResponse.rewrite(new URL('/maintenance', request.url));
+      
+      // Industry Standard: Signal "Service Unavailable" (503) for search engines
+      return response;
+    }
+  }
+
   return await updateSession(request);
 }
 

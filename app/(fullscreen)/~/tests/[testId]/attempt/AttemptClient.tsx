@@ -994,6 +994,7 @@ export function AttemptClient({
 
                 await onSubmit?.(attemptInfo.id, timeSpentSeconds)  // ← then redirect
             } catch (err: any) {
+                if (err?.message === "NEXT_REDIRECT") throw err
                 setIsSubmitting(false)
                 const msg = err?.message ?? "Submission failed. Please try again."
                 setSubmitError(msg)

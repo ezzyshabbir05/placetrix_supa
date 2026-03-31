@@ -121,6 +121,7 @@ function useActionState() {
       try {
         await fn()
       } catch (err: any) {
+        if (err?.message === "NEXT_REDIRECT") throw err
         toast.error(err?.message || "Operation failed")
       } finally {
         setActiveAction(null)

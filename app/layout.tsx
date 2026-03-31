@@ -11,7 +11,6 @@ export const metadata: Metadata = {
     "Practice mock tests, join study groups, and track your progress with Placetrix.",
 };
 
-
 export default function RootLayout({
   children,
 }: Readonly<{

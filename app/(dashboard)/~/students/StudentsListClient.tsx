@@ -71,6 +71,7 @@ export function StudentsListClient({ students }: Props) {
       await toggleStudentVerification(studentId, !currentStatus)
       toast.success(currentStatus ? "Verification revoked" : "Student verified")
     } catch (err: any) {
+      if (err?.message === "NEXT_REDIRECT") throw err
       toast.error(err.message || "Something went wrong")
     } finally {
       setLoadingId(null)
