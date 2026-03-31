@@ -702,9 +702,10 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
           const isCompA = a.status === "submitted" || a.status === "auto_submitted"
           const isCompB = b.status === "submitted" || b.status === "auto_submitted"
 
-          // Always push In-Progress/Abandoned to the bottom, regardless of sort direction
-          if (isCompA && !isCompB) return -1
-          if (!isCompA && isCompB) return 1
+          // Group In-Progress/Abandoned at the bottom when sorting by date descending, 
+          // or at the top when sorting by date ascending.
+          if (isCompA && !isCompB) return sortDir === "desc" ? -1 : 1
+          if (!isCompA && isCompB) return sortDir === "desc" ? 1 : -1
 
           if (isCompA && isCompB) {
             diff = (a.submitted_at || "").localeCompare(b.submitted_at || "")

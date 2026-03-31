@@ -36,10 +36,9 @@ export async function getTestQuestions(testId: string): Promise<AttemptQuestion[
         option_text: o.option_text,
         order_index: o.order_index,
       }))
-      .sort((a, b) => a.order_index - b.order_index),
-    tags: ((q.question_tags as any[]) ?? [])
+      .sort((a: any, b: any) => a.order_index - b.order_index),
+    tags: (((q as any).question_tags as any[]) ?? [])
       .map((qt) => qt.tags)
-      .filter(Boolean)
-      .flat(),
+      .filter(Boolean),
   }))
 }

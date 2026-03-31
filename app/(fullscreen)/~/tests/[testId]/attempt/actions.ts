@@ -175,6 +175,7 @@ export async function submitAttemptAction(
   })
 
   if (error || !result) throw new Error(error?.message || "Failed to submit")
+  if (result.error) throw new Error(result.error)
 
   redirect(result.test_id ? `/~/tests/${result.test_id}` : "/~/tests")
 }

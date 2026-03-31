@@ -38,7 +38,7 @@ export type LocalQuestion = {
 export type QuestionForm = {
   question_text: string
   question_type: "single_correct" | "multiple_correct"
-  marks: string
+  marks: number
   explanation: string
   options: OptionForm[]
   tag_names: string[]
@@ -287,7 +287,7 @@ function sanitizeQuestions(raw: any[], marksDefault: number): QuestionForm[] {
       return {
         question_text: String(q.question_text).trim(),
         question_type: qType,
-        marks: String(q.marks ?? marksDefault),
+        marks: Number(q.marks ?? marksDefault),
         explanation: String(q.explanation ?? "").trim(),
         tag_names: Array.isArray(q.tag_names)
           ? q.tag_names.map((t: any) => String(t).trim()).filter(Boolean)

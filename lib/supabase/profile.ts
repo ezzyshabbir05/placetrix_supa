@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { AuthApiError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { cache } from "react";
+import { headers } from "next/headers";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -129,9 +130,22 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
     );
 
     if (hasAuthCookie) {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        user = { ...authUser, sub: authUser.id } as any;
+      // ── ADVANCED LOG-OUT PROTECTION ──
+      // If Middleware JUST refreshed the token in this request lifecycle, 
+      // the browser cookies haven't updated yet. Calling getUser() now with 
+      // 'stale' cookies would trigger a "Refresh Token Already Used" revocation.
+      const head = await headers();
+      const wasRefreshedInMiddleware = head.get("x-supabase-refreshed") === "true";
+
+      if (!wasRefreshedInMiddleware) {
+        const { data: { user: authUser }, error: refreshError } = await supabase.auth.getUser();
+        if (authUser) {
+          user = { ...authUser, sub: authUser.id } as any;
+        } else if (refreshError instanceof AuthApiError && refreshError.code === "refresh_token_already_used") {
+          // This confirms a parallel refresh happened elsewhere. 
+          // We return whatever we have from claims (offline) to avoid a logout loop.
+          return profileFromClaims(claimsData);
+        }
       }
     }
   }

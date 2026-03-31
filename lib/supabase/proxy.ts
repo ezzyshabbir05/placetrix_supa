@@ -37,6 +37,12 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return NextResponse.next({ request });
   }
 
+  // 0. Skip refreshing for prefetches to avoid token reuse errors.
+  // Next.js Link prefetches can trigger Middleware, but browsers often ignore 
+  // Set-Cookie on prefetches, causing the refresh token to be used up.
+  const isPrefetch = request.headers.get("next-router-prefetch") || 
+                     request.headers.get("purpose") === "prefetch";
+
   // Start with a plain pass-through response.
   let supabaseResponse = NextResponse.next({ request });
 
@@ -53,9 +59,17 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
+
+          // Update the supabaseResponse headers to pass markers to Server components
+          // that might run in the same request before the browser sees new cookies.
+          const refreshedHeaders = new Headers(request.headers);
+          refreshedHeaders.set("x-supabase-refreshed", "true");
+
           // … and onto the response so the browser receives them.
-          // Note: Creating the response once and reusing it is more efficient.
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ 
+            request: { headers: refreshedHeaders } 
+          });
+
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -79,7 +93,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
       c.name.includes("auth-token")
     );
 
-    if (hasAuthCookie) {
+    if (hasAuthCookie && !isPrefetch) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
         // Refresh succeeded! Proceed with updated credentials.
@@ -101,7 +115,13 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
     loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    const redirectRes = NextResponse.redirect(loginUrl);
+    // IMPORTANT: Transfer any cookies set by Supabase to the redirect response.
+    supabaseResponse.cookies.getAll().forEach((c) => {
+      const { name, value, ...options } = c;
+      redirectRes.cookies.set(name, value, options);
+    });
+    return redirectRes;
   }
 
   // Redirect authenticated user visiting an auth page → app home.
@@ -123,7 +143,14 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/~";
     homeUrl.search = ""; // Clear accidental params
-    return NextResponse.redirect(homeUrl);
+    const redirectRes = NextResponse.redirect(homeUrl);
+    // IMPORTANT: Transfer any cookies set by Supabase (e.g. from session refresh)
+    // to the redirect response.
+    supabaseResponse.cookies.getAll().forEach((c) => {
+      const { name, value, ...options } = c;
+      redirectRes.cookies.set(name, value, options as any);
+    });
+    return redirectRes;
   }
 
   return supabaseResponse;
