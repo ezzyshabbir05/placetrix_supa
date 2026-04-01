@@ -43,14 +43,21 @@ export function GoogleOneTap({ next = "/~" }: GoogleOneTapProps) {
   const isMounted = useRef(true);
 
   const generateNonce = useCallback(async (): Promise<[string, string]> => {
-    const rawNonce = btoa(
-      String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))
-    );
+    // Generate 32 bytes of secure entropy
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    
+    // Standard unhashed nonce for Supabase (URL-safe string)
+    const rawNonce = Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+      
+    // SHA-256 hash for Google (identity match)
     const encoded = new TextEncoder().encode(rawNonce);
     const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
     const hashedNonce = Array.from(new Uint8Array(hashBuffer))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
+      
     return [rawNonce, hashedNonce];
   }, []);
 
@@ -103,8 +110,13 @@ export function GoogleOneTap({ next = "/~" }: GoogleOneTapProps) {
               nonce,
             });
             if (error) throw error;
-            router.push(next);
-            router.refresh();
+
+            // ✅ Hard Navigation: ensures cookies are fully settled in the browser 
+            // and sent to the server in the very first request to the protected route.
+            // Using window.location.assign instead of router.push avoids Next.js router race conditions.
+            setTimeout(() => {
+              window.location.assign(next);
+            }, 50);
           } catch (err) {
             console.error("[GoogleOneTap] signInWithIdToken error:", err);
           } finally {

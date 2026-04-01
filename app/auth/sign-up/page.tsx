@@ -241,8 +241,9 @@ export default function SignUpPage() {
               ) : (
                 <button
                   type="button"
+                  disabled={isLoading}
                   onClick={handleResend}
-                  className="underline underline-offset-4 hover:text-foreground"
+                  className="underline underline-offset-4 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Resend code
                 </button>
@@ -254,12 +255,13 @@ export default function SignUpPage() {
 
         <button
           type="button"
+          disabled={isLoading}
           onClick={() => {
             setPageState("sign-up-form");
             setOtp("");
             setError(null);
           }}
-          className="w-full text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          className="w-full text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Use a different email
         </button>
@@ -317,6 +319,7 @@ export default function SignUpPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading || isGoogleLoading}
             />
             <InputGroupAddon align="inline-start">
               <AtSignIcon />
@@ -331,6 +334,7 @@ export default function SignUpPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading || isGoogleLoading}
             />
             <InputGroupAddon align="inline-start">
               <LockIcon />
@@ -352,6 +356,7 @@ export default function SignUpPage() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={isLoading || isGoogleLoading}
             />
             <InputGroupAddon align="inline-start">
               <LockIcon />
@@ -390,8 +395,10 @@ export default function SignUpPage() {
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
-            href="/auth/login"
-            className="underline underline-offset-4 hover:text-primary"
+            href={isLoading || isGoogleLoading ? "#" : "/auth/login"}
+            className={`underline underline-offset-4 hover:text-primary ${
+              isLoading || isGoogleLoading ? "pointer-events-none opacity-50" : ""
+            }`}
           >
             Sign in
           </Link>

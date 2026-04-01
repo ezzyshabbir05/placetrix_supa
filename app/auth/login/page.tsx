@@ -262,8 +262,9 @@ function LoginContent() {
               ) : (
                 <button
                   type="button"
+                  disabled={isLoading}
                   onClick={handleResend}
-                  className="underline underline-offset-4 hover:text-foreground"
+                  className="underline underline-offset-4 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Resend code
                 </button>
@@ -275,12 +276,13 @@ function LoginContent() {
 
         <button
           type="button"
+          disabled={isLoading}
           onClick={() => {
             setPageState("login-form");
             setOtp("");
             setError(null);
           }}
-          className="w-full text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          className="w-full text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Back to sign in
         </button>
@@ -336,6 +338,7 @@ function LoginContent() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading || isGoogleLoading}
             />
             <InputGroupAddon align="inline-start">
               <AtSignIcon />
@@ -350,6 +353,7 @@ function LoginContent() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading || isGoogleLoading}
             />
             <InputGroupAddon align="inline-start">
               <LockIcon />
@@ -386,8 +390,10 @@ function LoginContent() {
 
           <div className="flex justify-end">
             <Link
-              href="/auth/reset-password"
-              className="text-xs text-muted-foreground underline underline-offset-4 hover:text-primary"
+              href={isLoading || isGoogleLoading ? "#" : "/auth/reset-password"}
+              className={`text-xs text-muted-foreground underline underline-offset-4 hover:text-primary ${
+                isLoading || isGoogleLoading ? "pointer-events-none opacity-50" : ""
+              }`}
             >
               Forgot password?
             </Link>
@@ -397,8 +403,10 @@ function LoginContent() {
         <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
           <Link
-            href="/auth/sign-up"
-            className="underline underline-offset-4 hover:text-primary"
+            href={isLoading || isGoogleLoading ? "#" : "/auth/sign-up"}
+            className={`underline underline-offset-4 hover:text-primary ${
+              isLoading || isGoogleLoading ? "pointer-events-none opacity-50" : ""
+            }`}
           >
             Create one
           </Link>

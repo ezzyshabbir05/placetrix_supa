@@ -38,11 +38,11 @@ function isDefinitiveRevocation(error: AuthApiError): boolean {
 
   // Fallback heuristic for Supabase servers that omit `code`.
   // Note: We are CAREFUL here. We only logout if it's explicitly a session NOT found.
+  const msg = error.message?.toLowerCase() ?? "";
   return (
     error.status === 401 &&
-    /session[_\s]not[_\s]found|user[_\s]not[_\s]found|invalid[_\s]refresh[_\s]token/i.test(
-      error.message ?? "",
-    )
+    (msg.includes("session") || msg.includes("user") || msg.includes("refresh_token")) &&
+    (msg.includes("not found") || msg.includes("not_found") || msg.includes("invalid"))
   );
 }
 
@@ -151,7 +151,6 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
             const code = refreshError.code;
             const msg = refreshError.message?.toLowerCase() ?? "";
             
-            // Comprehensive check for token/session reuse race conditions
             if (code === "refresh_token_already_used" || 
                 msg.includes("already used") || 
                 msg.includes("already_used")) {
@@ -162,6 +161,13 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
               return profileFromClaims(claimsData);
             }
             
+            // Log the error for debugging
+            console.error("[getUserProfile] getUser() failed:", {
+              code: refreshError.code,
+              message: refreshError.message,
+              status: refreshError.status
+            });
+
             // If it's a definitive revocation, we'll handle it below in Step 2 & 3.
             authError = refreshError;
           }
