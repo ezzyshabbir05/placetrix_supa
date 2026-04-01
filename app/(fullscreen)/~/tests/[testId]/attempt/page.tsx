@@ -5,7 +5,12 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AttemptClient } from "./AttemptClient"
-import { saveAnswerAction, submitAttemptAction, recordViolationAction, startAttemptAction } from "./actions"
+import {
+  saveAnswerAction,
+  submitAttemptAction,
+  recordViolationAction,
+  startAttemptAction,
+} from "./actions"
 import { getTestQuestions } from "@/lib/test-data"
 import type { AttemptQuestion, AttemptTest, AttemptInfo, SavedAnswer } from "./_types"
 
@@ -50,15 +55,15 @@ export default async function AttemptPage({
 }) {
   const { testId } = await params
   const supabase = await createClient()
-  const now = new Date()
 
   const { data: authData } = await supabase.auth.getClaims()
   if (!authData?.claims) redirect("/auth/login")
 
   // ── 1. Consolidated Initialization (RPC) ────────────────────────────────────
-  const { data: initResult, error: initError } = await (supabase as any).rpc("init_test_attempt", {
-    p_test_id: testId
-  }) as { data: any, error: any }
+  const { data: initResult, error: initError } = await (supabase as any).rpc(
+    "init_test_attempt",
+    { p_test_id: testId }
+  ) as { data: any; error: any }
 
   if (initError || !initResult) {
     throw new Error("Failed to initialize test: " + (initError?.message ?? "unknown"))
@@ -69,20 +74,35 @@ export default async function AttemptPage({
     redirect("/~/tests")
   }
 
+  // Capture the server timestamp immediately after the RPC returns so that
+  // it reflects real server-side time rather than the pre-RPC instant.
+  const serverNow = new Date()
+
   if (initResult.status === "expired") {
     redirect(`/~/tests/${testId}`)
   }
 
   // ── 2. Data Preparation ─────────────────────────────────────────────────────
+  // Discriminate between a resumed attempt and a new (ready) session.
+  // "ready" means the RPC confirmed the test is available but no in-progress
+  // attempt exists yet — the attempt row will be created when the user clicks
+  // "Begin test".
   let attemptInfo: AttemptInfo | null = null
   let savedAnswers: SavedAnswer[] = []
+  let currentAttemptNumber = 1
 
   if (initResult.status === "resumed") {
     attemptInfo = {
       ...initResult.attempt,
-      server_time: now.toISOString()
+      server_time: serverNow.toISOString(),
     }
     savedAnswers = initResult.saved_answers ?? []
+    currentAttemptNumber = attemptInfo?.attempt_number ?? 1
+  } else if (initResult.status === "ready") {
+    currentAttemptNumber = (initResult.completed_count ?? 0) + 1
+  } else {
+    // Guard against unexpected statuses returned by future RPC versions.
+    throw new Error(`Unexpected init status: ${initResult.status}`)
   }
 
   // ── 3. Fetch questions + test details in parallel ───────────────────────────
@@ -90,24 +110,27 @@ export default async function AttemptPage({
     getTestQuestions(testId),
     supabase
       .from("tests")
-      .select("title, description, instructions, time_limit_seconds, available_until, shuffle_questions, shuffle_options, strict_mode")
+      .select(
+        "title, description, instructions, time_limit_seconds, available_until, shuffle_questions, shuffle_options, strict_mode"
+      )
       .eq("id", testId)
       .single(),
   ])
 
   const testDetail = testDetailRes.data
 
-  const user = authData.claims
-
   // ── 4. Apply deterministic shuffle ──────────────────────────────────────────
-  // Use the attempt ID as seed so resume always shows the same order.
-  // For new attempts (no attemptInfo yet) we use a stable seed based on the user
-  // and test ID so the order doesn't change on page reloads.
-  let displayQuestions: AttemptQuestion[] = questions
+  // Seed strategy:
+  // We use (user.sub + testId + currentAttemptNumber) as the seed. 
+  // This is stable across the intro page and the active test phase because:
+  //   1. Before starting, the RPC returns the next available attempt number.
+  //   2. Once started, the attempt row persists that same attempt number.
+  // This prevents the question order from changing if the page is refreshed 
+  // mid-test or if a server action triggers a component re-render.
+  const user = authData.claims
+  const shuffleSeed = seedFromUUID(`${user.sub}_${testId}_${currentAttemptNumber}`)
 
-  const shuffleSeed = attemptInfo
-    ? seedFromUUID(attemptInfo.id)
-    : seedFromUUID(`${user.sub}_${testId}`)
+  let displayQuestions: AttemptQuestion[] = questions
 
   if (testDetail?.shuffle_questions) {
     const rng = mulberry32(shuffleSeed)
@@ -116,6 +139,7 @@ export default async function AttemptPage({
 
   if (testDetail?.shuffle_options) {
     // Use a separate RNG branch per question so option order is independent
+    // of question order and stable across reshuffles.
     displayQuestions = displayQuestions.map((q) => {
       const rng = mulberry32(shuffleSeed ^ seedFromUUID(q.id))
       return { ...q, options: seededShuffle(q.options, rng) }
@@ -125,7 +149,7 @@ export default async function AttemptPage({
   // ── 5. Build client-safe test object ────────────────────────────────────────
   const testForClient: AttemptTest = {
     id: testId,
-    title: testDetail?.title || "Test",
+    title: testDetail?.title ?? "Test",
     description: testDetail?.description ?? null,
     instructions: testDetail?.instructions ?? null,
     time_limit_seconds: testDetail?.time_limit_seconds ?? null,
@@ -141,7 +165,7 @@ export default async function AttemptPage({
       questions={displayQuestions}
       attemptInfo={attemptInfo}
       savedAnswers={savedAnswers}
-      serverNow={now.toISOString()}
+      serverNow={serverNow.toISOString()}
       onStartAttempt={startAttemptAction.bind(null, testId)}
       onSaveAnswer={saveAnswerAction}
       onSubmit={submitAttemptAction}

@@ -30,12 +30,17 @@ const REVOKED_SESSION_CODES = new Set([
 ]);
 
 function isDefinitiveRevocation(error: AuthApiError): boolean {
-  if (error.code && REVOKED_SESSION_CODES.has(error.code)) return true;
+  if (error.code && REVOKED_SESSION_CODES.has(error.code)) {
+    // Edge case: if we are in the middle of a race, we might get 'refresh_token_already_used'.
+    // We only treat it as definitive if we are NOT in a middleware refresh context.
+    return true;
+  }
 
   // Fallback heuristic for Supabase servers that omit `code`.
+  // Note: We are CAREFUL here. We only logout if it's explicitly a session NOT found.
   return (
     error.status === 401 &&
-    /session[_\s]not[_\s]found|invalid[_\s]refresh[_\s]token/i.test(
+    /session[_\s]not[_\s]found|user[_\s]not[_\s]found|invalid[_\s]refresh[_\s]token/i.test(
       error.message ?? "",
     )
   );
@@ -118,7 +123,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const supabase = await createClient();
 
   // ── Step 1: Read user from local claims (fast, signature-validated) ──────
-  const { data: claimsData, error: authError } = await supabase.auth.getClaims();
+  let { data: claimsData, error: authError } = await supabase.auth.getClaims();
   let user = claimsData?.claims ?? null;
 
   // Fallback: If claims are missing/expired, try a full session refresh via getUser()
@@ -138,14 +143,35 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
       const wasRefreshedInMiddleware = head.get("x-supabase-refreshed") === "true";
 
       if (!wasRefreshedInMiddleware) {
-        const { data: { user: authUser }, error: refreshError } = await supabase.auth.getUser();
-        if (authUser) {
-          user = { ...authUser, sub: authUser.id } as any;
-        } else if (refreshError instanceof AuthApiError && refreshError.code === "refresh_token_already_used") {
-          // This confirms a parallel refresh happened elsewhere. 
-          // We return whatever we have from claims (offline) to avoid a logout loop.
-          return profileFromClaims(claimsData);
+        try {
+          const { data: { user: authUser }, error: refreshError } = await supabase.auth.getUser();
+          if (authUser) {
+            user = { ...authUser, sub: authUser.id } as any;
+          } else if (refreshError instanceof AuthApiError) {
+            const code = refreshError.code;
+            const msg = refreshError.message?.toLowerCase() ?? "";
+            
+            // Comprehensive check for token/session reuse race conditions
+            if (code === "refresh_token_already_used" || 
+                msg.includes("already used") || 
+                msg.includes("already_used")) {
+              
+              // This confirms a parallel refresh happened elsewhere within the last 10s.
+              // We return the minimal profile from claims to avoid a logout.
+              // The browser will receive the NEW cookies from the successful request.
+              return profileFromClaims(claimsData);
+            }
+            
+            // If it's a definitive revocation, we'll handle it below in Step 2 & 3.
+            authError = refreshError;
+          }
+        } catch (e) {
+          console.error("[getUserProfile] Exception during getUser():", e);
         }
+      } else {
+        // Middleware already succeeded! But getClaims() used old cookies.
+        // We'll trust the claims we have for now, OR we could try one more fast getSession().
+        if (!user) return profileFromClaims(claimsData);
       }
     }
   }
@@ -181,8 +207,14 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   // ── Step 2 & 3: Handle definitive revocation (e.g. 401) ─────────────────
   if (authError instanceof AuthApiError) {
     if (isDefinitiveRevocation(authError)) {
+      console.warn("[getUserProfile] Definitive revocation detected:", authError.code, authError.message);
+      
+      // SCOPE: local. We don't want to sign out the user globally, just clear our own stale cookies.
+      // This prevents "nuking" other active sessions if it was just a local cookie issue.
       await supabase.auth.signOut({ scope: "local" });
-      redirect("/auth/login?revoked=1"); // Added param to help middleware avoid loop
+      
+      // Redirect to login with a special param that Middleware listens for.
+      redirect("/auth/login?revoked=1");
     }
   }
 

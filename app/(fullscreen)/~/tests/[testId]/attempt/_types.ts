@@ -31,12 +31,16 @@ export interface AttemptQuestion {
 export interface AttemptInfo {
   id: string
   started_at: string
+  /** ISO timestamp of the server clock at the moment this object was created. */
   server_time: string
   expires_at: string | null
   tab_switch_count: number
+  attempt_number: number
 }
 
 export interface SavedAnswer {
   question_id: string
   selected_option_ids: string[]
 }
+
+export type SyncState = "synced" | "pending" | "failed"

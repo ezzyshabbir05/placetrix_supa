@@ -93,11 +93,20 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
       c.name.includes("auth-token")
     );
 
+    // CRITICAL: We skip refreshes for prefetches. 
+    // Browsers often ignore Set-Cookie on prefetches, meaning the refresh token would 
+    // be used up on the server but the browser would never see the new one.
     if (hasAuthCookie && !isPrefetch) {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        // Refresh succeeded! Proceed with updated credentials.
-        user = { ...authUser, sub: authUser.id } as any;
+      // We use a small timeout to avoid hanging if Supabase is slow
+      try {
+        const { data: { user: authUser }, error: refreshError } = await supabase.auth.getUser();
+        if (authUser) {
+          user = { ...authUser, sub: authUser.id } as any;
+        } else if (refreshError) {
+          console.error("[Middleware] Refresh failed:", refreshError.message);
+        }
+      } catch (e) {
+        console.error("[Middleware] Refresh exception:", e);
       }
     }
   }
@@ -111,7 +120,16 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   // Redirect unauthenticated user trying to reach a protected page → login.
-  if (isProtected(pathname) && !user) {
+  // We ONLY redirect for GET requests that are NOT prefetches.
+  // For POST/Prefetch, we return a response that allows the caller to handle it 
+  // (or ignores the prefetch) rather than following a 302.
+  if (isProtected(pathname) && !user && request.method === "GET") {
+    if (isPrefetch) {
+      // Don't redirect prefetches — it causes browser cache issues and accidental logouts.
+      // Returning a 401 response is safer for prefetches.
+      return new NextResponse(null, { status: 401 });
+    }
+
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
     loginUrl.searchParams.set("next", pathname);

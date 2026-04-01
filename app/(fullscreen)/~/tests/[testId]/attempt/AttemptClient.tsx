@@ -164,12 +164,16 @@ function QuestionNavigator({
     questions,
     currentIndex,
     answers,
+    savingIds,
+    unsyncedIds,
     flagged,
     onJump,
 }: {
     questions: AttemptQuestion[]
     currentIndex: number
     answers: Record<string, string[]>
+    savingIds: Record<string, boolean>
+    unsyncedIds: Record<string, boolean>
     flagged: Record<string, boolean>
     onJump: (i: number) => void
 }) {
@@ -201,6 +205,9 @@ function QuestionNavigator({
                         const answered = (answers[q.id] ?? []).length > 0
                         const isFlagged = flagged[q.id] ?? false
                         const isCurrent = i === currentIndex
+                        const isSaving = savingIds[q.id]
+                        const isUnsynced = unsyncedIds[q.id]
+                        
                         return (
                             <button
                                 key={q.id}
@@ -215,7 +222,8 @@ function QuestionNavigator({
                                                 : "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
                                             : answered
                                                 ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-                                                : "border-border bg-background text-muted-foreground hover:border-muted-foreground hover:text-foreground"
+                                                : "border-border bg-background text-muted-foreground hover:border-muted-foreground hover:text-foreground",
+                                    (isSaving || isUnsynced) && !isCurrent && "animate-pulse"
                                 )}
                             >
                                 {i + 1}
@@ -223,6 +231,9 @@ function QuestionNavigator({
                                     <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full border border-background bg-amber-500">
                                         <Flag className="h-1.5 w-1.5 fill-white text-white" />
                                     </span>
+                                )}
+                                {(isSaving || isUnsynced) && (
+                                    <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 flex h-1 w-1 rounded-full bg-primary" />
                                 )}
                             </button>
                         )
@@ -313,7 +324,8 @@ function QuestionView({
     index,
     total,
     selectedIds,
-    savingId,
+    isSaving,
+    isUnsynced,
     saveError,
     isFlagged,
     onAnswer,
@@ -323,13 +335,13 @@ function QuestionView({
     index: number
     total: number
     selectedIds: string[]
-    savingId: string | null
+    isSaving: boolean
+    isUnsynced: boolean
     saveError: string | null
     isFlagged: boolean
     onAnswer: (optionId: string) => void
     onToggleFlag: () => void
 }) {
-    const isSaving = savingId === question.id
 
     return (
         <div className="space-y-6">
@@ -399,16 +411,27 @@ function QuestionView({
             </div>
 
             {saveError ? (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <p className="flex items-center gap-1.5 text-xs text-destructive font-medium">
                     <AlertTriangle className="h-3 w-3 shrink-0" />
-                    {saveError} — please check your connection and try again.
+                    Failed to save: {saveError}
                 </p>
-            ) : selectedIds.length > 0 ? (
+            ) : (isSaving || isUnsynced || selectedIds.length > 0) ? (
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     {isSaving ? (
-                        <><Loader2 className="h-3 w-3 animate-spin" />Saving…</>
+                        <>
+                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                            <span className="text-primary font-medium">Saving to server…</span>
+                        </>
+                    ) : isUnsynced ? (
+                        <>
+                            <Clock className="h-3 w-3 text-amber-500" />
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">Changes pending…</span>
+                        </>
                     ) : (
-                        <><CheckCircle2 className="h-3 w-3 text-emerald-500" />Saved</>
+                        <>
+                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Saved to database</span>
+                        </>
                     )}
                 </p>
             ) : (
@@ -646,8 +669,9 @@ export function AttemptClient({
         return {}
     })
 
-    const [savingId, setSavingId] = useState<string | null>(null)
-    const [saveError, setSaveError] = useState<string | null>(null)
+    const [savingIds, setSavingIds] = useState<Record<string, boolean>>({})
+    const [unsyncedIds, setUnsyncedIds] = useState<Record<string, boolean>>({})
+    const [saveErrors, setSaveErrors] = useState<Record<string, string | null>>({})
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [showSubmitDialog, setShowSubmitDialog] = useState(false)
@@ -900,16 +924,27 @@ export function AttemptClient({
     const saveAnswer = useCallback(
         async (questionId: string, selectedIds: string[], timeSpentSeconds: number = 0) => {
             if (!onSaveAnswer || !attemptInfo) return
-            setSavingId(questionId)
-            setSaveError(null)
+            setSavingIds((prev) => ({ ...prev, [questionId]: true }))
+            setUnsyncedIds((prev) => ({ ...prev, [questionId]: false }))
+            setSaveErrors((prev) => ({ ...prev, [questionId]: null }))
             try {
                 await onSaveAnswer(attemptInfo.id, questionId, selectedIds, timeSpentSeconds)
             } catch (err: any) {
+                // If it's a redirect error, don't toast it; let it bubble up.
+                if (err?.message === "NEXT_REDIRECT" || err?.digest?.includes("NEXT_REDIRECT")) throw err
+
                 const msg = err?.message ?? "Failed to save answer"
-                setSaveError(msg)
-                toast.error(msg)
+
+                // "An unexpected response" usually means the server returned HTML (redirect to login) 
+                // instead of the action response, likely due to session expiry.
+                const userFriendlyMsg = msg.toLowerCase().includes("unexpected response")
+                    ? "Your session may have expired. Please refresh the page."
+                    : msg
+
+                setSaveErrors((prev) => ({ ...prev, [questionId]: userFriendlyMsg }))
+                toast.error(userFriendlyMsg)
             } finally {
-                setSavingId(null)
+                setSavingIds((prev) => ({ ...prev, [questionId]: false }))
             }
         },
         [attemptInfo, onSaveAnswer]
@@ -937,6 +972,12 @@ export function AttemptClient({
             optionId: string,
             questionType: "single_correct" | "multiple_correct"
         ) => {
+            // Immediately mark as "unsynced" to reflect the debounce period in UI
+            if (onSaveAnswer && attemptInfo) {
+                setUnsyncedIds((prev) => ({ ...prev, [questionId]: true }))
+                setSaveErrors((prev) => ({ ...prev, [questionId]: null }))
+            }
+
             setAnswers((prev) => {
                 const current = prev[questionId] ?? []
                 const next =
@@ -994,11 +1035,21 @@ export function AttemptClient({
 
                 await onSubmit?.(attemptInfo.id, timeSpentSeconds)  // ← then redirect
             } catch (err: any) {
-                if (err?.message === "NEXT_REDIRECT") throw err
+                // REQUIRED for Next.js 15: Re-throw redirect errors so the router can handle them.
+                if (err?.message === "NEXT_REDIRECT" || err?.digest?.includes("NEXT_REDIRECT")) throw err
+                
                 setIsSubmitting(false)
                 const msg = err?.message ?? "Submission failed. Please try again."
-                setSubmitError(msg)
-                toast.error(msg)
+                
+                // "An unexpected response" usually means the server returned HTML (redirect to login) 
+                // instead of the action response, likely due to session expiry.
+                const lowerMsg = msg.toLowerCase()
+                const userFriendlyMsg = (lowerMsg.includes("unexpected") && lowerMsg.includes("response"))
+                    ? "Your session may have expired. Please refresh the page and try finishing again."
+                    : msg
+                    
+                setSubmitError(userFriendlyMsg)
+                toast.error(userFriendlyMsg)
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1054,6 +1105,10 @@ export function AttemptClient({
     const timerWarning = timeRemaining !== null && timeRemaining > 60 && timeRemaining <= 300
     const isLastQuestion = currentIndex === questions.length - 1
 
+    const isAnySaving = Object.values(savingIds).some(Boolean)
+    const isAnyUnsynced = Object.values(unsyncedIds).some(Boolean)
+    const hasUnsyncedWork = isAnySaving || isAnyUnsynced
+
 
     // ── Tracking Offline and Question Pacing ───────────────────────────────────
 
@@ -1107,15 +1162,40 @@ export function AttemptClient({
 
     // Override handleSubmit for final time pacing sync and flush
     const finalHandleSubmit = useCallback(async (auto = false) => {
+        // 1. Flush any and all pending debounced saves for ALL questions
+        const syncPromises: Promise<any>[] = []
+        
+        for (const qId in saveDebounceRef.current) {
+            if (saveDebounceRef.current[qId]) {
+                clearTimeout(saveDebounceRef.current[qId])
+                delete saveDebounceRef.current[qId]
+                const pendingAnswers = answers[qId] ?? []
+                syncPromises.push(saveAnswer(qId, pendingAnswers))
+            }
+        }
+
+        // 2. Specialized sync for the CURRENT question's pacing and content
         const finalTrack = timeTrackingRef.current
-        if (finalTrack.enteredAtServerTime > 0 && finalTrack.id && attemptInfo) {
+        if (finalTrack.id && attemptInfo) {
             const finalElapsed = Math.max(0, Math.floor((getNowOnServer().getTime() - finalTrack.enteredAtServerTime) / 1000))
             const finalAnswers = answers[finalTrack.id] ?? []
 
-            // Consolidated final sync: content + time in ONE request before grading the test.
-            // This prevents race conditions and redundant function invocations on completion.
-            await saveAnswer(finalTrack.id, finalAnswers, finalElapsed)
+            // If it was already in the debounced sync list, we don't want to double-fire.
+            // But since we just cleared the timers above, we can just ensure 
+            // the current question is handled with its full pacing data here.
+            syncPromises.push(saveAnswer(finalTrack.id, finalAnswers, finalElapsed))
         }
+
+        // Wait for all outgoing sync requests to finish
+        if (syncPromises.length > 0) {
+            try {
+                await Promise.all(syncPromises)
+            } catch {
+                // We proceed even if a background save fails during submit, 
+                // as the grading RPC is the source of truth anyway.
+            }
+        }
+        
         await handleSubmit(auto)
     }, [handleSubmit, attemptInfo, answers, saveAnswer, getNowOnServer])
 
@@ -1144,7 +1224,12 @@ export function AttemptClient({
                             setFocusLostCount(info.tab_switch_count)
                             focusLostCountRef.current = info.tab_switch_count
                         } catch (err: any) {
-                            toast.error(err?.message || "Failed to start test")
+                            const msg = err?.message ?? "Failed to start test"
+                            const lowerMsg = msg.toLowerCase()
+                            const userFriendlyMsg = (lowerMsg.includes("unexpected") && lowerMsg.includes("response"))
+                                ? "Your session may have expired. Please refresh the page and try again."
+                                : msg
+                            toast.error(userFriendlyMsg)
                             setIsStarting(false)
                             return
                         }
@@ -1289,8 +1374,9 @@ export function AttemptClient({
                             index={currentIndex}
                             total={questions.length}
                             selectedIds={currentAnswers}
-                            savingId={savingId}
-                            saveError={saveError}
+                            isSaving={!!savingIds[currentQuestion.id]}
+                            isUnsynced={!!unsyncedIds[currentQuestion.id]}
+                            saveError={saveErrors[currentQuestion.id] ?? null}
                             isFlagged={flagged[currentQuestion.id] ?? false}
                             onAnswer={(optId) =>
                                 handleAnswer(currentQuestion.id, optId, currentQuestion.question_type)
@@ -1363,6 +1449,8 @@ export function AttemptClient({
                                 questions={questions}
                                 currentIndex={currentIndex}
                                 answers={answers}
+                                savingIds={savingIds}
+                                unsyncedIds={unsyncedIds}
                                 flagged={flagged}
                                 onJump={setCurrentIndex}
                             />
@@ -1486,6 +1574,8 @@ export function AttemptClient({
                             questions={questions}
                             currentIndex={currentIndex}
                             answers={answers}
+                            savingIds={savingIds}
+                            unsyncedIds={unsyncedIds}
                             flagged={flagged}
                             onJump={(i) => {
                                 setCurrentIndex(i)
@@ -1542,14 +1632,29 @@ export function AttemptClient({
                                         </p>
                                     </div>
                                 )}
+                                {hasUnsyncedWork && (
+                                    <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/30 p-4">
+                                        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
+                                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                                            Some answers are still being synced to the server. 
+                                            We will ensure everything is saved before submitting.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isSubmitting}>Go back</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => finalHandleSubmit()} disabled={isSubmitting}>
+                        <AlertDialogAction 
+                            onClick={() => finalHandleSubmit()} 
+                            disabled={isSubmitting}
+                            className={cn(hasUnsyncedWork && "bg-blue-600 hover:bg-blue-700")}
+                        >
                             {isSubmitting ? (
-                                <><Loader2 className="animate-spin" />Submitting…</>
+                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting…</>
+                            ) : hasUnsyncedWork ? (
+                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Syncing & Submitting…</>
                             ) : (
                                 "Submit Test"
                             )}
