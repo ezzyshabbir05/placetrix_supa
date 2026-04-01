@@ -207,7 +207,7 @@ function QuestionNavigator({
                         const isCurrent = i === currentIndex
                         const isSaving = savingIds[q.id]
                         const isUnsynced = unsyncedIds[q.id]
-                        
+
                         return (
                             <button
                                 key={q.id}
@@ -1037,17 +1037,17 @@ export function AttemptClient({
             } catch (err: any) {
                 // REQUIRED for Next.js 15: Re-throw redirect errors so the router can handle them.
                 if (err?.message === "NEXT_REDIRECT" || err?.digest?.includes("NEXT_REDIRECT")) throw err
-                
+
                 setIsSubmitting(false)
                 const msg = err?.message ?? "Submission failed. Please try again."
-                
+
                 // "An unexpected response" usually means the server returned HTML (redirect to login) 
                 // instead of the action response, likely due to session expiry.
                 const lowerMsg = msg.toLowerCase()
                 const userFriendlyMsg = (lowerMsg.includes("unexpected") && lowerMsg.includes("response"))
                     ? "Your session may have expired. Please refresh the page and try finishing again."
                     : msg
-                    
+
                 setSubmitError(userFriendlyMsg)
                 toast.error(userFriendlyMsg)
             }
@@ -1164,7 +1164,7 @@ export function AttemptClient({
     const finalHandleSubmit = useCallback(async (auto = false) => {
         // 1. Flush any and all pending debounced saves for ALL questions
         const syncPromises: Promise<any>[] = []
-        
+
         for (const qId in saveDebounceRef.current) {
             if (saveDebounceRef.current[qId]) {
                 clearTimeout(saveDebounceRef.current[qId])
@@ -1195,7 +1195,7 @@ export function AttemptClient({
                 // as the grading RPC is the source of truth anyway.
             }
         }
-        
+
         await handleSubmit(auto)
     }, [handleSubmit, attemptInfo, answers, saveAnswer, getNowOnServer])
 
@@ -1636,7 +1636,7 @@ export function AttemptClient({
                                     <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/30 p-4">
                                         <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
                                         <p className="text-sm text-blue-700 dark:text-blue-300">
-                                            Some answers are still being synced to the server. 
+                                            Some answers are still being synced to the server.
                                             We will ensure everything is saved before submitting.
                                         </p>
                                     </div>
@@ -1646,8 +1646,8 @@ export function AttemptClient({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isSubmitting}>Go back</AlertDialogCancel>
-                        <AlertDialogAction 
-                            onClick={() => finalHandleSubmit()} 
+                        <AlertDialogAction
+                            onClick={() => finalHandleSubmit()}
                             disabled={isSubmitting}
                             className={cn(hasUnsyncedWork && "bg-blue-600 hover:bg-blue-700")}
                         >

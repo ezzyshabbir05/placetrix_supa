@@ -102,8 +102,17 @@ async function fetchResultData(
     answerMap[a.question_id] = a
   }
 
-  const answers: CandidateAnswerDetail[] = (raw.questions ?? []).map((q: any) => {
+  // Ensure questions and options are sorted by order_index
+  const sortedQuestions = [...(raw.questions ?? [])].sort(
+    (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+  )
+
+  const answers: CandidateAnswerDetail[] = sortedQuestions.map((q: any) => {
     const ans = answerMap[q.id]
+    const sortedOptions = [...(q.options ?? [])].sort(
+      (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+    )
+
     return {
       question_id: q.id,
       question_text: q.question_text,
@@ -113,7 +122,7 @@ async function fetchResultData(
       selected_option_ids: (ans?.selected_option_ids as string[]) ?? [],
       time_spent_seconds: ans?.time_spent_seconds ?? null,
       explanation: (q.explanation as string) ?? null,
-      options: ((q.options as any[]) ?? []).map((o) => ({
+      options: sortedOptions.map((o: any) => ({
         id: o.id,
         option_text: o.option_text,
         is_correct: o.is_correct,
