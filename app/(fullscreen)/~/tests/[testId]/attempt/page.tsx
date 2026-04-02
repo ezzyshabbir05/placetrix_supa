@@ -7,46 +7,13 @@ import { createClient } from "@/lib/supabase/server"
 import { AttemptClient } from "./AttemptClient"
 import {
   saveAnswerAction,
+  saveAnswersBatchAction,
   submitAttemptAction,
   recordViolationAction,
   startAttemptAction,
 } from "./actions"
 import { getTestQuestions } from "@/lib/test-data"
 import type { AttemptQuestion, AttemptTest, AttemptInfo, SavedAnswer } from "./_types"
-
-
-// ── Seeded PRNG (mulberry32) ──────────────────────────────────────────────────
-// Produces a deterministic sequence from a 32-bit seed so that question /
-// option order is identical across page reloads for the same attempt.
-
-function mulberry32(seed: number) {
-  return function () {
-    let t = (seed += 0x6d2b79f5)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-/** Derive a 32-bit integer from a UUID string. */
-function seedFromUUID(uuid: string): number {
-  let hash = 0
-  for (let i = 0; i < uuid.length; i++) {
-    hash = (Math.imul(31, hash) + uuid.charCodeAt(i)) | 0
-  }
-  return hash >>> 0
-}
-
-/** Fisher-Yates shuffle using a seeded RNG — returns a new array. */
-function seededShuffle<T>(arr: readonly T[], rng: () => number): T[] {
-  const out = [...arr]
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-      ;[out[i], out[j]] = [out[j], out[i]]
-  }
-  return out
-}
-
 
 
 export default async function AttemptPage({
@@ -84,13 +51,8 @@ export default async function AttemptPage({
   }
 
   // ── 2. Data Preparation ─────────────────────────────────────────────────────
-  // Discriminate between a resumed attempt and a new (ready) session.
-  // "ready" means the RPC confirmed the test is available but no in-progress
-  // attempt exists yet — the attempt row will be created when the user clicks
-  // "Begin test".
   let attemptInfo: AttemptInfo | null = null
   let savedAnswers: SavedAnswer[] = []
-  let currentAttemptNumber = 1
 
   if (initResult.status === "resumed") {
     attemptInfo = {
@@ -98,12 +60,6 @@ export default async function AttemptPage({
       server_time: serverNow.toISOString(),
     }
     savedAnswers = initResult.saved_answers ?? []
-    currentAttemptNumber = attemptInfo?.attempt_number ?? 1
-  } else if (initResult.status === "ready") {
-    currentAttemptNumber = (initResult.completed_count ?? 0) + 1
-  } else {
-    // Guard against unexpected statuses returned by future RPC versions.
-    throw new Error(`Unexpected init status: ${initResult.status}`)
   }
 
   // ── 3. Fetch questions + test details in parallel ───────────────────────────
@@ -112,42 +68,18 @@ export default async function AttemptPage({
     supabase
       .from("tests")
       .select(
-        "title, description, instructions, time_limit_seconds, available_until, shuffle_questions, shuffle_options, strict_mode"
+        "title, description, instructions, time_limit_seconds, available_until, strict_mode, shuffle_questions, shuffle_options"
       )
       .eq("id", testId)
       .single(),
   ])
 
   const testDetail = testDetailRes.data
-
-  // ── 4. Apply deterministic shuffle ──────────────────────────────────────────
-  // Seed strategy:
-  // We use (user.sub + testId + currentAttemptNumber) as the seed. 
-  // This is stable across the intro page and the active test phase because:
-  //   1. Before starting, the RPC returns the next available attempt number.
-  //   2. Once started, the attempt row persists that same attempt number.
-  // This prevents the question order from changing if the page is refreshed 
-  // mid-test or if a server action triggers a component re-render.
   const user = authData.claims
-  const shuffleSeed = seedFromUUID(`${user.sub}_${testId}_${currentAttemptNumber}`)
+  const currentAttemptNumber = (initResult.completed_count ?? 0) + 1
+  const shuffleSeedString = `${user.sub}_${testId}_${currentAttemptNumber}`
 
-  let displayQuestions: AttemptQuestion[] = questions
-
-  if (testDetail?.shuffle_questions) {
-    const rng = mulberry32(shuffleSeed)
-    displayQuestions = seededShuffle(displayQuestions, rng)
-  }
-
-  if (testDetail?.shuffle_options) {
-    // Use a separate RNG branch per question so option order is independent
-    // of question order and stable across reshuffles.
-    displayQuestions = displayQuestions.map((q) => {
-      const rng = mulberry32(shuffleSeed ^ seedFromUUID(q.id))
-      return { ...q, options: seededShuffle(q.options, rng) }
-    })
-  }
-
-  // ── 5. Build client-safe test object ────────────────────────────────────────
+  // ── 4. Build client-safe test object ────────────────────────────────────────
   const testForClient: AttemptTest = {
     id: testId,
     title: testDetail?.title ?? "Test",
@@ -163,12 +95,14 @@ export default async function AttemptPage({
   return (
     <AttemptClient
       test={testForClient}
-      questions={displayQuestions}
+      questions={questions}
       attemptInfo={attemptInfo}
       savedAnswers={savedAnswers}
       serverNow={serverNow.toISOString()}
+      shuffleSeed={shuffleSeedString}
       onStartAttempt={startAttemptAction.bind(null, testId)}
       onSaveAnswer={saveAnswerAction}
+      onSaveAnswersBatch={saveAnswersBatchAction}
       onSubmit={submitAttemptAction}
       onViolation={recordViolationAction}
     />

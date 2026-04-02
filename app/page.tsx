@@ -10,7 +10,6 @@ import { GridPattern } from "@/components/ui/landing/grid-pattern";
 import { Avatar } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Footer } from "@/components/footer";
-import { HeaderWrapper } from "@/components/header-wrapper";
 import { FeatureSection } from "@/components/feature-section";
 
 
@@ -224,7 +223,7 @@ function TestimonialsCard({
 export default function LandingPage() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden supports-[overflow:clip]:overflow-clip">
-      <HeaderWrapper />
+      <Header />
       <main
         className={cn(
           "relative mx-auto w-full max-w-4xl grow",

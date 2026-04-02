@@ -1,3 +1,5 @@
+"use server";
+
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { AuthApiError } from "@supabase/supabase-js";
@@ -150,17 +152,17 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
           } else if (refreshError instanceof AuthApiError) {
             const code = refreshError.code;
             const msg = refreshError.message?.toLowerCase() ?? "";
-            
-            if (code === "refresh_token_already_used" || 
-                msg.includes("already used") || 
-                msg.includes("already_used")) {
-              
+
+            if (code === "refresh_token_already_used" ||
+              msg.includes("already used") ||
+              msg.includes("already_used")) {
+
               // This confirms a parallel refresh happened elsewhere within the last 10s.
               // We return the minimal profile from claims to avoid a logout.
               // The browser will receive the NEW cookies from the successful request.
               return profileFromClaims(claimsData);
             }
-            
+
             // Log the error for debugging
             console.error("[getUserProfile] getUser() failed:", {
               code: refreshError.code,
@@ -214,11 +216,11 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   if (authError instanceof AuthApiError) {
     if (isDefinitiveRevocation(authError)) {
       console.warn("[getUserProfile] Definitive revocation detected:", authError.code, authError.message);
-      
+
       // SCOPE: local. We don't want to sign out the user globally, just clear our own stale cookies.
       // This prevents "nuking" other active sessions if it was just a local cookie issue.
       await supabase.auth.signOut({ scope: "local" });
-      
+
       // Redirect to login with a special param that Middleware listens for.
       redirect("/auth/login?revoked=1");
     }
@@ -228,3 +230,10 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   return profileFromClaims(claimsData);
 });
 
+/**
+ * Server Action wrapper for getUserProfile.
+ * Allows client components to fetch the profile on mount.
+ */
+export async function getUserProfileAction() {
+  return await getUserProfile();
+}

@@ -5,7 +5,7 @@
 import { cn } from "@/lib/utils";
 import { FullWidthDivider } from "@/components/ui/landing/full-width-divider";
 import { GridPattern } from "@/components/ui/landing/grid-pattern";
-import { HeaderWrapper } from "@/components/header-wrapper";
+import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
 import { PrivacyScrollNav } from "@/components/legal/scroll-nav"; // client component
@@ -252,7 +252,7 @@ function SectionBlock({ id, index }: { id: string; index: number }) {
 export default function PrivacyPolicyPage() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden supports-[overflow:clip]:overflow-clip">
-      <HeaderWrapper />
+      <Header />
 
       <main
         className={cn(

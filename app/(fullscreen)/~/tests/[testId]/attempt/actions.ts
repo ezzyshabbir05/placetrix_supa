@@ -208,6 +208,33 @@ export async function saveAnswerAction(
 }
 
 
+/**
+ * Batch version of saveAnswerAction.
+ * Reduces server round-trips by processing multiple answers in one call.
+ */
+export async function saveAnswersBatchAction(
+  attemptId: string,
+  answers: Array<{
+    questionId: string
+    selectedOptionIds: string[]
+    timeSpentSeconds?: number
+  }>
+): Promise<void> {
+  const { supabase } = await getSupabaseForAction()
+
+  // Use the new bulk RPC to save everything in one round-trip.
+  const { error } = await (supabase as any).rpc("bulk_save_answers", {
+    p_attempt_id: attemptId,
+    p_batch: answers, // jsonb array
+  })
+
+  if (error) {
+    console.error("[saveAnswersBatchAction] RPC error:", error)
+    throw new Error(error.message || "Failed to save answers in batch")
+  }
+}
+
+
 // ─── Submit Attempt ────────────────────────────────────────────────────────────
 //
 // 1. Calls grade_attempt_v2 which scores every answer, persists
@@ -218,7 +245,7 @@ export async function saveAnswerAction(
 export async function submitAttemptAction(
   attemptId: string,
   timeSpentSeconds: number
-): Promise<void> {
+): Promise<string> {
   const { supabase, userId } = await getSupabaseForAction()
 
   // Verify ownership before grading so a malicious caller cannot grade someone
@@ -255,7 +282,7 @@ export async function submitAttemptAction(
     throw new Error(typedResult.error)
   }
 
-  redirect(typedResult.test_id ? `/~/tests/${typedResult.test_id}` : "/~/tests")
+  return typedResult.test_id ? `/~/tests/${typedResult.test_id}` : "/~/tests"
 }
 
 

@@ -10,6 +10,7 @@ import { useTheme } from "next-themes"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { UserProfile } from "@/lib/supabase/profile"
+import { getUserProfileAction } from "@/lib/supabase/profile"
 import { buildStorageUrl } from "@/lib/storage"
 
 
@@ -158,8 +159,23 @@ interface HeaderProps {
   user?: UserProfile | null
 }
 
-export function Header({ user = null }: HeaderProps) {
+export function Header({ user: initialUser = null }: HeaderProps) {
+  const [user, setUser] = React.useState<UserProfile | null>(initialUser);
   const scrolled = useScroll(10)
+
+  // Client-side hydration for public (static) pages.
+  // If the page was static, 'initialUser' is always null.
+  React.useEffect(() => {
+    if (initialUser) return;
+    
+    // Only attempt hydration if we think a session might exist locally.
+    const hasAuthCookie = document.cookie.includes("auth-token");
+    if (!hasAuthCookie) return;
+
+    getUserProfileAction().then((data) => {
+        if (data) setUser(data);
+    }).catch(() => { /* skip if session revoked */ });
+  }, [initialUser]);
 
   return (
     <header

@@ -1,4 +1,4 @@
-// middleware.ts  (root of project — next to package.json)
+// middleware.ts
 //
 // ── What this file does ────────────────────────────────────────────────────────
 //
@@ -7,28 +7,22 @@
 //  2. Redirects unauthenticated visitors away from protected routes.
 //  3. Redirects authenticated visitors away from auth pages (login, sign-up …).
 //
-// ── Why getSession() instead of getUser() ────────────────────────────────────
-//
-//  Initially, we used getUser() here to re-validate the token against the 
-//  Supabase Auth server on every quest for maximum security—however, that
-//  pattern results in "Auth request flooding" and 504 Gateway errors under load.
-//  getSession() matches the token against the cookie faster and with zero latency.
-//  We rely on Server Components/Actions to perform the final, hardened 
-//  getUser() check for data consistency and account status security.
-//
-// ── Route rules ───────────────────────────────────────────────────────────────
-//
-//  Protected  →  /~/…          Unauthenticated visitors → /auth/login
-//  Auth       →  /auth/…       Authenticated visitors  → /~
-//
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { updateSession } from "@/lib/supabase/proxy";
 import { type NextRequest, NextResponse } from "next/server";
 
-// ✅  Next.js requires the export to be named exactly "middleware".
 export async function middleware(request: NextRequest) {
-  // 1. Check for maintenance mode first
+  // 1. Skip middleware entirely for prefetches. 
+  // Browsers often ignore Set-Cookie on prefetches, so we shouldn't waste 
+  // CPU or Supabase Auth hits (invocations) on them.
+  const isPrefetch = request.headers.get("next-router-prefetch") || 
+                     request.headers.get("purpose") === "prefetch";
+  if (isPrefetch) {
+    return NextResponse.next();
+  }
+
+  // 2. Check for maintenance mode first
   const isMaintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
   if (isMaintenanceMode) {
@@ -41,11 +35,7 @@ export async function middleware(request: NextRequest) {
       !pathname.includes('/api/') &&
       !pathname.includes('.') // for images, icons, etc.
     ) {
-      // Rewrite allows the URL to stay the same in the browser while showing maintenance content
-      const response = NextResponse.rewrite(new URL('/maintenance', request.url));
-      
-      // Industry Standard: Signal "Service Unavailable" (503) for search engines
-      return response;
+      return NextResponse.rewrite(new URL('/maintenance', request.url));
     }
   }
 
@@ -63,3 +53,4 @@ export const config = {
     '/auth/:path*',
   ],
 };
+
