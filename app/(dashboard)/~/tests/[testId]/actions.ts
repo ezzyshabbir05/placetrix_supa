@@ -100,3 +100,22 @@ export async function deleteTestAction(testId: string): Promise<void> {
   revalidatePath("/~/tests")
   redirect("/~/tests")
 }
+
+
+// ─── Delete Attempt ───────────────────────────────────────────────────────────
+// Hard-deletes a single test attempt. Cascade removes answers.
+
+export async function deleteAttemptAction(testId: string, attemptId: string): Promise<void> {
+  await assertOwner(testId)
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from("test_attempts")
+    .delete()
+    .eq("id", attemptId)
+    .eq("test_id", testId) // safety check
+
+  if (error) throw new Error("Failed to delete attempt: " + error.message)
+
+  revalidatePath(`/~/tests/${testId}`)
+}

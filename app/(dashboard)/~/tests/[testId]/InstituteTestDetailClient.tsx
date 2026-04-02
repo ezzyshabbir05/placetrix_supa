@@ -109,7 +109,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 // ─── Action State Hook ────────────────────────────────────────────────────────
 
-type ActionKey = "toggleResults" | "togglePublish" | "deleteTest" | null
+type ActionKey = "toggleResults" | "togglePublish" | "deleteTest" | "deleteAttempt" | null
 
 function useActionState() {
   const [activeAction, setActiveAction] = useState<ActionKey>(null)
@@ -471,10 +471,12 @@ const MobileAttemptRow = React.memo(function MobileAttemptRow({
   attempt,
   scoresVisible,
   testId,
+  onDelete,
 }: {
   attempt: InstituteAttemptRow
   scoresVisible: boolean
   testId: string
+  onDelete: (a: InstituteAttemptRow) => void
 }) {
   const isCompleted = attempt.status === "submitted" || attempt.status === "auto_submitted"
 
@@ -550,14 +552,23 @@ const MobileAttemptRow = React.memo(function MobileAttemptRow({
             )}
           </div>
 
-
-          <Button asChild size="lg" className="w-full font-bold gap-2 text-sm shadow-md">
-            <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
-              <Eye className="h-4.5 w-4.5" />
-              View Full Detailed Result
-              <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-50" />
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild size="lg" className="flex-1 font-bold gap-2 text-sm shadow-md">
+              <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
+                <Eye className="h-4.5 w-4.5" />
+                View Full Result
+                <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-50" />
+              </Link>
+            </Button>
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="px-3 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 shadow-sm"
+              onClick={() => onDelete(attempt)}
+            >
+              <Trash2 className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </AccordionContent>
     </AccordionItem>
@@ -570,10 +581,12 @@ const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
   attempt,
   scoresVisible,
   testId,
+  onDelete,
 }: {
   attempt: InstituteAttemptRow
   scoresVisible: boolean
   testId: string
+  onDelete: (a: InstituteAttemptRow) => void
 }) {
   return (
     <TableRow className="hover:bg-muted/20">
@@ -619,12 +632,23 @@ const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
         {attempt.submitted_at ? formatDateTime(attempt.submitted_at) : "—"}
       </TableCell>
       <TableCell className="text-right">
-        <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5">
-          <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
-            <Eye className="h-3.5 w-3.5" />
-            <span className="sr-only sm:not-sr-only">View</span>
-          </Link>
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5">
+            <Link href={`/~/tests/${testId}/result/${attempt.id}`} target="_blank" rel="noopener noreferrer">
+              <Eye className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only">View</span>
+            </Link>
+          </Button>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => onDelete(attempt)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="sr-only">Delete</span>
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   )
@@ -633,9 +657,27 @@ const DesktopAttemptRow = React.memo(function DesktopAttemptRow({
 
 // ─── Attempts Tab ─────────────────────────────────────────────────────────────
 
-function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer }: { test: InstituteTestDetail; liveAttempts: InstituteAttemptRow[]; totalMarks: number; serverNow: string; getNowOnServer: () => Date }) {
+function AttemptsTab({ 
+  test, 
+  liveAttempts, 
+  totalMarks, 
+  serverNow, 
+  getNowOnServer,
+  onDeleteAttempt,
+  onDeleteSuccess,
+}: { 
+  test: InstituteTestDetail
+  liveAttempts: InstituteAttemptRow[]
+  totalMarks: number 
+  serverNow: string
+  getNowOnServer: () => Date
+  onDeleteAttempt?: (attemptId: string) => Promise<void>
+  onDeleteSuccess?: (attemptId: string) => void
+}) {
   const attempts = liveAttempts
   const [scoresVisible, setScoresVisible] = useState(false)
+  const [attemptToDelete, setAttemptToDelete] = useState<InstituteAttemptRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // ── Filters ─────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("")
@@ -1227,7 +1269,7 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
         ) : (
           <Accordion type="single" collapsible className="divide-y divide-border/60">
             {sorted.map((a) => (
-              <MobileAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} />
+              <MobileAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} onDelete={setAttemptToDelete} />
             ))}
           </Accordion>
         )}
@@ -1265,12 +1307,55 @@ function AttemptsTab({ test, liveAttempts, totalMarks, serverNow, getNowOnServer
               </TableRow>
             ) : (
               sorted.map((a) => (
-                <DesktopAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} />
+                <DesktopAttemptRow key={a.id} attempt={a} scoresVisible={scoresVisible} testId={test.id} onDelete={setAttemptToDelete} />
               ))
             )}
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={!!attemptToDelete} onOpenChange={(open) => !open && setAttemptToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete student attempt?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <span className="font-semibold text-foreground">{attemptToDelete?.student_name}</span>'s attempt? 
+              This will permanently remove their score and all answers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={isDeleting}
+              onClick={async (e) => {
+                e.preventDefault()
+                if (!attemptToDelete || !onDeleteAttempt) return
+                setIsDeleting(true)
+                try {
+                  await onDeleteAttempt(attemptToDelete.id)
+                  onDeleteSuccess?.(attemptToDelete.id)
+                  toast.success("Attempt deleted successfully")
+                  setAttemptToDelete(null)
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to delete attempt")
+                } finally {
+                  setIsDeleting(false)
+                }
+              }}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting…
+                </>
+              ) : (
+                "Delete Attempt"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -1421,6 +1506,7 @@ interface Props {
   onToggleResults?: () => Promise<void>
   onTogglePublish?: () => Promise<void>
   onDeleteTest?: () => Promise<void>
+  onDeleteAttempt?: (attemptId: string) => Promise<void>
 }
 
 export function InstituteTestDetailClient({
@@ -1430,6 +1516,7 @@ export function InstituteTestDetailClient({
   onToggleResults,
   onTogglePublish,
   onDeleteTest,
+  onDeleteAttempt,
 }: Props) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("overview")
@@ -1733,7 +1820,15 @@ export function InstituteTestDetailClient({
           </TabsContent>
 
           <TabsContent value="attempts" className="m-0">
-            <AttemptsTab test={test} liveAttempts={liveAttempts} totalMarks={totalMarks} serverNow={serverNow} getNowOnServer={getNowOnServer} />
+            <AttemptsTab 
+              test={test} 
+              liveAttempts={liveAttempts} 
+              totalMarks={totalMarks} 
+              serverNow={serverNow} 
+              getNowOnServer={getNowOnServer} 
+              onDeleteAttempt={onDeleteAttempt}
+              onDeleteSuccess={(id) => setLiveAttempts((prev) => prev.filter((a) => a.id !== id))}
+            />
           </TabsContent>
         </Tabs>
       </div>

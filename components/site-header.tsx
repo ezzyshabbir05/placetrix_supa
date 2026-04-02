@@ -13,6 +13,8 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Skeleton } from "@/components/ui/skeleton"
+
 
 
 // ─── Label map ────────────────────────────────────────────────────────────────
@@ -37,17 +39,37 @@ const SEGMENT_LABELS: Record<string, string> = {
     settings:      "Settings",
     help:          "Get Help",
     result:        "Results",
+    edit:          "Settings",
+    new:           "New",
+    attempt:       "Attempt",
+    preview:       "Preview",
+    details:       "Details",
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toLabel(segment: string): string {
     return (
-        SEGMENT_LABELS[segment] ??
+        SEGMENT_LABELS[segment.toLowerCase()] ??
         segment
             .split("-")
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(" ")
+    )
+}
+
+function isId(segment: string): boolean {
+    // UUID regex: matches standard 8-4-4-4-12 UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    // Numeric ID: starts with a digit and is completely numeric (common for serial IDs)
+    const numericRegex = /^\d+$/
+    // Long alphanumeric (15+ chars) that aren't keywords - likely a NanoID or similar
+    const longAlphanumericRegex = /^[a-zA-Z0-9_-]{15,}$/
+    
+    return (
+        uuidRegex.test(segment) || 
+        numericRegex.test(segment) || 
+        (longAlphanumericRegex.test(segment) && !SEGMENT_LABELS[segment.toLowerCase()])
     )
 }
 
@@ -56,16 +78,21 @@ function useBreadcrumbs() {
     const { labels } = useBreadcrumbLabels()
     const allSegments = pathname.split("/").filter((s) => s && s !== "~")
     
-    const crumbs: { label: string; href: string }[] = []
+    const crumbs: { label: string; href: string; isLoading: boolean }[] = []
     let currentHref = "/~"
 
     for (const seg of allSegments) {
         currentHref += "/" + seg
         if (seg === "result") continue
 
+        const label = labels[currentHref]
+        const isKnownStatic = !!SEGMENT_LABELS[seg.toLowerCase()]
+        const looksLikeId = isId(seg)
+
         crumbs.push({
-            label: labels[currentHref] ?? toLabel(seg),
+            label: label ?? toLabel(seg),
             href: currentHref,
+            isLoading: !label && !isKnownStatic && looksLikeId,
         })
     }
 
@@ -114,14 +141,22 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
                                     <BreadcrumbItem>
                                         {idx === crumbs.length - 1 ? (
                                             <BreadcrumbPage className="whitespace-nowrap">
-                                                {crumb.label}
+                                                {crumb.isLoading ? (
+                                                    <Skeleton className="h-4 w-24" />
+                                                ) : (
+                                                    crumb.label
+                                                )}
                                             </BreadcrumbPage>
                                         ) : (
                                             <Link
                                                 href={crumb.href}
                                                 className="whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
                                             >
-                                                {crumb.label}
+                                                {crumb.isLoading ? (
+                                                    <Skeleton className="h-4 w-20" />
+                                                ) : (
+                                                    crumb.label
+                                                )}
                                             </Link>
                                         )}
                                     </BreadcrumbItem>

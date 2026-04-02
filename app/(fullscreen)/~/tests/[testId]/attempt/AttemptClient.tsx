@@ -324,6 +324,7 @@ function QuestionView({
     index,
     total,
     selectedIds,
+    syncedIds,
     isSaving,
     isUnsynced,
     saveError,
@@ -335,6 +336,7 @@ function QuestionView({
     index: number
     total: number
     selectedIds: string[]
+    syncedIds: string[]
     isSaving: boolean
     isUnsynced: boolean
     saveError: string | null
@@ -342,6 +344,7 @@ function QuestionView({
     onAnswer: (optionId: string) => void
     onToggleFlag: () => void
 }) {
+    const isActuallySynced = JSON.stringify([...selectedIds].sort()) === JSON.stringify([...syncedIds].sort())
 
     return (
         <div className="space-y-6">
@@ -415,14 +418,14 @@ function QuestionView({
                     <AlertTriangle className="h-3 w-3 shrink-0" />
                     Failed to save: {saveError}
                 </p>
-            ) : (isSaving || isUnsynced || selectedIds.length > 0) ? (
+            ) : (isSaving || isUnsynced || !isActuallySynced || selectedIds.length > 0) ? (
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     {isSaving ? (
                         <>
                             <Loader2 className="h-3 w-3 animate-spin text-primary" />
                             <span className="text-primary font-medium">Saving to server…</span>
                         </>
-                    ) : isUnsynced ? (
+                    ) : (isUnsynced || !isActuallySynced) ? (
                         <>
                             <Clock className="h-3 w-3 text-amber-500" />
                             <span className="text-amber-600 dark:text-amber-400 font-medium">Changes pending…</span>
@@ -671,6 +674,9 @@ export function AttemptClient({
 
     const [savingIds, setSavingIds] = useState<Record<string, boolean>>({})
     const [unsyncedIds, setUnsyncedIds] = useState<Record<string, boolean>>({})
+    const [syncedAnswers, setSyncedAnswers] = useState<Record<string, string[]>>(
+        () => Object.fromEntries(savedAnswers.map((a) => [a.question_id, a.selected_option_ids]))
+    )
     const [saveErrors, setSaveErrors] = useState<Record<string, string | null>>({})
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
@@ -904,6 +910,10 @@ export function AttemptClient({
             document.removeEventListener("dragstart", handleDragStart)
             window.removeEventListener("blur", handleBlur)
             window.removeEventListener("beforeunload", handleBeforeUnload)
+
+            // Cleanup debounce timers on unmount
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            Object.values(saveDebounceRef.current).forEach(clearTimeout)
         }
         // ─── Intentionally only [phase] in deps ───────────────────────────────
         // isSubmitting and showFocusWarning are read from their ref mirrors so
@@ -925,10 +935,12 @@ export function AttemptClient({
         async (questionId: string, selectedIds: string[], timeSpentSeconds: number = 0) => {
             if (!onSaveAnswer || !attemptInfo) return
             setSavingIds((prev) => ({ ...prev, [questionId]: true }))
-            setUnsyncedIds((prev) => ({ ...prev, [questionId]: false }))
             setSaveErrors((prev) => ({ ...prev, [questionId]: null }))
             try {
                 await onSaveAnswer(attemptInfo.id, questionId, selectedIds, timeSpentSeconds)
+                // Mark as synced ONLY upon successful server confirmation
+                setSyncedAnswers((prev) => ({ ...prev, [questionId]: selectedIds }))
+                setUnsyncedIds((prev) => ({ ...prev, [questionId]: false }))
             } catch (err: any) {
                 // If it's a redirect error, don't toast it; let it bubble up.
                 if (err?.message === "NEXT_REDIRECT" || err?.digest?.includes("NEXT_REDIRECT")) throw err
@@ -943,6 +955,9 @@ export function AttemptClient({
 
                 setSaveErrors((prev) => ({ ...prev, [questionId]: userFriendlyMsg }))
                 toast.error(userFriendlyMsg)
+                // Re-mark as unsynced on error so the UI doesn't mislead the user
+                setUnsyncedIds((prev) => ({ ...prev, [questionId]: true }))
+                throw err // Re-throw so handleSubmit can detect failure
             } finally {
                 setSavingIds((prev) => ({ ...prev, [questionId]: false }))
             }
@@ -1146,11 +1161,15 @@ export function AttemptClient({
                 clearTimeout(saveDebounceRef.current[track.id])
                 delete saveDebounceRef.current[track.id]
                 const finalAnswers = answers[track.id] ?? []
-                saveAnswer(track.id, finalAnswers, elapsed)
+                saveAnswer(track.id, finalAnswers, elapsed).catch(() => { })
             } else if (elapsed >= 3 && attemptInfo) {
                 // No pending content change, but significant time spent
                 const currentSelections = answers[track.id] ?? []
-                onSaveAnswer?.(attemptInfo.id, track.id, currentSelections, elapsed).catch(() => { })
+                onSaveAnswer?.(attemptInfo.id, track.id, currentSelections, elapsed)
+                    .then(() => {
+                        setSyncedAnswers((prev) => ({ ...prev, [track.id]: currentSelections }))
+                    })
+                    .catch(() => { })
             }
         }
 
@@ -1190,9 +1209,14 @@ export function AttemptClient({
         if (syncPromises.length > 0) {
             try {
                 await Promise.all(syncPromises)
-            } catch {
-                // We proceed even if a background save fails during submit, 
-                // as the grading RPC is the source of truth anyway.
+            } catch (err: any) {
+                // If any save fails during submission, we MUST stop.
+                // Otherwise the grading RPC will score based on stale data.
+                setIsSubmitting(false)
+                const msg = err?.message ?? "Some answers could not be saved. Please check your connection and try again."
+                setSubmitError(msg)
+                toast.error(msg)
+                return
             }
         }
 
@@ -1374,6 +1398,7 @@ export function AttemptClient({
                             index={currentIndex}
                             total={questions.length}
                             selectedIds={currentAnswers}
+                            syncedIds={syncedAnswers[currentQuestion.id] ?? []}
                             isSaving={!!savingIds[currentQuestion.id]}
                             isUnsynced={!!unsyncedIds[currentQuestion.id]}
                             saveError={saveErrors[currentQuestion.id] ?? null}
