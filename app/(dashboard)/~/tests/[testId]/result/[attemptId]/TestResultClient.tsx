@@ -268,7 +268,9 @@ export function TestResultClient({ test, attempt, accountType, serverNow }: Prop
   const displayAnswers = attempt.answers ?? []
 
   const correctCount = displayAnswers.filter((a) => a.is_correct === true).length
-  const incorrectCount = displayAnswers.filter((a) => a.is_correct === false).length
+  const incorrectCount = displayAnswers.filter(
+    (a) => a.is_correct === false && (a.selected_option_ids ?? []).length > 0
+  ).length
   const skippedCount = displayAnswers.filter((a) => (a.selected_option_ids ?? []).length === 0).length
 
   const pctColorClass =

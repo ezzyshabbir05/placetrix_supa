@@ -1107,7 +1107,21 @@ export function AttemptClient({
     const isSyncingRef = useRef(false)
 
     const syncBatch = useCallback(async (isFinalSync = false) => {
-        if (isSyncingRef.current || (!isFinalSync && isSubmittingRef.current) || !onSaveAnswersBatch || !attemptInfo) return true
+        // If a sync is already in flight, wait for it then re-sync if needed
+        if (isSyncingRef.current) {
+            if (!isFinalSync && isSubmittingRef.current) return true
+            // Wait for the current sync to finish, then recurse to pick up queued changes
+            if (syncPromiseRef.current) {
+                await syncPromiseRef.current
+            }
+            // After waiting, if there are queued items, run again
+            if (batchQueueRef.current.size > 0) {
+                return syncBatch(isFinalSync)
+            }
+            return true
+        }
+
+        if ((!isFinalSync && isSubmittingRef.current) || !onSaveAnswersBatch || !attemptInfo) return true
 
         // Helper to commit recent seconds for a question into the batch buffer
         const commitPacing = (id: string, nowMs: number) => {
@@ -1142,10 +1156,11 @@ export function AttemptClient({
             const idsToSync = Array.from(batchQueueRef.current)
             batchQueueRef.current.clear()
 
-            // Prepare batch with both selected options and pacing deltas
+            // Snapshot the current answers at the moment we build the batch.
+            // This lets us detect if the user changed an answer during the RPC call.
             const batch = idsToSync.map(id => ({
                 questionId: id,
-                selectedOptionIds: answersRef.current[id] ?? [],
+                selectedOptionIds: [...(answersRef.current[id] ?? [])],
                 timeSpentSeconds: pacingBufferRef.current[id] ?? 0
             }))
 
@@ -1166,15 +1181,39 @@ export function AttemptClient({
 
                 batch.forEach(item => {
                     newSynced[item.questionId] = item.selectedOptionIds
-                    newUnsynced[item.questionId] = false
                     doneSaving[item.questionId] = false
                     // Success! Clear these specific deltas from the buffer
                     pacingBufferRef.current[item.questionId] = Math.max(0, (pacingBufferRef.current[item.questionId] ?? 0) - (clearedDeltas[item.questionId] ?? 0))
+
+                    // CRITICAL: Only mark as synced if the current answer still
+                    // matches what we just sent. If the user changed their answer
+                    // while the RPC was in flight, keep it marked as unsynced so
+                    // the next save captures the latest value.
+                    const currentAnswer = answersRef.current[item.questionId] ?? []
+                    const sentAnswer = item.selectedOptionIds
+                    const answersMatch =
+                        currentAnswer.length === sentAnswer.length &&
+                        [...currentAnswer].sort().join(',') === [...sentAnswer].sort().join(',')
+
+                    if (answersMatch) {
+                        newUnsynced[item.questionId] = false
+                    } else {
+                        // Answer changed during sync — re-queue for next sync
+                        newUnsynced[item.questionId] = true
+                        batchQueueRef.current.add(item.questionId)
+                    }
                 })
 
                 setSyncedAnswers(prev => ({ ...prev, ...newSynced }))
                 setUnsyncedIds(prev => ({ ...prev, ...newUnsynced }))
                 setSavingIds(prev => ({ ...prev, ...doneSaving }))
+
+                // If new items were queued during the sync, chain another sync
+                if (batchQueueRef.current.size > 0) {
+                    // Let the finally block release the lock first
+                    setTimeout(() => syncBatch(isFinalSync), 0)
+                }
+
                 return true
             } catch (err: any) {
                 console.error("[AttemptClient] Sync failed:", err)
@@ -1226,7 +1265,7 @@ export function AttemptClient({
             const current = answersRef.current[questionId] ?? []
             const next =
                 questionType === "single_correct"
-                    ? [optionId]
+                    ? (current.length === 1 && current[0] === optionId ? [] : [optionId])
                     : current.includes(optionId)
                         ? current.filter((id) => id !== optionId)
                         : [...current, optionId]
@@ -1697,10 +1736,9 @@ export function AttemptClient({
                                     <Badge variant="destructive" className="h-5 px-1.5 text-[10px] shrink-0">Offline</Badge>
                                 )}
                             </div>
-                            
+
                             <Button
                                 variant={unsyncedCount > 0 ? "default" : "outline"}
-                                size="sm"
                                 className={cn(
                                     "w-full gap-2 transition-all shadow-sm",
                                     unsyncedCount > 0 && "bg-primary text-primary-foreground hover:bg-primary/90",
