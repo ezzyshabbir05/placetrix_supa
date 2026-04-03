@@ -732,7 +732,7 @@ export function AttemptClient({
     serverNow,
     shuffleSeed,
 }: Props) {
-    const isResuming = savedAnswers.length > 0 && initialAttemptInfo !== null
+    const isResuming = initialAttemptInfo !== null
 
     // ── Shuffling (Client-Side) ──────────────────────────────────────────────────
 
@@ -760,6 +760,7 @@ export function AttemptClient({
     const [attemptInfo, setAttemptInfo] = useState<AttemptInfo | null>(initialAttemptInfo)
     const [phase, setPhase] = useState<"intro" | "active" | "submitted">("intro")
     const [submitReason, setSubmitReason] = useState<"manual" | "auto">("manual")
+    const [submitRedirectPath, setSubmitRedirectPath] = useState<string | null>(null)
     const [showUpdateNotice, setShowUpdateNotice] = useState(false)
     const router = useRouter()
 
@@ -1327,10 +1328,11 @@ export function AttemptClient({
 
                 if (auto) {
                     setSubmitReason("auto")
-                    setPhase("submitted")
-                } else if (redirectPath) {
-                    router.push(redirectPath)
+                } else {
+                    setSubmitReason("manual")
+                    setSubmitRedirectPath(redirectPath ?? `/~/tests/${test.id}`)
                 }
+                setPhase("submitted")
             } catch (err: any) {
                 // REQUIRED for Next.js 15: Re-throw redirect errors so the router can handle them.
                 if (err?.message === "NEXT_REDIRECT" || err?.digest?.includes("NEXT_REDIRECT")) throw err
@@ -1468,8 +1470,7 @@ export function AttemptClient({
                 test={test}
                 reason={submitReason}
                 onViewResults={() => {
-                    // Manual submission result path was already stored or we can just go back to tests
-                    router.push(`/~/tests/${test.id}`)
+                    router.push(submitRedirectPath ?? `/~/tests/${test.id}`)
                 }}
             />
         )
@@ -1751,12 +1752,10 @@ export function AttemptClient({
                                     <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>
                                 ) : unsyncedCount > 0 ? (
                                     <>
-                                        <Clock className="h-3.5 w-3.5" />
                                         <span>Save Changes ({unsyncedCount})</span>
                                     </>
                                 ) : (
                                     <>
-                                        <CheckCircle2 className="h-3.5 w-3.5" />
                                         <span>Saved</span>
                                     </>
                                 )}
