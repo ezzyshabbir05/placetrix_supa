@@ -91,6 +91,7 @@ import {
 import { toast } from "sonner"
 import { useBreadcrumbLabels } from "@/components/breadcrumb-context"
 import { cn } from "@/lib/utils"
+import { MathText } from "@/components/ui/math-text"
 import type { InstituteTestDetail, InstituteQuestion, InstituteAttemptRow } from "./_types"
 import { formatDuration, formatDateTime, formatSeconds, resolvePct } from "./_types"
 
@@ -263,7 +264,7 @@ function QuestionCard({
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium leading-relaxed text-foreground line-clamp-2">
-              {question.question_text}
+              <MathText>{question.question_text}</MathText>
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
@@ -304,7 +305,7 @@ function QuestionCard({
                   opt.is_correct ? "font-medium text-foreground" : "text-muted-foreground"
                 )}
               >
-                {opt.option_text}
+                <MathText>{opt.option_text}</MathText>
               </span>
               {opt.is_correct && (
                 <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-500">
@@ -330,7 +331,7 @@ function QuestionCard({
           <div className="mt-3 flex items-start gap-2.5 rounded-xl border bg-muted/40 p-3">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {question.explanation}
+              <MathText>{question.explanation}</MathText>
             </p>
           </div>
         )}

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { PlusCircle, Sparkles, Upload, Trash2, Pencil } from "lucide-react"
 import { QuestionSheet } from "./QuestionSheet"
+import { MathText } from "@/components/ui/math-text"
 import { AiGenerateSheet } from "./AiGenerateSheet"
 import { ImportSheet } from "./ImportSheet"
 import type {
@@ -159,7 +160,7 @@ export function QuestionsPanel({
                     {idx + 1}.
                   </span>
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate text-sm">{q.question_text}</p>
+                    <p className="truncate text-sm"><MathText>{q.question_text}</MathText></p>
                     <div className="flex flex-wrap gap-1">
                       <Badge variant="outline" className="text-xs">
                         {q.question_type === "single_correct" ? "Single" : "Multiple"}

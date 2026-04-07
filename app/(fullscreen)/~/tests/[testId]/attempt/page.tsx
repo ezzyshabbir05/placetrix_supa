@@ -11,6 +11,7 @@ import {
   submitAttemptAction,
   recordViolationAction,
   startAttemptAction,
+  submitFeedbackAction,
 } from "./actions"
 import { getTestQuestions } from "@/lib/test-data"
 import type { AttemptQuestion, AttemptTest, AttemptInfo, SavedAnswer } from "./_types"
@@ -105,6 +106,7 @@ export default async function AttemptPage({
       onSaveAnswersBatch={saveAnswersBatchAction}
       onSubmit={submitAttemptAction}
       onViolation={recordViolationAction}
+      onSubmitFeedback={submitFeedbackAction}
     />
   )
 }

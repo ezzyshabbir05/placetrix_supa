@@ -37,6 +37,7 @@ import {
   Trophy,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MathText } from "@/components/ui/math-text"
 import type {
   CandidateTestDetail,
   CandidateAttemptDetail,
@@ -103,6 +104,7 @@ function OptionItem({ opt, isSelected }: { opt: CandidateOption; isSelected: boo
       </span>
     )
   } else if (!isCorrect && isSelected) {
+    const isPartial = (opt as any).marks_awarded > 0 // This logic is simplified for OptionItem
     containerClass = "border-destructive/20 bg-destructive/5"
     textClass = "text-foreground"
     Icon = <X className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -117,7 +119,7 @@ function OptionItem({ opt, isSelected }: { opt: CandidateOption; isSelected: boo
     <div className={cn("flex items-start gap-3 rounded-xl border px-3 py-3", containerClass)}>
       {Icon}
       <div className="flex flex-col gap-0.5">
-        <span className={cn("text-sm leading-snug", textClass)}>{opt.option_text}</span>
+        <span className={cn("text-sm leading-snug", textClass)}><MathText>{opt.option_text}</MathText></span>
         {label}
       </div>
     </div>
@@ -149,7 +151,7 @@ function QuestionReviewItem({
           </span>
           <div className="min-w-0 flex-1">
             <p className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">
-              {answer.question_text}
+              <MathText>{answer.question_text}</MathText>
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {isSkipped ? (
@@ -163,10 +165,16 @@ function QuestionReviewItem({
                     "h-4 border bg-transparent px-1.5 text-[10px] font-normal",
                     isCorrect
                       ? "border-emerald-200 text-emerald-600 dark:border-emerald-900 dark:text-emerald-400"
-                      : "border-destructive/20 text-destructive"
+                      : (answer.marks_awarded ?? 0) > 0
+                        ? "border-amber-200 text-amber-600 dark:border-amber-900 dark:text-amber-400"
+                        : "border-destructive/20 text-destructive"
                   )}
                 >
-                  {isCorrect ? "Correct" : "Incorrect"} · {answer.marks_awarded ?? 0}/
+                  {isCorrect 
+                    ? "Correct" 
+                    : (answer.marks_awarded ?? 0) > 0 
+                      ? "Partially Correct" 
+                      : "Incorrect"} · {answer.marks_awarded ?? 0}/
                   {answer.marks} pts
                 </Badge>
               )}
@@ -199,7 +207,7 @@ function QuestionReviewItem({
               <div className="flex items-start gap-2.5">
                 <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {answer.explanation}
+                  <MathText>{answer.explanation}</MathText>
                 </p>
               </div>
             )}
@@ -268,8 +276,9 @@ export function TestResultClient({ test, attempt, accountType, serverNow }: Prop
   const displayAnswers = attempt.answers ?? []
 
   const correctCount = displayAnswers.filter((a) => a.is_correct === true).length
+  const partialCount = displayAnswers.filter((a) => a.is_correct === false && (a.marks_awarded ?? 0) > 0).length
   const incorrectCount = displayAnswers.filter(
-    (a) => a.is_correct === false && (a.selected_option_ids ?? []).length > 0
+    (a) => a.is_correct === false && (a.marks_awarded ?? 0) <= 0 && (a.selected_option_ids ?? []).length > 0
   ).length
   const skippedCount = displayAnswers.filter((a) => (a.selected_option_ids ?? []).length === 0).length
 
@@ -405,6 +414,13 @@ export function TestResultClient({ test, attempt, accountType, serverNow }: Prop
                     {correctCount}
                   </span>
                   <span className="ml-1 text-muted-foreground">correct</span>
+                </span>
+                <Separator orientation="vertical" className="h-3.5" />
+                <span>
+                  <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-500">
+                    {partialCount}
+                  </span>
+                  <span className="ml-1 text-muted-foreground">partial</span>
                 </span>
                 <Separator orientation="vertical" className="h-3.5" />
                 <span>

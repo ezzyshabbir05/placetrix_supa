@@ -46,8 +46,12 @@ import {
     EyeOff,
     Flag,
     Shuffle,
+    Star,
+    MessageSquare,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MathText } from "@/components/ui/math-text"
+import { Textarea } from "@/components/ui/textarea"
 import type { AttemptTest, AttemptQuestion, AttemptInfo, SavedAnswer } from "./_types"
 
 
@@ -345,7 +349,7 @@ function OptionButton({
                 )}
             </span>
             <span className={cn("min-w-0 flex-1 break-words leading-snug", isSelected && "font-medium")}>
-                {option.option_text}
+                <MathText>{option.option_text}</MathText>
             </span>
             {isSaving && isSelected && (
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
@@ -425,7 +429,7 @@ function QuestionView({
                 </div>
 
                 <p className="break-words text-base font-medium leading-relaxed">
-                    {question.question_text}
+                    <MathText>{question.question_text}</MathText>
                 </p>
 
                 {question.tags.length > 0 && (
@@ -640,29 +644,83 @@ function IntroScreen({
 
 // ─── Submitted Screen ─────────────────────────────────────────────────────────
 
+const DIFFICULTY_OPTIONS = [
+    { value: "too_easy" as const, label: "Easy", emoji: "😌" },
+    { value: "as_expected" as const, label: "Just Right", emoji: "👍" },
+    { value: "too_hard" as const, label: "Too Hard", emoji: "😰" },
+]
+
 function SubmittedScreen({
     test,
     reason,
+    attemptId,
     onViewResults,
+    onSubmitFeedback,
 }: {
     test: AttemptTest
     reason: "manual" | "auto"
+    attemptId: string | null
     onViewResults: () => void
+    onSubmitFeedback?: (
+        attemptId: string,
+        testId: string,
+        data: {
+            rating: number
+            overallComment?: string
+            bugsIssues?: string
+            suggestions?: string
+            difficultyFelt?: "too_easy" | "as_expected" | "too_hard"
+        }
+    ) => Promise<void>
 }) {
-    return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
+    const [feedbackPhase, setFeedbackPhase] = useState<"prompt" | "form" | "thanks">("prompt")
+    const [rating, setRating] = useState(0)
+    const [hoveredStar, setHoveredStar] = useState(0)
+    const [overallComment, setOverallComment] = useState("")
+    const [bugsIssues, setBugsIssues] = useState("")
+    const [suggestions, setSuggestions] = useState("")
+    const [difficultyFelt, setDifficultyFelt] = useState<"too_easy" | "as_expected" | "too_hard" | null>(null)
+    const [isSendingFeedback, setIsSendingFeedback] = useState(false)
+    const [feedbackError, setFeedbackError] = useState<string | null>(null)
 
-            <div className="max-w-md space-y-4">
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                    Test Submitted
-                </h1>
-                <p className="text-muted-foreground">
-                    {reason === "auto"
-                        ? "Your test was automatically submitted because the timer expired or too many violations were detected."
-                        : "Your test has been successfully submitted for grading."}
-                </p>
+    const handleFeedbackSubmit = async () => {
+        if (!attemptId || !onSubmitFeedback || rating === 0) return
+        setIsSendingFeedback(true)
+        setFeedbackError(null)
+        try {
+            await onSubmitFeedback(attemptId, test.id, {
+                rating,
+                overallComment: overallComment.trim() || undefined,
+                bugsIssues: bugsIssues.trim() || undefined,
+                suggestions: suggestions.trim() || undefined,
+                difficultyFelt: difficultyFelt ?? undefined,
+            })
+            setFeedbackPhase("thanks")
+        } catch (err: any) {
+            setFeedbackError(err?.message ?? "Failed to submit feedback")
+        } finally {
+            setIsSendingFeedback(false)
+        }
+    }
+
+    return (
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12 text-center">
+            <div className="w-full max-w-lg space-y-6">
+
+                {/* ── Header ─────────────────────────────────────────────── */}
+                <div className="space-y-3">
+                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                        Test Submitted
+                    </h1>
+                    <p className="text-muted-foreground">
+                        {reason === "auto"
+                            ? "Your test was automatically submitted because the timer expired or too many violations were detected."
+                            : "Your test has been successfully submitted for grading."}
+                    </p>
+                </div>
+
                 <div className="rounded-xl border bg-muted/40 p-5 text-sm">
-                    <p className="font-semibold">{test.title}</p>
+                    <p className="font-semibold text-xl">{test.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                         Submitted on {new Date().toLocaleString("en-IN", {
                             day: "2-digit",
@@ -674,11 +732,195 @@ function SubmittedScreen({
                     </p>
                 </div>
 
-                <div className="pt-4">
-                    <Button onClick={onViewResults} className="w-full">
-                        View Results & Back to Dashboard
-                    </Button>
-                </div>
+                {feedbackPhase === "form" && (
+                    <div className="space-y-5 rounded-xl border p-6 text-left">
+                        <p className="text-center text-sm font-semibold">
+                            Rate your experience
+                        </p>
+
+                        {/* Star Rating */}
+                        <div className="flex items-center justify-center gap-1.5">
+                            {[1, 2, 3, 4, 5].map((star) => {
+                                const active = star <= (hoveredStar || rating)
+                                return (
+                                    <button
+                                        key={star}
+                                        type="button"
+                                        onClick={() => setRating(star)}
+                                        onMouseEnter={() => setHoveredStar(star)}
+                                        onMouseLeave={() => setHoveredStar(0)}
+                                        className={cn(
+                                            "rounded-lg p-1.5 transition-all duration-150",
+                                            "hover:scale-110 active:scale-95",
+                                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                        )}
+                                        aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                                    >
+                                        <Star
+                                            className={cn(
+                                                "h-8 w-8 transition-colors duration-150",
+                                                active
+                                                    ? "fill-amber-400 text-amber-400"
+                                                    : "text-muted-foreground/30"
+                                            )}
+                                        />
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        {rating > 0 && (
+                            <p className="text-center text-xs text-muted-foreground">
+                                {rating === 1 && "Poor"}
+                                {rating === 2 && "Fair"}
+                                {rating === 3 && "Good"}
+                                {rating === 4 && "Very Good"}
+                                {rating === 5 && "Excellent"}
+                            </p>
+                        )}
+
+                        {/* Difficulty Perception */}
+                        <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                                How did you find the difficulty?
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                                {DIFFICULTY_OPTIONS.map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setDifficultyFelt(
+                                            difficultyFelt === opt.value ? null : opt.value
+                                        )}
+                                        className={cn(
+                                            "flex flex-col items-center gap-1 rounded-xl border px-3 py-3 text-xs font-medium transition-all",
+                                            "hover:border-primary/50 hover:bg-primary/5",
+                                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                                            difficultyFelt === opt.value
+                                                ? "border-primary bg-primary/10 text-primary"
+                                                : "border-border text-muted-foreground"
+                                        )}
+                                    >
+                                        <span className="text-lg">{opt.emoji}</span>
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Overall Comment */}
+                        <div className="space-y-1.5">
+                            <label htmlFor="fb-comment" className="text-xs font-medium text-muted-foreground">
+                                Overall thoughts (optional)
+                            </label>
+                            <Textarea
+                                id="fb-comment"
+                                placeholder="How was the test overall?"
+                                value={overallComment}
+                                onChange={(e) => setOverallComment(e.target.value)}
+                                className="min-h-[3.5rem] resize-none text-sm"
+                                maxLength={1000}
+                            />
+                        </div>
+
+                        {/* Bugs / Issues */}
+                        <div className="space-y-1.5">
+                            <label htmlFor="fb-bugs" className="text-xs font-medium text-muted-foreground">
+                                Any bugs or issues? (optional)
+                            </label>
+                            <Textarea
+                                id="fb-bugs"
+                                placeholder="Describe any issues you faced..."
+                                value={bugsIssues}
+                                onChange={(e) => setBugsIssues(e.target.value)}
+                                className="min-h-[3.5rem] resize-none text-sm"
+                                maxLength={1000}
+                            />
+                        </div>
+
+                        {/* Suggestions */}
+                        <div className="space-y-1.5">
+                            <label htmlFor="fb-suggestions" className="text-xs font-medium text-muted-foreground">
+                                Suggestions for improvement (optional)
+                            </label>
+                            <Textarea
+                                id="fb-suggestions"
+                                placeholder="What could we do better?"
+                                value={suggestions}
+                                onChange={(e) => setSuggestions(e.target.value)}
+                                className="min-h-[3.5rem] resize-none text-sm"
+                                maxLength={1000}
+                            />
+                        </div>
+
+                        {feedbackError && (
+                            <p className="flex items-center gap-1.5 text-xs text-destructive">
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                {feedbackError}
+                            </p>
+                        )}
+
+                        <div className="flex gap-3 pt-1">
+                            <Button
+                                variant="ghost"
+                                className="flex-1"
+                                onClick={onViewResults}
+                                disabled={isSendingFeedback}
+                            >
+                                Skip & View Results
+                            </Button>
+                            <Button
+                                className="flex-1"
+                                onClick={handleFeedbackSubmit}
+                                disabled={rating === 0 || isSendingFeedback}
+                            >
+                                {isSendingFeedback ? (
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending…</>
+                                ) : (
+                                    "Submit Feedback"
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {feedbackPhase === "thanks" && (
+                    <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/20">
+                        <div className="flex items-center justify-center gap-2 text-emerald-700 dark:text-emerald-400">
+                            <p className="text-sm font-semibold">Thank you for your feedback!</p>
+                        </div>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400/80">
+                            Your response has been recorded and will help us improve.
+                        </p>
+                    </div>
+                )}
+
+                {/* ── Action Buttons ──────────────────────────────────────── */}
+                {feedbackPhase !== "form" && (
+                    <div className="pt-2">
+                        {feedbackPhase === "prompt" && attemptId && onSubmitFeedback ? (
+                            <div className="flex gap-3">
+                                <Button
+                                    className="flex-1 gap-2"
+                                    onClick={() => setFeedbackPhase("form")}
+                                >
+                                    <MessageSquare className="h-4 w-4" />
+                                    Share Feedback
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={onViewResults}
+                                >
+                                    View Results
+                                </Button>
+                            </div>
+                        ) : (
+                            <Button onClick={onViewResults} className="w-full">
+                                View Results & Back to Dashboard
+                            </Button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     )
@@ -716,6 +958,17 @@ interface Props {
         totalCount: number,
         timestamp: string
     ) => Promise<void>
+    onSubmitFeedback?: (
+        attemptId: string,
+        testId: string,
+        data: {
+            rating: number
+            overallComment?: string
+            bugsIssues?: string
+            suggestions?: string
+            difficultyFelt?: "too_easy" | "as_expected" | "too_hard"
+        }
+    ) => Promise<void>
     shuffleSeed: string
 }
 
@@ -729,6 +982,7 @@ export function AttemptClient({
     onSaveAnswersBatch,
     onSubmit,
     onViolation,
+    onSubmitFeedback,
     serverNow,
     shuffleSeed,
 }: Props) {
@@ -1469,9 +1723,11 @@ export function AttemptClient({
             <SubmittedScreen
                 test={test}
                 reason={submitReason}
+                attemptId={attemptInfo?.id ?? null}
                 onViewResults={() => {
                     router.push(submitRedirectPath ?? `/~/tests/${test.id}`)
                 }}
+                onSubmitFeedback={onSubmitFeedback}
             />
         )
     }

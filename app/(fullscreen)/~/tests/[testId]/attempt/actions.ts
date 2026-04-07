@@ -319,3 +319,40 @@ export async function recordViolationAction(
     console.error("[recordViolationAction] unexpected error:", err)
   }
 }
+
+
+// ─── Submit Feedback ───────────────────────────────────────────────────────────
+//
+// Persists an optional star-rating + free-text feedback after the test is
+// submitted.  One feedback per attempt (enforced by a UNIQUE on attempt_id).
+// ──────────────────────────────────────────────────────────────────────────────
+
+export async function submitFeedbackAction(
+  attemptId: string,
+  testId: string,
+  data: {
+    rating: number
+    overallComment?: string
+    bugsIssues?: string
+    suggestions?: string
+    difficultyFelt?: "too_easy" | "as_expected" | "too_hard"
+  }
+): Promise<void> {
+  const { supabase, userId } = await getSupabaseForAction()
+
+  const { error } = await (supabase as any).from("test_attempt_feedback").insert({
+    attempt_id: attemptId,
+    student_id: userId,
+    test_id: testId,
+    rating: data.rating,
+    overall_comment: data.overallComment ?? null,
+    bugs_issues: data.bugsIssues ?? null,
+    suggestions: data.suggestions ?? null,
+    difficulty_felt: data.difficultyFelt ?? null,
+  })
+
+  if (error) {
+    console.error("[submitFeedbackAction] insert error:", error)
+    throw new Error(error.message || "Failed to submit feedback")
+  }
+}

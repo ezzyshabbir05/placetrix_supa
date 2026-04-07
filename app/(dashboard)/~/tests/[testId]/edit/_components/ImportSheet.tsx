@@ -13,6 +13,7 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, Circle, FileJson, Upload,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MathText } from "@/components/ui/math-text"
 import type { QuestionForm, OptionForm } from "../actions"
 
 interface Props {
@@ -342,7 +343,7 @@ export function ImportSheet({ open, onOpenChange, onImport }: Props) {
                         onClick={(e) => e.stopPropagation()}
                       />
                       <p className={cn("flex-1 text-sm font-medium leading-snug", hasErrors && "text-muted-foreground")}>
-                        {idx + 1}. {q.question_text || <span className="italic">(no question text)</span>}
+                        {idx + 1}. {q.question_text ? <MathText>{q.question_text}</MathText> : <span className="italic">(no question text)</span>}
                       </p>
                       {hasErrors && <Badge variant="destructive" className="shrink-0 text-xs">Invalid</Badge>}
                       {!hasErrors && hasWarnings && (
@@ -390,7 +391,7 @@ export function ImportSheet({ open, onOpenChange, onImport }: Props) {
                               ) : (
                                 <Circle className="h-3 w-3 shrink-0" />
                               )}
-                              {String.fromCharCode(65 + oi)}. {opt.option_text}
+                              {String.fromCharCode(65 + oi)}. <MathText>{opt.option_text}</MathText>
                             </div>
                           ))}
                         </div>

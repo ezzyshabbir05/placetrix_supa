@@ -33,6 +33,7 @@ import {
   Info,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MathText } from "@/components/ui/math-text"
 import type {
   AiGenerateForm,
   GenerateQuestionsResult,
@@ -385,7 +386,7 @@ export function AiGenerateSheet({
                       onClick={(e) => e.stopPropagation()}
                     />
                     <p className="flex-1 text-sm font-medium leading-snug">
-                      {idx + 1}. {q.question_text}
+                      {idx + 1}. <MathText>{q.question_text}</MathText>
                     </p>
                     {q._warnings.length > 0 && (
                       <Badge className="shrink-0 border-amber-300 bg-amber-100 text-xs text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400">
@@ -410,7 +411,7 @@ export function AiGenerateSheet({
                         ) : (
                           <Circle className="h-3 w-3 shrink-0" />
                         )}
-                        {String.fromCharCode(65 + oi)}. {opt.option_text}
+                        {String.fromCharCode(65 + oi)}. <MathText>{opt.option_text}</MathText>
                       </div>
                     ))}
                   </div>
@@ -467,7 +468,7 @@ export function AiGenerateSheet({
 
                       {q._showExplanation && (
                         <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                          {q.explanation}
+                          <MathText>{q.explanation}</MathText>
                         </p>
                       )}
                     </div>

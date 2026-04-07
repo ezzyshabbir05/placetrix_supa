@@ -34,6 +34,7 @@ import {
   ArrowRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MathText } from "@/components/ui/math-text"
 import type {
   CandidateTestDetail,
   CandidateAttemptDetail,
@@ -114,7 +115,7 @@ function OptionItem({ opt, isSelected }: { opt: CandidateOption; isSelected: boo
     <div className={cn("flex items-start gap-3 rounded-xl border px-3 py-3", containerClass)}>
       {Icon}
       <div className="flex flex-col gap-0.5">
-        <span className={cn("text-sm leading-snug", textClass)}>{opt.option_text}</span>
+        <span className={cn("text-sm leading-snug", textClass)}><MathText>{opt.option_text}</MathText></span>
         {label}
       </div>
     </div>
@@ -146,7 +147,7 @@ function QuestionReviewItem({
           </span>
           <div className="min-w-0 flex-1">
             <p className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">
-              {answer.question_text}
+              <MathText>{answer.question_text}</MathText>
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {isSkipped ? (
@@ -196,7 +197,7 @@ function QuestionReviewItem({
               <div className="flex items-start gap-2.5">
                 <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {answer.explanation}
+                  <MathText>{answer.explanation}</MathText>
                 </p>
               </div>
             )}
