@@ -68,6 +68,7 @@ const NAV_MAIN: Record<AccountType, NavItem[]> = {
       icon: IconTools,
       items: [
         { title: "Resume Generator", url: "/~/resume" },
+        { title: "Resume Analyzer", url: "/~/resume-analyzer" },
       ],
     },
   ],
