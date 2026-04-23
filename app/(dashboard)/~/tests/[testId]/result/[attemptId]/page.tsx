@@ -15,7 +15,7 @@ async function fetchResultData(
   testId: string,
   attemptId: string,
   userId: string,
-  accountType: "candidate" | "institute"
+  accountType: "candidate" | "institute" | "recruiter"
 ): Promise<{ test: CandidateTestDetail; attempt: CandidateAttemptDetail }> {
   const supabase = await createClient()
 
@@ -49,6 +49,7 @@ async function fetchResultData(
 
   // 2. Security Check & Eligibility
   if (accountType === "candidate") {
+    // Candidates can only see their own attempts
     // 1. Candidates can only see their own attempts
     if (raw.test_attempts[0].student_id !== userId) {
       notFound()
@@ -57,11 +58,13 @@ async function fetchResultData(
     if (raw.status !== "published") {
       notFound()
     }
-  } else {
-    // Institutes can only see attempts for their own tests
+  } else if (accountType === "institute" || accountType === "recruiter") {
+    // Institutes/recruiters can only see attempts for their own tests
     if (raw.institute_id !== userId) {
       notFound()
     }
+  } else {
+    notFound()
   }
 
   // 3. Map Data
@@ -152,7 +155,7 @@ export default async function TestResultPage({
     testId,
     attemptId,
     profile.id,
-    profile.account_type as "candidate" | "institute"
+    profile.account_type as "candidate" | "institute" | "recruiter"
   )
 
   const serverNow = new Date().toISOString()
@@ -161,7 +164,7 @@ export default async function TestResultPage({
     <TestResultClient
       test={test}
       attempt={attempt}
-      accountType={profile.account_type as "candidate" | "institute"}
+      accountType={profile.account_type as "candidate" | "institute" | "recruiter"}
       serverNow={serverNow}
     />
   )

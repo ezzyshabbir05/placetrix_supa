@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getUserProfile } from "@/lib/supabase/profile"
 import { CandidateTestsClient } from "./CandidateTestsClient"
 import { InstituteTestsClient } from "./InstituteTestsClient"
+import { UnderDevelopment } from "@/components/under-development"
 import {
   deriveStatus,
   type CandidateTest,
@@ -156,5 +157,7 @@ export default async function TestsPage() {
     return <InstituteTestsClient tests={tests} serverNow={nowStr} />
   }
 
-  redirect("/~/tests")
+  // Recruiter, admin, etc. — feature not yet available
+  return <UnderDevelopment />
 }
+

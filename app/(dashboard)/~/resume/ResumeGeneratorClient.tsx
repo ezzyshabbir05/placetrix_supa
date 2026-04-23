@@ -1322,7 +1322,7 @@ export function ResumeGeneratorClient() {
     <div className="min-h-screen w-full pb-24 md:pb-20">
 
       {/* ── Page Header — matches CandidateSettingsClient pattern ── */}
-      <div className="border-b bg-background">
+      <div className="bg-background">
         <div className="px-4 pt-8 pb-0 md:px-8">
           <div className="space-y-0.5">
             <h1 className="text-xl font-semibold tracking-tight">Resume Builder</h1>

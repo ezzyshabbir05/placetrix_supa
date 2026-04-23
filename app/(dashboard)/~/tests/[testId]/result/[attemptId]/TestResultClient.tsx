@@ -233,7 +233,7 @@ function QuestionReviewItem({
 interface Props {
   test: CandidateTestDetail
   attempt: CandidateAttemptDetail
-  accountType: "candidate" | "institute"
+  accountType: "candidate" | "institute" | "recruiter"
   serverNow: string
 }
 
@@ -358,7 +358,7 @@ export function TestResultClient({ test, attempt, accountType, serverNow }: Prop
           </Card>
         ) : (
           <>
-            {!test.results_available && accountType === "institute" && (
+            {!test.results_available && (accountType === "institute" || accountType === "recruiter") && (
               <Alert className="mb-6">
                 <EyeOff className="h-4 w-4" />
                 <AlertTitle>Results Hidden from Candidates</AlertTitle>

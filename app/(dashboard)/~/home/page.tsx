@@ -300,5 +300,48 @@ export default async function HomePage() {
     );
   }
 
+  // ── Recruiter ───────────────────────────────────────────────────────────────
+  if (profile.account_type === "recruiter") {
+    const { data: rp } = await supabase
+      .from("recruiter_profiles")
+      .select("profile_complete, profile_updated")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+
+    const profileReady = rp?.profile_complete === true && rp?.profile_updated === true;
+
+    return (
+      <div className="min-h-screen w-full">
+        <div className="px-4 pt-8 pb-0 md:px-8">
+          <div className="space-y-0.5">
+            <h1 className="text-xl font-semibold tracking-tight">Home</h1>
+            <p className="text-sm text-muted-foreground">
+              Welcome back{profile.username ? `, @${profile.username}` : ""}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 py-6 md:px-8 md:py-8 space-y-6">
+          {!profileReady && (
+            <div className="rounded-lg border bg-card p-4 flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">Your company profile isn&apos;t complete yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Fill in your company details to unlock all recruiter features.
+                </p>
+              </div>
+              <Link href="/~/settings" className="shrink-0">
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+                  Complete Profile
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   redirect("/~/home");
 }

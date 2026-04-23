@@ -20,30 +20,29 @@ import { Skeleton } from "@/components/ui/skeleton"
 // ─── Label map ────────────────────────────────────────────────────────────────
 
 const SEGMENT_LABELS: Record<string, string> = {
-    home:          "Home",
-    jobs:          "Job Search",
-    applications:  "My Applications",
-    tests:         "Tests",
-    resume:        "Resume",
-    events:        "Events",
-    students:      "Students",
-    drives:        "Drives",
-    reports:       "Reports",
-    recruiters:    "Recruiters",
-    users:         "Users",
-    groups:        "Groups",
-    analytics:     "Analytics",
-    postings:      "Job Postings",
-    candidates:    "Candidates",
+    home: "Home",
+    jobs: "Job Search",
+    applications: "My Applications",
+    tests: "Tests",
+    resume: "Resume",
+    events: "Events",
+    students: "Students",
+    drives: "Drives",
+    reports: "Reports",
+    users: "Users",
+    groups: "Groups",
+    analytics: "Analytics",
+    postings: "Job Postings",
+    candidates: "Candidates",
     notifications: "Notifications",
-    settings:      "Settings",
-    help:          "Get Help",
-    result:        "Results",
-    edit:          "Settings",
-    new:           "New",
-    attempt:       "Attempt",
-    preview:       "Preview",
-    details:       "Details",
+    settings: "Settings",
+    help: "Get Help",
+    result: "Results",
+    edit: "Settings",
+    new: "New",
+    attempt: "Attempt",
+    preview: "Preview",
+    details: "Details",
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -65,10 +64,10 @@ function isId(segment: string): boolean {
     const numericRegex = /^\d+$/
     // Long alphanumeric (15+ chars) that aren't keywords - likely a NanoID or similar
     const longAlphanumericRegex = /^[a-zA-Z0-9_-]{15,}$/
-    
+
     return (
-        uuidRegex.test(segment) || 
-        numericRegex.test(segment) || 
+        uuidRegex.test(segment) ||
+        numericRegex.test(segment) ||
         (longAlphanumericRegex.test(segment) && !SEGMENT_LABELS[segment.toLowerCase()])
     )
 }
@@ -77,7 +76,7 @@ function useBreadcrumbs() {
     const pathname = usePathname()
     const { labels } = useBreadcrumbLabels()
     const allSegments = pathname.split("/").filter((s) => s && s !== "~")
-    
+
     const crumbs: { label: string; href: string; isLoading: boolean }[] = []
     let currentHref = "/~"
 
@@ -130,7 +129,7 @@ export function SiteHeader({ onManualToggle }: SiteHeaderProps) {
                 />
 
                 {crumbs.length > 0 && (
-                    <Breadcrumb 
+                    <Breadcrumb
                         ref={scrollRef}
                         className="min-w-0 flex-1 overflow-x-auto scroll-smooth"
                     >

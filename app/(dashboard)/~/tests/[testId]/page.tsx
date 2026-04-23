@@ -285,5 +285,7 @@ export default async function TestDetailPage({
     )
   }
 
+  // Recruiter / admin / other — not supported for test detail
   redirect("/~/tests")
 }
+
