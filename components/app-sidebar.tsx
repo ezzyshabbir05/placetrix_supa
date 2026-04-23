@@ -10,13 +10,18 @@ import {
   IconSearch, IconSettings, IconShieldCheck, IconUser, IconUserCircle,
   IconUsers, IconUsersGroup, IconCreditCard, IconCalendarEvent, IconSchool,
   IconBriefcase2, IconFileAnalytics, IconTargetArrow,
-  IconSun, IconMoon, IconDeviceLaptop, IconCheck,
+  IconSun, IconMoon, IconDeviceLaptop, IconCheck, IconChevronRight, IconTools,
 } from "@tabler/icons-react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton,
-  SidebarMenuItem, SidebarMenuSkeleton, useSidebar,
+  SidebarMenuItem, SidebarMenuSkeleton, SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton, useSidebar,
 } from "@/components/ui/sidebar"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -40,6 +45,10 @@ type NavItem = {
   title: string
   url: string
   icon: Icon
+  items?: {
+    title: string
+    url: string
+  }[]
 }
 
 
@@ -52,8 +61,16 @@ const NAV_MAIN: Record<AccountType, NavItem[]> = {
     { title: "Job Search", url: "/~/jobs", icon: IconSearch },
     { title: "My Applications", url: "/~/applications", icon: IconClipboardList },
     { title: "Tests", url: "/~/tests", icon: IconChartBar },
-    { title: "Resume", url: "/~/resume", icon: IconFileDescription },
     { title: "Events", url: "/~/events", icon: IconCalendarEvent },
+    {
+      title: "Tools",
+      url: "#",
+      icon: IconTools,
+      items: [
+        { title: "Resume Generator", url: "/~/resume" },
+        { title: "Resume Analyzer", url: "/~/resume-analyzer" },
+      ],
+    },
   ],
   institute: [
     { title: "Home", url: "/~/home", icon: IconHome },
@@ -288,23 +305,68 @@ export function NavMain({ items }: { items: NavItem[] }) {
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                tooltip={item.title}
-                asChild
-                isActive={
-                  pathname === item.url ||
-                  pathname.startsWith(item.url + "/")
-                }
-              >
-                <Link href={item.url} onClick={() => setOpenMobile(false)}>
-                  <item.icon />
-                  <span>{item.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {items.map((item) => {
+            if (item.items && item.items.length > 0) {
+              return (
+                <Collapsible
+                  key={item.title}
+                  asChild
+                  defaultOpen={item.items.some(
+                    (subItem) =>
+                      pathname === subItem.url ||
+                      pathname.startsWith(subItem.url + "/")
+                  )}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip={item.title}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                        <IconChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 size-4 shrink-0" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {item.items.map((subItem) => (
+                          <SidebarMenuSubItem key={subItem.title}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={
+                                pathname === subItem.url ||
+                                pathname.startsWith(subItem.url + "/")
+                              }
+                            >
+                              <Link href={subItem.url} onClick={() => setOpenMobile(false)}>
+                                <span>{subItem.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )
+            }
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  tooltip={item.title}
+                  asChild
+                  isActive={
+                    pathname === item.url ||
+                    pathname.startsWith(item.url + "/")
+                  }
+                >
+                  <Link href={item.url} onClick={() => setOpenMobile(false)}>
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

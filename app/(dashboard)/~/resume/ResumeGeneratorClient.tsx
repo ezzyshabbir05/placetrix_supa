@@ -667,14 +667,18 @@ function ResumeFloatingBar({
       >
         {/* Mobile */}
         <div className="flex items-center justify-between gap-3 w-full px-4 py-3 border-t border-border bg-background/95 backdrop-blur-md md:hidden">
-          <Button size="sm" onClick={onPreview} className="h-9 gap-1.5">
-            <Eye className="h-3.5 w-3.5" />
-            <span>Preview & Export</span>
-          </Button>
+          <p className="text-sm text-muted-foreground truncate">Manage your resume</p>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" onClick={onPreview} className="h-9 gap-1.5">
+              <Eye className="h-3.5 w-3.5" />
+              <span>Preview</span>
+            </Button>
+          </div>
         </div>
 
         {/* Desktop */}
-        <div className="hidden md:flex items-center gap-4 px-5 py-3 rounded-xl border border-border bg-background/80 shadow-lg backdrop-blur-md whitespace-nowrap">
+        <div className="hidden md:flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-background/80 shadow-lg backdrop-blur-md whitespace-nowrap">
+          <span className="text-sm text-muted-foreground">Manage your resume</span>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={onPreview} className="h-8 gap-1.5">
               <Eye className="h-3.5 w-3.5" />
