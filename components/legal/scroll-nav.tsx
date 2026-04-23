@@ -28,7 +28,7 @@ function Sidebar({
   activeId,
 }: ScrollNavProps & { activeId: string }) {
   return (
-    <nav className="sticky top-20 hidden lg:flex flex-col gap-0.5 w-52 shrink-0 pt-1">
+    <nav className="sticky top-14 hidden lg:flex flex-col gap-0.5 w-52 shrink-0 pt-1">
       <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/60 px-3 mb-2">
         On this page
       </p>

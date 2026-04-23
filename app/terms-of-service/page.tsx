@@ -3,12 +3,13 @@
 // Interactive sidebar & mobile TOC are handled by <ToSScrollNav> (client component).
 
 import { cn } from "@/lib/utils";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { FullWidthDivider } from "@/components/ui/landing/full-width-divider";
 import { GridPattern } from "@/components/ui/landing/grid-pattern";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
-import { ToSScrollNav } from "@/components/legal/scroll-nav"; // client component
+import { ScrollToTopButton } from "@/components/scroll-to-top";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -317,7 +318,7 @@ function SectionBlock({ id, index }: { id: string; index: number }) {
 
 export default function TermsOfServicePage() {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden supports-[overflow:clip]:overflow-clip">
+    <div className="relative flex min-h-screen flex-col supports-[overflow:clip]:overflow-clip">
       <Header />
 
       <main
@@ -373,10 +374,8 @@ export default function TermsOfServicePage() {
         </section>
 
         {/* ── Body ──────────────────────────────────────────────── */}
-        <div className="flex gap-0 lg:gap-10 px-4 sm:px-8 md:px-10 py-10">
-          <ToSScrollNav sections={sectionsMeta} />
-
-          <div className="min-w-0 flex-1 divide-y divide-border/50">
+        <div className="px-4 sm:px-8 md:px-10 py-10">
+          <div className="divide-y divide-border/50">
             {sectionsMeta.map((s, i) => (
               <SectionBlock key={s.id} id={s.id} index={i} />
             ))}
@@ -386,6 +385,8 @@ export default function TermsOfServicePage() {
 
         <Footer />
       </main>
+
+      <ScrollToTopButton />
     </div>
   );
 }

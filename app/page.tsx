@@ -11,7 +11,7 @@ import { Avatar } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Footer } from "@/components/footer";
 import { FeatureSection } from "@/components/feature-section";
-
+import TextType from "@/components/TextType";
 
 function HeroSection() {
   return (
@@ -26,7 +26,7 @@ function HeroSection() {
             className={cn(
               "absolute -inset-x-20 inset-y-0 z-0 rounded-full",
               "bg-[radial-gradient(ellipse_at_center,theme(--color-foreground/.2),transparent,transparent)]",
-              "blur-[50px]"
+              "blur-[50px]",
             )}
           />
           <div className="absolute inset-y-0 left-4 w-px bg-linear-to-b from-transparent via-border to-border md:left-8" />
@@ -35,44 +35,55 @@ function HeroSection() {
           <div className="absolute inset-y-0 right-8 w-px bg-linear-to-b from-transparent via-border/50 to-border/50 md:right-12" />
         </div>
 
-
         <a
           className={cn(
             "group mx-auto flex max-w-[90vw] w-fit flex-wrap items-center gap-2 rounded-sm border bg-card p-1 shadow sm:gap-3 sm:flex-nowrap",
-            "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards transition-all delay-500 duration-500 ease-out"
+            "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards transition-all delay-500 duration-500 ease-out",
           )}
         >
           <div className="rounded-sm px-1.5 py-0.5 shadow-sm">
-            <p className="font-mono text-xs">NEW</p>
+            {/* <p className="font-mono text-xs">NEW</p> */}
           </div>
-          <span className="text-xs">1,000+ mock tests attempted</span>
+          {/* <span className="text-xs">1,000+ mock tests attempted</span> */}
+          <span className="text-xs">
+          <TextType
+            text={[
+              "1,000+ mock tests attempted",
+              "500+ active users"
+            ]}
+            typingSpeed={15}
+            pauseDuration={1500}
+            showCursor
+            cursorCharacter="|"
+            deletingSpeed={45}
+            cursorBlinkDuration={0.7}
+          />
+          </span>
           <span className="hidden h-5 border-l sm:block" />
           <div className="pr-1 hidden sm:block">
             <ArrowRightIcon className="size-3 -translate-x-0.5 duration-150 ease-out group-hover:translate-x-0.5" />
           </div>
         </a>
 
-
         <h1
           className={cn(
             "max-w-xs text-balance text-center text-4xl text-foreground sm:max-w-xl sm:text-5xl md:max-w-2xl md:text-6xl lg:text-7xl",
-            "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards delay-100 duration-500 ease-out"
+            "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards delay-100 duration-500 ease-out",
           )}
         >
           The Gap Between You and Your Goal? Let's Close It.
         </h1>
 
-
         <p
           className={cn(
             "max-w-xs text-center text-muted-foreground text-sm tracking-normal sm:max-w-none sm:tracking-wider sm:text-lg",
-            "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards delay-200 duration-500 ease-out"
+            "fade-in slide-in-from-bottom-10 animate-in fill-mode-backwards delay-200 duration-500 ease-out",
           )}
         >
-          Practice with mock tests, track your progress, <br className="hidden sm:block" /> and
-          crush your goals with Placetrix.
+          Practice with mock tests, track your progress,{" "}
+          <br className="hidden sm:block" /> and crush your goals with
+          Placetrix.
         </p>
-
 
         <div className="fade-in slide-in-from-bottom-10 flex w-fit animate-in items-center justify-center gap-3 fill-mode-backwards pt-1 sm:pt-2 delay-300 duration-500 ease-out">
           <Link href="/auth/sign-up">
@@ -84,7 +95,6 @@ function HeroSection() {
         </div>
       </div>
 
-
       <div className="relative">
         <DecorIcon className="size-4" position="top-left" />
         <DecorIcon className="size-4" position="top-right" />
@@ -95,7 +105,6 @@ function HeroSection() {
     </section>
   );
 }
-
 
 function TestimonialsSection() {
   return (
@@ -126,7 +135,6 @@ function TestimonialsSection() {
   );
 }
 
-
 type Testimonial = {
   name: string;
   role: string;
@@ -134,7 +142,6 @@ type Testimonial = {
   company?: string;
   quote: string;
 };
-
 
 const testimonials: Testimonial[] = [
   {
@@ -171,7 +178,6 @@ const testimonials: Testimonial[] = [
   },
 ];
 
-
 function TestimonialsCard({
   testimonial,
   className,
@@ -184,7 +190,7 @@ function TestimonialsCard({
     <figure
       className={cn(
         "relative grid grid-cols-[auto_1fr] gap-x-3 overflow-hidden bg-background p-3 sm:p-4",
-        className
+        className,
       )}
       {...props}
     >
@@ -198,9 +204,12 @@ function TestimonialsCard({
         />
       </div>
 
-
       <Avatar className="size-8 rounded-full">
-        <AvatarImage alt={`${name}'s profile picture`} src={image} className="object-cover" />
+        <AvatarImage
+          alt={`${name}'s profile picture`}
+          src={image}
+          className="object-cover"
+        />
         <AvatarFallback>{name.charAt(0)}</AvatarFallback>
       </Avatar>
       <div>
@@ -212,13 +221,14 @@ function TestimonialsCard({
           </span>
         </figcaption>
         <blockquote className="mt-2 sm:mt-3">
-          <p className="text-foreground/80 text-sm tracking-wide leading-relaxed">{quote}</p>
+          <p className="text-foreground/80 text-sm tracking-wide leading-relaxed">
+            {quote}
+          </p>
         </blockquote>
       </div>
     </figure>
   );
 }
-
 
 export default function LandingPage() {
   return (
@@ -229,7 +239,7 @@ export default function LandingPage() {
           "relative mx-auto w-full max-w-4xl grow",
           // X Borders — hidden on very small screens to avoid clipping content
           "sm:before:absolute sm:before:-inset-y-14 sm:before:-left-px sm:before:w-px sm:before:bg-border",
-          "sm:after:absolute sm:after:-inset-y-14 sm:after:-right-px sm:after:w-px sm:after:bg-border"
+          "sm:after:absolute sm:after:-inset-y-14 sm:after:-right-px sm:after:w-px sm:after:bg-border",
         )}
       >
         <HeroSection />

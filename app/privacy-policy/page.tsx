@@ -8,7 +8,7 @@ import { GridPattern } from "@/components/ui/landing/grid-pattern";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
-import { PrivacyScrollNav } from "@/components/legal/scroll-nav"; // client component
+import { ScrollToTopButton } from "@/components/scroll-to-top";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -251,7 +251,7 @@ function SectionBlock({ id, index }: { id: string; index: number }) {
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden supports-[overflow:clip]:overflow-clip">
+    <div className="relative flex min-h-screen flex-col supports-[overflow:clip]:overflow-clip">
       <Header />
 
       <main
@@ -307,17 +307,9 @@ export default function PrivacyPolicyPage() {
           </div>
         </section>
 
-        {/* ── Body: client ScrollNav + static content ────────────── */}
-        <div className="flex gap-0 lg:gap-10 px-4 sm:px-8 md:px-10 py-10">
-          {/*
-            PrivacyScrollNav is "use client" — handles:
-              - sticky sidebar with active-section highlight
-              - collapsible mobile TOC
-            It receives the section metadata as a plain serialisable prop.
-          */}
-          <PrivacyScrollNav sections={sectionsMeta} />
-
-          <div className="min-w-0 flex-1 divide-y divide-border/50">
+        {/* ── Body: static content ────────────── */}
+        <div className="px-4 sm:px-8 md:px-10 py-10">
+          <div className="divide-y divide-border/50">
             {sectionsMeta.map((s, i) => (
               <SectionBlock key={s.id} id={s.id} index={i} />
             ))}
@@ -327,6 +319,8 @@ export default function PrivacyPolicyPage() {
 
         <Footer />
       </main>
+
+      <ScrollToTopButton />
     </div>
   );
 }
