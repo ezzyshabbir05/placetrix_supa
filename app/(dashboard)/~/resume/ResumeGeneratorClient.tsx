@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -199,7 +200,8 @@ const DEFAULT_CONFIG: ResumeConfig = {
 // STEP COMPLETION
 // ─────────────────────────────────────────────────────────────────────────────
 
-function isStepDone(id: StepId, data: ResumeData): boolean {
+// ✅ FIX: Accept visitedSteps so "style" is only marked done after visiting
+function isStepDone(id: StepId, data: ResumeData, visitedSteps: Set<StepId>): boolean {
   switch (id) {
     case "personal": return !!(data.personal.fullName.trim() && data.personal.email.trim() && data.personal.phone.trim() && data.personal.location.trim())
     case "experience": return data.experience.some((e) => e.company.trim() && e.title.trim())
@@ -207,13 +209,13 @@ function isStepDone(id: StepId, data: ResumeData): boolean {
     case "skills": return data.skills.some((s) => s.skills.trim())
     case "projects": return data.projects.some((p) => p.name.trim())
     case "certifications": return data.certifications.some((c) => c.name.trim())
-    case "style": return true
+    case "style": return visitedSteps.has("style") // ✅ FIX: only done after visiting
   }
 }
 
-function overallCompletion(data: ResumeData): number {
+function overallCompletion(data: ResumeData, visitedSteps: Set<StepId>): number {
   const required: StepId[] = ["personal", "experience", "education", "skills"]
-  return Math.round(required.filter((id) => isStepDone(id, data)).length / required.length * 100)
+  return Math.round(required.filter((id) => isStepDone(id, data, visitedSteps)).length / required.length * 100)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -665,7 +667,6 @@ function ResumeFloatingBar({
       >
         {/* Mobile */}
         <div className="flex items-center justify-between gap-3 w-full px-4 py-3 border-t border-border bg-background/95 backdrop-blur-md md:hidden">
-          {/* <div className="text-xs text-muted-foreground font-medium">{completion}% complete</div> */}
           <Button size="sm" onClick={onPreview} className="h-9 gap-1.5">
             <Eye className="h-3.5 w-3.5" />
             <span>Preview & Export</span>
@@ -784,9 +785,11 @@ export function ResumeGeneratorClient() {
   const [config, setConfig] = useState<ResumeConfig>(DEFAULT_CONFIG)
   const [activeStep, setActiveStep] = useState<StepId | null>("personal")
   const [previewOpen, setPreviewOpen] = useState(false)
+  // ✅ FIX: Track which steps the user has actually visited
+  const [visitedSteps, setVisitedSteps] = useState<Set<StepId>>(new Set())
   const stepRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  const completion = overallCompletion(data)
+  const completion = overallCompletion(data, visitedSteps)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -797,6 +800,8 @@ export function ResumeGeneratorClient() {
 
   function goToStep(id: StepId) {
     setActiveStep(id)
+    // ✅ FIX: Mark step as visited when navigated to
+    setVisitedSteps((prev) => new Set(prev).add(id))
     setTimeout(() => {
       const el = stepRefs.current[id]
       if (!el) return
@@ -812,8 +817,13 @@ export function ResumeGeneratorClient() {
   }
 
   function handleStepHeaderClick(id: StepId) {
-    if (activeStep === id) setActiveStep(null)
-    else goToStep(id)
+    if (activeStep === id) {
+      setActiveStep(null)
+    } else {
+      // ✅ FIX: Mark step as visited when user opens it manually
+      setVisitedSteps((prev) => new Set(prev).add(id))
+      goToStep(id)
+    }
   }
 
   // ── Data updaters ─────────────────────────────────────────────────────────
@@ -868,7 +878,7 @@ export function ResumeGeneratorClient() {
       const { active, over } = e;
       if (!over || active.id === over.id) return;
       setData(d => {
-        const arr = d[key] as unknown as T[]; // ✅ cast via unknown
+        const arr = d[key] as unknown as T[];
         const ids = arr.map(x => x.id);
         return {
           ...d,
@@ -876,7 +886,6 @@ export function ResumeGeneratorClient() {
         };
       });
     };
-
 
   const handleExpDragEnd = makeDragEnd<ExperienceItem>("experience")
   const handleEduDragEnd = makeDragEnd<EducationItem>("education")
@@ -898,6 +907,8 @@ export function ResumeGeneratorClient() {
     setData(makeEmpty())
     setConfig(DEFAULT_CONFIG)
     setActiveStep("personal")
+    // ✅ FIX: Also reset visited steps on reset
+    setVisitedSteps(new Set())
     toast.info("Resume reset to defaults.")
   }, [])
 
@@ -924,7 +935,7 @@ export function ResumeGeneratorClient() {
 
   function renderStepContent(id: StepId) {
     const isLast = STEPS[STEPS.length - 1].id === id
-    const done = isStepDone(id, data)
+    const done = isStepDone(id, data, visitedSteps)
 
     switch (id) {
 
@@ -1321,7 +1332,7 @@ export function ResumeGeneratorClient() {
   return (
     <div className="min-h-screen w-full pb-24 md:pb-20">
 
-      {/* ── Page Header — matches CandidateSettingsClient pattern ── */}
+      {/* ── Page Header ── */}
       <div className="bg-background">
         <div className="px-4 pt-8 pb-0 md:px-8">
           <div className="space-y-0.5">
@@ -1331,57 +1342,23 @@ export function ResumeGeneratorClient() {
             </p>
           </div>
         </div>
-
-        {/* Step progress pills */}
-        <div className="overflow-x-auto px-4 pt-5 md:px-8 pb-3">
-          <div className="flex items-center gap-1 w-max">
-            {STEPS.map((step, idx) => {
-              const done = isStepDone(step.id, data)
-              const active = activeStep === step.id
-              return (
-                <div key={step.id} className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleStepHeaderClick(step.id)}
-                    title={step.label}
-                    className={cn(
-                      "flex items-center gap-1.5 px-2.5 h-6 rounded-full text-xs font-medium transition-all whitespace-nowrap cursor-pointer",
-                      active && "bg-primary text-primary-foreground",
-                      !active && done && "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:opacity-80",
-                      !active && !done && "bg-muted text-muted-foreground hover:bg-muted/80",
-                    )}
-                  >
-                    {done && !active
-                      ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
-                      : <span className="h-3 w-3 rounded-full border flex items-center justify-center text-[8px] font-bold shrink-0">{idx + 1}</span>
-                    }
-                    {step.label}
-                  </button>
-                  {idx < STEPS.length - 1 && (
-                    <div className={cn("h-px w-2.5 shrink-0", done ? "bg-emerald-400/50" : "bg-muted-foreground/15")} />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
       </div>
 
       {/* ── Accordion steps ── */}
       <div className="px-4 md:px-8 py-6 space-y-3">
         {STEPS.map((step, idx) => {
           const isActive = activeStep === step.id
-          const isDone = isStepDone(step.id, data)
+          const isDone = isStepDone(step.id, data, visitedSteps)
 
           return (
             <div
               key={step.id}
               ref={(el) => { stepRefs.current[step.id] = el }}
               className={cn(
-                "border rounded-xl overflow-hidden transition-colors duration-200",
-                isActive && "border-primary/40 shadow-sm",
-                !isActive && isDone && "border-emerald-200/60 dark:border-emerald-800/30",
-                !isActive && !isDone && "border-border",
+                "rounded-xl overflow-hidden transition-all duration-200 border",
+                isActive && "shadow-sm",
+                isDone && "border-emerald-200/60 dark:border-emerald-800/30",
+                !isDone && "border-border",
               )}
             >
               <StepHeader
