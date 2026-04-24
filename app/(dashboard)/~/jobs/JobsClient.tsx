@@ -130,8 +130,8 @@ function JobDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 overflow-hidden">
-        <ScrollArea className="flex-1">
+      <DialogContent className="max-w-5xl w-[90vw] max-h-[85vh] h-full flex flex-col p-0 overflow-hidden sm:max-w-5xl">
+        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="p-6">
             <div className="space-y-1 mb-6">
               <DialogTitle className="text-2xl">{job.title}</DialogTitle>
@@ -172,7 +172,7 @@ function JobDetailDialog({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
         <div className="p-4 border-t bg-background flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button 

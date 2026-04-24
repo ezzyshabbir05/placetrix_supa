@@ -36,6 +36,8 @@ export default async function JobsPage() {
     console.error("Error fetching jobs:", jobsError)
   }
 
+  require("fs").writeFileSync("debug_jobs.json", JSON.stringify(jobsData, null, 2));
+
   // Fetch jobs this candidate has already applied to
   // @ts-ignore
   const { data: applicationsData } = await supabase

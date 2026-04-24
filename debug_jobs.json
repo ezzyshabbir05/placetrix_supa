@@ -1,0 +1,61 @@
+[
+  {
+    "id": "db95dfb4-5665-41e2-ac36-22753c117549",
+    "recruiter_id": "fa49f8bd-4fb1-4a91-8930-ace6103813e3",
+    "title": "Backend Developer (Java)",
+    "description": "We are hiring a Backend Developer who can design and build robust APIs and handle high-performance server-side logic. You will be responsible for building scalable backend systems and ensuring seamless data flow between services.",
+    "requirements": "Responsibilities:\n\nDesign and develop RESTful APIs\nBuild and maintain backend services using Java & Spring Boot\nOptimize database queries and improve performance\nIntegrate third-party APIs and services\nEnsure security and data protection practices\nWrite unit and integration tests\n\nWhat makes it exciting:\n\nWork on scalable backend systems\nOpportunity to handle real production-level traffic\nExposure to microservices architecture\nOwnership of backend modules\n\nQualifications:\n\nBachelor’s degree in Computer Science or related field\nStrong knowledge of Java and Spring Boot\nExperience with REST APIs and backend architecture\nFamiliarity with MySQL / PostgreSQL\nUnderstanding of OOP and design patterns\nBasic knowledge of Docker is a plus",
+    "job_type": "full_time",
+    "work_mode": "onsite",
+    "location": "Mumbai",
+    "salary_min": 500000,
+    "salary_max": 1000000,
+    "salary_currency": "INR",
+    "skills": [
+      "Java",
+      "Spring Boot",
+      "Rest API",
+      "MySQl",
+      "Docker",
+      "Git"
+    ],
+    "application_deadline": "2026-05-15T00:00:00+00:00",
+    "application_count": 0,
+    "status": "active",
+    "created_at": "2026-04-24T06:31:07.543322+00:00",
+    "updated_at": "2026-04-24T06:31:07.543322+00:00",
+    "profiles": {
+      "recruiter_profiles": null
+    }
+  },
+  {
+    "id": "0cad8547-5f1a-4d89-96e1-596df8194ec1",
+    "recruiter_id": "fa49f8bd-4fb1-4a91-8930-ace6103813e3",
+    "title": "Software Engineer",
+    "description": "We are looking for a passionate Software Engineer to join our team and build scalable, high-performance applications. You will work closely with cross-functional teams to design, develop, and deploy modern web solutions.",
+    "requirements": "Responsibilities:\n\nDevelop and maintain web applications using modern frameworks\nWrite clean, efficient, and scalable code\nCollaborate with designers, product managers, and backend teams\nDebug, test, and optimize application performance\nParticipate in code reviews and technical discussions\n\nWhat makes it exciting:\n\nWork on real-world scalable products\nFast-paced startup environment\nOpportunity to own features end-to-end\nExposure to modern tech stack and architecture",
+    "job_type": "full_time",
+    "work_mode": "onsite",
+    "location": "Mumbai",
+    "salary_min": 400000,
+    "salary_max": 800000,
+    "salary_currency": "INR",
+    "skills": [
+      "Javascript",
+      "React",
+      "Node.js",
+      "HTML",
+      "CSS",
+      "MongoDB",
+      "Git"
+    ],
+    "application_deadline": "2026-04-30T00:00:00+00:00",
+    "application_count": 0,
+    "status": "active",
+    "created_at": "2026-04-24T06:25:28.025215+00:00",
+    "updated_at": "2026-04-24T06:25:28.025215+00:00",
+    "profiles": {
+      "recruiter_profiles": null
+    }
+  }
+]

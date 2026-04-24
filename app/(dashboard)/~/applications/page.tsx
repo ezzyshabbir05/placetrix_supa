@@ -42,6 +42,8 @@ export default async function ApplicationsPage() {
     console.error("Error fetching my applications:", error)
   }
 
+  require("fs").writeFileSync("debug_apps.json", JSON.stringify(apps, null, 2));
+
   // Map the nested data to match our component's type
   const applications: MyJobApplication[] = (apps ?? []).map((row: any) => {
     // Navigate the Supabase nested response structure
