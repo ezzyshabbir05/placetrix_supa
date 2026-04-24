@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
-  MapPin, Clock, Briefcase, IndianRupee, Search, CalendarClock, Building2, Send, CheckCircle2
+  MapPin, Clock, Briefcase, IndianRupee, Search, CalendarClock, Building2, Send, CheckCircle2, Sparkles
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { CandidateJobPosting } from "./_types"
 import { JOB_TYPE_LABELS, WORK_MODE_LABELS } from "./_types"
 import { applyForJobAction } from "./actions"
+import Link from "next/link"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -215,6 +216,13 @@ function JobDetailDialog({
           </div>
         </div>
         <div className="p-4 border-t bg-background flex justify-end gap-2">
+          {job.description && (
+            <Button variant="secondary" asChild>
+              <Link href={`/~/resume-analyzer?job_id=${job.id}`}>
+                <Sparkles className="h-4 w-4 mr-1.5" /> Analyze Resume
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button 
             className="gap-1.5" 
