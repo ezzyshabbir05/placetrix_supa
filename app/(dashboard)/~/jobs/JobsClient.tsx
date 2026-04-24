@@ -5,10 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
-  MapPin, Clock, Briefcase, IndianRupee, Search, CalendarClock, Building2, Send, CheckCircle2, Loader2
+  MapPin, Clock, Briefcase, IndianRupee, Search, CalendarClock, Building2, Send, CheckCircle2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -37,44 +36,90 @@ function formatSalary(min?: number, max?: number): string | null {
 
 function StatPill({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap">
       {icon}{label}
     </span>
   )
 }
 
+// ─── Job Status Badge ─────────────────────────────────────────────────────────
+
+function JobStatusBadge({ isExpired, hasApplied }: { isExpired: boolean; hasApplied: boolean }) {
+  if (hasApplied) {
+    return (
+      <Badge className="gap-1 bg-emerald-500 hover:bg-emerald-500 text-white border-0 text-[11px] px-2 py-0.5">
+        <CheckCircle2 className="h-3 w-3" />
+        Applied
+      </Badge>
+    )
+  }
+  if (isExpired) {
+    return (
+      <Badge variant="outline" className="gap-1 text-[11px] px-2 py-0.5 text-muted-foreground">
+        Closed
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="secondary" className="gap-1 text-[11px] px-2 py-0.5">
+      <CalendarClock className="h-3 w-3" />
+      Open
+    </Badge>
+  )
+}
+
+
 // ─── Job Card ─────────────────────────────────────────────────────────────────
 
-function JobCard({ job, onClick }: { job: CandidateJobPosting; onClick: (job: CandidateJobPosting) => void }) {
+function JobCard({
+  job,
+  hasApplied,
+  onClick,
+}: {
+  job: CandidateJobPosting
+  hasApplied: boolean
+  onClick: (job: CandidateJobPosting) => void
+}) {
   const salary = formatSalary(job.salary_min, job.salary_max)
-  const isExpired = job.application_deadline && new Date(job.application_deadline) < new Date()
+  const isExpired = !!(job.application_deadline && new Date(job.application_deadline) < new Date())
 
   return (
-    <Card 
-      className="border flex flex-col hover:border-primary/50 transition-colors cursor-pointer group"
-      onClick={() => onClick(job)}
-    >
+    <Card className="border flex flex-col">
       <CardHeader className="pb-3">
-        <div className="space-y-1">
-          <div className="flex items-start justify-between gap-2">
-            <CardTitle className="text-base leading-snug group-hover:text-primary transition-colors">
-              {job.title}
-            </CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1 min-w-0">
+            <CardTitle className="text-base leading-snug truncate">{job.title}</CardTitle>
+            <CardDescription className="flex items-center text-xs font-medium text-foreground min-w-0">
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mr-1.5" />
+              <span className="truncate">{job.company_name}</span>
+            </CardDescription>
           </div>
-          <CardDescription className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-            {job.company_name}
-            {job.industry && <span className="text-muted-foreground font-normal ml-1 hidden sm:inline-block">• {job.industry}</span>}
-          </CardDescription>
+          <JobStatusBadge isExpired={isExpired} hasApplied={hasApplied} />
         </div>
       </CardHeader>
+
       <CardContent className="flex flex-col flex-1 gap-4">
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {/* Meta */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
           <StatPill icon={<Briefcase className="h-3.5 w-3.5" />} label={JOB_TYPE_LABELS[job.job_type]} />
           <StatPill icon={<MapPin className="h-3.5 w-3.5" />} label={job.location || WORK_MODE_LABELS[job.work_mode]} />
           {salary && <StatPill icon={<IndianRupee className="h-3.5 w-3.5" />} label={salary} />}
         </div>
 
+        {/* Deadline */}
+        <p className={cn(
+          "text-xs flex items-center gap-1.5",
+          isExpired ? "text-red-500" : "text-muted-foreground"
+        )}>
+          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+          {isExpired
+            ? "Application closed"
+            : job.application_deadline
+              ? `Apply by ${formatDate(job.application_deadline)}`
+              : "No deadline set"}
+        </p>
+
+        {/* Skills */}
         {job.skills.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {job.skills.slice(0, 4).map((s) => (
@@ -86,14 +131,11 @@ function JobCard({ job, onClick }: { job: CandidateJobPosting; onClick: (job: Ca
           </div>
         )}
 
-        <div className="mt-auto pt-2 flex items-center justify-between">
-          <div className={cn("flex items-center gap-1.5 text-[11px]", isExpired ? "text-red-500" : "text-muted-foreground")}>
-            <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-            {isExpired ? "Closed" : job.application_deadline ? `Apply by ${formatDate(job.application_deadline)}` : "Open"}
-          </div>
-          <span className="text-[11px] font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-            View Details &rarr;
-          </span>
+        {/* Action */}
+        <div className="mt-auto">
+          <Button variant="outline" size="sm" onClick={() => onClick(job)}>
+            View Details
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -135,10 +177,9 @@ function JobDetailDialog({
           <div className="p-6">
             <div className="space-y-1 mb-6">
               <DialogTitle className="text-2xl">{job.title}</DialogTitle>
-              <DialogDescription className="text-base font-medium flex items-center gap-1.5 text-foreground">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                {job.company_name}
-                {job.industry && <span className="text-muted-foreground font-normal ml-1">• {job.industry}</span>}
+              <DialogDescription className="text-base font-medium flex items-center flex-wrap gap-1.5 text-foreground">
+                <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span>{job.company_name}</span>
               </DialogDescription>
             </div>
 
@@ -250,9 +291,14 @@ export function JobsClient({ jobs, appliedJobIds }: Props) {
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredJobs.map(j => (
-              <JobCard key={j.id} job={j} onClick={setSelectedJob} />
+              <JobCard
+                key={j.id}
+                job={j}
+                hasApplied={appliedJobIds.includes(j.id)}
+                onClick={setSelectedJob}
+              />
             ))}
           </div>
         )}

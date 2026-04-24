@@ -25,7 +25,11 @@
     "created_at": "2026-04-24T06:31:07.543322+00:00",
     "updated_at": "2026-04-24T06:31:07.543322+00:00",
     "profiles": {
-      "recruiter_profiles": null
+      "recruiter_profiles": {
+        "industry": "Software Development",
+        "company_name": "360 View Tech",
+        "company_logo_path": "recruiters/fa49f8bd-4fb1-4a91-8930-ace6103813e3/logo/1777014295640.jpg"
+      }
     }
   },
   {
@@ -55,7 +59,11 @@
     "created_at": "2026-04-24T06:25:28.025215+00:00",
     "updated_at": "2026-04-24T06:25:28.025215+00:00",
     "profiles": {
-      "recruiter_profiles": null
+      "recruiter_profiles": {
+        "industry": "Software Development",
+        "company_name": "360 View Tech",
+        "company_logo_path": "recruiters/fa49f8bd-4fb1-4a91-8930-ace6103813e3/logo/1777014295640.jpg"
+      }
     }
   }
 ]

@@ -1,0 +1,19 @@
+[
+  {
+    "id": "98214e54-641d-41a1-9642-7ed387ad5a11",
+    "status": "reviewing",
+    "created_at": "2026-04-24T07:05:24.957406+00:00",
+    "job_postings": {
+      "id": "db95dfb4-5665-41e2-ac36-22753c117549",
+      "title": "Backend Developer (Java)",
+      "job_type": "full_time",
+      "location": "Mumbai",
+      "profiles": {
+        "recruiter_profiles": {
+          "company_name": "360 View Tech"
+        }
+      },
+      "work_mode": "onsite"
+    }
+  }
+]
