@@ -53,12 +53,10 @@ function stripCodeFences(text: string): string {
 // ─── PDF text extraction ──────────────────────────────────────────────────────
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
-  // This version of pdf-parse uses an OOP API:
-  // import { PDFParse } from "pdf-parse"  →  new PDFParse({ data: buffer }).getText()
-  const { PDFParse } = await import("pdf-parse")
-  const parser = new PDFParse({ data: buffer })
-  const result = await parser.getText()
-  return result.text
+  // pdf-parse v1 — simple CJS default-function, no worker, works in Next.js server actions.
+  const pdfParse = (await import("pdf-parse")).default
+  const data = await pdfParse(buffer)
+  return data.text
 }
 
 // ─── Main action ──────────────────────────────────────────────────────────────
